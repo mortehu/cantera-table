@@ -134,7 +134,7 @@ journal_replay (off_t journal_length)
               struct journal_file *f;
 
               if (journal_file_count == journal_file_alloc)
-                GROW_ARRAY (&journal_files, &journal_file_alloc);
+                ARRAY_GROW (&journal_files, &journal_file_alloc);
 
               f = &journal_files[journal_file_count++];
 
@@ -276,7 +276,7 @@ journal_file_open (const char *path)
     }
 
   if (journal_file_count == journal_file_alloc)
-    GROW_ARRAY (&journal_files, &journal_file_alloc);
+    ARRAY_GROW (&journal_files, &journal_file_alloc);
 
   if (!(journal_files[result].path = strdup (path)))
     err (EX_OSERR, "strdup failed");

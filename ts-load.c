@@ -113,7 +113,7 @@ parse_data (const char *begin, const char *end)
         case parse_key:
 
           if (key_length == key_alloc)
-            GROW_ARRAY (&key, &key_alloc);
+            ARRAY_GROW (&key, &key_alloc);
 
           if (*begin == delimiter)
             {
@@ -135,7 +135,7 @@ parse_data (const char *begin, const char *end)
         case parse_date:
 
           if (date_length == date_alloc)
-            GROW_ARRAY (&date, &date_alloc);
+            ARRAY_GROW (&date, &date_alloc);
 
           if (*begin == delimiter)
             {
@@ -166,7 +166,7 @@ parse_data (const char *begin, const char *end)
             continue;
 
           if (value_length == value_alloc)
-            GROW_ARRAY (&value, &value_alloc);
+            ARRAY_GROW (&value, &value_alloc);
 
           if (*begin == '\n')
             {

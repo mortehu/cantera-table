@@ -4,7 +4,7 @@
 #include <sysexits.h>
 
 void
-grow_array (void **array, size_t *alloc, size_t element_size)
+array_grow (void **array, size_t *alloc, size_t element_size)
 {
   size_t new_alloc;
   void *new_array;

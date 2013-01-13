@@ -1,6 +1,8 @@
 #ifndef JOURNAL_H_
 #define JOURNAL_H_ 1
 
+#include <stdio.h>
+
 enum journal_operation
 {
   JOURNAL_TRUNCATE = 1,

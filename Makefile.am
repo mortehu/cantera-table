@@ -5,6 +5,7 @@ bin_PROGRAMS = ts-load ts-compact
 
 ACLOCAL_AMFLAGS = -I m4
 AM_CPPFLAGS = -D_GNU_SOURCE -Wall
+AM_CFLAGS = -Wall -O3 -g
 
 libsmalltable_la_SOURCES = \
   crc32.c crc32.h \

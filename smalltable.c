@@ -444,38 +444,83 @@ TABLE_heap_push (struct TABLE_iterate_heap *heap, size_t heap_size,
   heap[i] = *entry;
 }
 
-void
-TABLE_heap_pop (struct TABLE_iterate_heap *heap, size_t heap_size,
-                struct TABLE_iterate_heap *dest)
+static void
+TABLE_heap_replace_top (struct TABLE_iterate_heap *heap, size_t heap_size,
+                        const struct TABLE_iterate_heap *entry)
 {
   size_t i, child, parent;
 
-  *dest = heap[0];
+  /* This helps avoid some '+1's and '-1's later.  Technically illegal */
+  --heap;
 
-  for(i = 0, child = 1; child < heap_size; i = child, child = i * 2 + 1)
+  /* Move hole down the tree */
+
+  for(i = 1, child = 2; child <= heap_size; i = child, child = i << 1)
     {
-      if(child + 1 < heap_size
+      /* Move the smaller child up the tree */
+
+      if(child + 1 <= heap_size
          && strcmp (heap[child].data, heap[child + 1].data) > 0)
         ++child;
 
       heap[i] = heap[child];
     }
 
-  if(i != heap_size)
+  /* Move ancestor chain down into hole, until we can insert the new entry */
+
+  while (i > 1)
     {
-      while (i)
-        {
-          parent = (i - 1) / 2;
+      parent = i >> 1;
 
-          if (strcmp (heap[parent].data, heap[heap_size - 1].data) <= 0)
-            break;
+      if (strcmp (heap[parent].data, entry->data) <= 0)
+        break;
 
-          heap[i] = heap[parent];
-          i = parent;
-        }
-
-      heap[i] = heap[heap_size - 1];
+      heap[i] = heap[parent];
+      i = parent;
     }
+
+  heap[i] = *entry;
+}
+
+static void
+TABLE_heap_pop (struct TABLE_iterate_heap *heap, size_t heap_size)
+{
+  size_t i, child, parent;
+
+  /* This helps avoid some '+1's and '-1's later.  Technically illegal */
+  --heap;
+
+  /* Move hole down the tree */
+
+  for(i = 1, child = 2; child <= heap_size; i = child, child = i << 1)
+    {
+      /* Move the smaller child up the tree */
+
+      if(child + 1 <= heap_size
+         && strcmp (heap[child].data, heap[child + 1].data) > 0)
+        ++child;
+
+      heap[i] = heap[child];
+    }
+
+  if(i == heap_size)
+    return;
+
+  /* Hole did not end up at tail: Move ancestor chain down into hole, until we
+   * can insert the tail element as an ancestor */
+
+  while (i > 0)
+    {
+      parent = i >> 1;
+
+      if (strcmp (heap[parent].data, heap[heap_size].data) <= 0)
+        break;
+
+      heap[i] = heap[parent];
+      i = parent;
+    }
+
+  heap[i] = heap[heap_size];
 }
 
 void
@@ -525,8 +570,7 @@ table_iterate_multiple (struct table **tables, size_t table_count,
     {
       struct TABLE_iterate_heap e;
 
-      TABLE_heap_pop (heap, heap_size, &e);
-      --heap_size;
+      e = heap[0];
 
       callback (e.data, e.size);
 
@@ -551,7 +595,12 @@ table_iterate_multiple (struct table **tables, size_t table_count,
                 e.size = tables[e.table]->entries[j + 1] - tables[e.table]->entries[j];
             }
 
-          TABLE_heap_push (heap, heap_size++, &e);
+          TABLE_heap_replace_top (heap, heap_size, &e);
+        }
+      else
+        {
+          TABLE_heap_pop (heap, heap_size);
+          --heap_size;
         }
     }
 

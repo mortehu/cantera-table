@@ -230,11 +230,7 @@ table_write_samples (struct table *t, const char *key,
   if (!t->prev_key || (cmp = strcmp (key, t->prev_key)))
     {
       if (cmp < 0)
-        {
-          fprintf (stderr, "Not ordered: %s -> %s\n",
-                   t->prev_key, key);
-          t->flags &= ~TABLE_FLAG_ORDERED;
-        }
+        t->flags &= ~TABLE_FLAG_ORDERED;
 
       free (t->prev_key);
       t->prev_key = safe_strdup (key);

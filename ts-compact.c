@@ -221,14 +221,14 @@ main (int argc, char **argv)
 
   struct table **inputs;
 
-  output = table_create (argv[optind++]);
+  inputs = safe_malloc (sizeof (*inputs) * (argc - optind - 1));
 
-  inputs = safe_malloc (sizeof (*inputs) * (argc - optind));
+  for (i = 0; i < argc - optind - 1; ++i)
+    inputs[i] = table_open (argv[optind + i + 1]);
 
-  for (i = 0; i < argc - optind; ++i)
-    inputs[i] = table_open (argv[optind + i]);
+  output = table_create (argv[optind]);
 
-  table_iterate_multiple (inputs, argc - optind, data_callback);
+  table_iterate_multiple (inputs, argc - optind - 1, data_callback);
 
   if (prev_key)
     {
@@ -239,7 +239,7 @@ main (int argc, char **argv)
 
   table_close (output);
 
-  for (i = 0; i < argc - optind; ++i)
+  for (i = 0; i < argc - optind - 1; ++i)
     table_close (inputs[i]);
 
   return EXIT_SUCCESS;

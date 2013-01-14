@@ -14,7 +14,7 @@
 #include "crc32.h"
 #include "io.h"
 #include "memory.h"
-#include "table.h"
+#include "smalltable.h"
 
 #define MAGIC 0x6c6261742e692e70ULL
 #define MAJOR_VERSION 0
@@ -230,7 +230,11 @@ table_write_samples (struct table *t, const char *key,
   if (!t->prev_key || (cmp = strcmp (key, t->prev_key)))
     {
       if (cmp < 0)
-        t->flags &= ~TABLE_FLAG_ORDERED;
+        {
+          fprintf (stderr, "Not ordered: %s -> %s\n",
+                   t->prev_key, key);
+          t->flags &= ~TABLE_FLAG_ORDERED;
+        }
 
       free (t->prev_key);
       t->prev_key = safe_strdup (key);
@@ -241,7 +245,7 @@ table_write_samples (struct table *t, const char *key,
       TABLE_write (t, key, strlen (key) + 1);
     }
 
-  if (!t->prev_time && start_time < t->prev_time)
+  if (!t->prev_time || start_time < t->prev_time)
     {
       TABLE_putc (t, TABLE_TIME_SERIES);
       TABLE_put_integer (t, start_time);
@@ -381,7 +385,7 @@ table_iterate_multiple (struct table **tables, size_t table_count,
   size_t i, *positions;
 
   for (i = 0; i < table_count; ++i)
-    if (!tables[i]->sorted_entries)
+    if (!(tables[i]->header->flags & TABLE_FLAG_ORDERED) && !tables[i]->sorted_entries)
       TABLE_build_sorted_entries (tables[i]);
 
   positions = safe_malloc (sizeof (*positions) * table_count);

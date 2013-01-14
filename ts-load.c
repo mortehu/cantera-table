@@ -15,10 +15,8 @@
 #include <sysexits.h>
 #include <unistd.h>
 
-#include "array.h"
-#include "journal.h"
-
-#define DATADIR "/tmp/ts"
+#include "table.h"
+#include "memory.h"
 
 static int print_version;
 static int print_help;
@@ -47,7 +45,7 @@ static struct option long_options[] =
     { 0, 0, 0, 0 }
 };
 
-static int db_handle, db_index_handle;
+static struct table *table_handle;
 
 enum parse_state
 {
@@ -69,39 +67,6 @@ static size_t date_length;
 static char *value;
 static size_t value_alloc;
 static size_t value_length;
-
-static void
-write_integer (int file_handle, uint64_t value)
-{
-  uint8_t buffer[10];
-  unsigned int ptr = 9;
-
-  buffer[ptr] = value & 0x7f;
-  value >>= 7;
-
-  while (value)
-    {
-      buffer[--ptr] = 0x80 | value;
-
-      value >>= 7;
-    }
-
-  journal_file_append (file_handle, &buffer[ptr], 10 - ptr);
-}
-
-static void
-write_time_value (const char *key, uint64_t time, float value)
-{
-  uint64_t db_offset;
-
-  db_offset = journal_file_size (db_handle);
-
-  journal_file_append (db_handle, key, strlen (key) + 1);
-  write_integer (db_handle, time);
-  journal_file_append (db_handle, &value, sizeof(float));
-
-  journal_file_append (db_index_handle, &db_offset, sizeof (uint64_t));
-}
 
 static void
 parse_data (const char *begin, const char *end)
@@ -140,12 +105,18 @@ parse_data (const char *begin, const char *end)
           if (*begin == delimiter)
             {
               struct tm tm;
+              char *end;
+
+              memset (&tm, 0, sizeof (tm));
 
               date[date_length] = 0;
 
-              if (!strptime (date, date_format, &tm))
+              if (!(end = strptime (date, date_format, &tm)))
                 errx (EX_DATAERR, "Unable to parse date '%s' according to format '%s'",
                       date, date_format);
+
+              if (*end)
+                errx (EX_DATAERR, "Junk at end of date '%s': %s", date, end);
 
               input_time = mktime (&tm);
 
@@ -183,7 +154,7 @@ parse_data (const char *begin, const char *end)
 
               value_length = 0;
 
-              write_time_value (input_key, input_time, fvalue);
+              table_write_sample (table_handle, input_key, input_time, fvalue);
 
               if (!has_input_key)
                 state = parse_key;
@@ -299,7 +270,7 @@ main (int argc, char **argv)
 
   if (print_help)
     {
-      printf ("Usage: %s [OPTION]...\n"
+      printf ("Usage: %s [OPTION]... TABLE\n"
              "\n"
              "      --delimiter=DELIMITER  set input delimiter [%c]\n"
              "      --date-format=FORMAT   use provided date format [%s]\n"
@@ -324,10 +295,10 @@ main (int argc, char **argv)
       return EXIT_SUCCESS;
     }
 
-  journal_init (DATADIR "/journal");
+  if (optind + 1 != argc)
+    errx (EX_USAGE, "Usage: %s [OPTION]... TABLE", argv[0]);
 
-  db_handle = journal_file_open (DATADIR "/input.data");
-  db_index_handle = journal_file_open (DATADIR "/input.index");
+  table_handle = table_create (argv[optind]);
 
   if (!has_input_key)
     state = parse_key;
@@ -358,9 +329,11 @@ main (int argc, char **argv)
         err (EX_NOINPUT, "failed to mmap input");
 
       parse_data (map, (char *) map + file_size);
+
+      munmap (map, file_size);
     }
 
-  journal_commit ();
+  table_close (table_handle);
 
   return EXIT_SUCCESS;
 }

@@ -15,11 +15,17 @@ journal_init (const char *path);
 int
 journal_file_open (const char *name);
 
+int
+journal_file_rewrite (int handle);
+
 off_t
 journal_file_size (int handle);
 
 void
 journal_file_append (int handle, const void *data, size_t size);
+
+void
+journal_file_map (int handle, void **map, size_t *size, int prot, int flags);
 
 void
 journal_flush (void);

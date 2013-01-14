@@ -22,6 +22,8 @@
 static char buffer[BUFFER_SIZE];
 static size_t buffer_fill;
 
+static int journal_dirty;
+
 static int journal_fd;
 static char *journal_path;
 
@@ -34,6 +36,9 @@ struct journal_file
 
   char *buffer;
   size_t buffer_fill;
+
+  char *tmp_path;
+  int tmp_fd;
 };
 
 static struct journal_file *journal_files;
@@ -173,6 +178,9 @@ journal_commit (void)
 
   char *new_journal_path;
 
+  if (!journal_dirty)
+    return;
+
   journal_flush ();
 
   close (journal_fd);
@@ -296,6 +304,28 @@ journal_file_open (const char *path)
   return result;
 }
 
+int
+journal_file_rewrite (int handle)
+{
+  struct journal_file *f;
+
+  assert (handle >= 0 && handle < journal_file_count);
+
+  f = &journal_files[handle];
+
+  assert (!f->tmp_path);
+
+  if (-1 == asprintf (&f->tmp_path, "%s.tmp.XXXXXX", tmp->path))
+    err (EX_OSERR, "asprintf failed");
+
+  /* XXX: 2. On commit:
+               1. Create backups of old tables
+               2. Create new journal recovering tables from backups
+               3. Replace tables (rename)
+               4. Create new journal keeping new tables
+               5. Remove backups
+   */
+}
 
 off_t
 journal_file_size (int handle)
@@ -311,7 +341,10 @@ journal_file_append (int handle, const void *data, size_t size)
   f = &journal_files[handle];
 
   if (!f->buffer)
-    f->buffer = safe_malloc (BUFFER_SIZE);
+    {
+      f->buffer = safe_malloc (BUFFER_SIZE);
+      journal_dirty = 1;
+    }
 
   if (size + f->buffer_fill > BUFFER_SIZE)
     {
@@ -328,6 +361,21 @@ journal_file_append (int handle, const void *data, size_t size)
     }
 
   f->size += size;
+}
+
+void
+journal_file_map (int handle, void **map, size_t *size, int prot, int flags)
+{
+  struct journal_file *f;
+
+  f = &journal_files[handle];
+
+  assert (!journal_dirty);
+
+  *size = f->size;
+
+  if (MAP_FAILED == (*map = mmap (NULL, *size, prot, flags, f->fd, 0)))
+    err (EX_IOERR, "mmap of '%s' failed", f->path);
 }
 
 void

@@ -4,7 +4,11 @@ bin_PROGRAMS = ts-load ts-compact
 
 AM_CPPFLAGS = -D_GNU_SOURCE -Wall
 
-libcommon_a_SOURCES = journal.c journal.h array.c array.h
+libcommon_a_SOURCES = \
+  crc32.c crc32.h \
+  io.c io.h \
+  memory.c memory.h \
+  table.c table.h
 
 ts_load_SOURCES = ts-load.c
 ts_load_LDADD = libcommon.a

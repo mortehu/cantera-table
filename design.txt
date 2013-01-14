@@ -10,13 +10,6 @@ Features:
     - Clusters are stored as entries: cluster:0 to cluster:FF
 
   * Allow nearest neighbor queries
-
-    - Results are cached as nn-results:[key]
-
-Journal format:
-
-  List of file names and their truncate offset
-
 Data format:
 
   Array of:
@@ -25,10 +18,11 @@ Data format:
     integer    format
                  0x00 = Time series
                  0x01 = NN search resutls
-    integer    size
     [data in given format]
 
   Time series:
+
+    integer    array_size
 
     Array of:
 

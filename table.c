@@ -375,14 +375,67 @@ table_iterate (struct table *t, table_iterate_callback callback,
 }
 
 void
-table_iterate_multiple (struct table *tables, size_t table_count,
+table_iterate_multiple (struct table **tables, size_t table_count,
                         table_iterate_callback callback)
 {
-  size_t i;
+  size_t i, *positions;
 
   for (i = 0; i < table_count; ++i)
-    if (!tables[i].sorted_entries)
-      TABLE_build_sorted_entries (&tables[i]);
+    if (!tables[i]->sorted_entries)
+      TABLE_build_sorted_entries (tables[i]);
+
+  positions = safe_malloc (sizeof (*positions) * table_count);
+
+  /* XXX: Does N comparisons for every iteration, even though only log N are needed */
+
+  for (;;)
+    {
+      const char *lowest_key = NULL;
+      size_t lowest_key_size = 0;
+      size_t lowest_key_table = 0;
+
+      for (i = 0; i < table_count; ++i)
+        {
+          const char *key;
+          size_t j, size;
+
+          j = positions[i];
+
+          if (j == tables[i]->entry_count)
+            continue;
+
+          if (tables[i]->sorted_entries)
+            {
+              key = tables[i]->sorted_entries[j].data;
+              size = tables[i]->sorted_entries[j].size;
+            }
+          else
+            {
+              key = tables[i]->buffer + tables[i]->entries[j];
+
+              if (j + 1 == tables[i]->entry_count)
+                size = tables[i]->header->index_offset - tables[i]->entries[j];
+              else
+                size = tables[i]->entries[j + 1] - tables[i]->entries[j];
+            }
+
+          if (!lowest_key || 0 > strcmp (key, lowest_key))
+            {
+              lowest_key = key;
+              lowest_key_size = size;
+              lowest_key_table = i;
+            }
+        }
+
+      if (!lowest_key)
+        break;
+
+      callback (lowest_key, lowest_key_size);
+
+      ++positions[lowest_key_table];
+    }
+
+  free (positions);
 }
 
 static uint64_t

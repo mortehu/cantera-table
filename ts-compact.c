@@ -23,42 +23,6 @@ static struct option long_options[] =
     { 0, 0, 0, 0 }
 };
 
-#if 0
-static struct table *table_handle;
-
-static void **sorted_indexes;
-static size_t index_count;
-
-static uint64_t
-parse_integer (const uint8_t *input)
-{
-  uint64_t result = 0;
-
-  result = *input & 0x7F;
-
-  while (0 != (*input & 0x80))
-    {
-      result <<= 7;
-      result |= *++input & 0x7F;
-    }
-
-  return result;
-}
-
-static int
-indexcmp (const void *vlhs, const void *vrhs)
-{
-  int result;
-
-  if (0 != (result = strcmp (table_value_key (vlhs), table_value_key (vrhs))))
-    return result;
-
-  /* XXX: Compare time series info */
-
-  return 0;
-}
-#endif
-
 static struct table *output;
 
 struct sample
@@ -100,8 +64,6 @@ data_flush (const char *key)
 
       if (next == sample_count || samples[next].time != samples[i].time)
         continue;
-
-      fprintf (stderr, "DUP!\n");
 
       do
         {
@@ -236,7 +198,7 @@ main (int argc, char **argv)
 
   if (print_help)
     {
-      printf ("Usage: %s [OPTION]... TABLE\n"
+      printf ("Usage: %s [OPTION]... OUTPUT INPUT...\n"
              "\n"
              "      --help     display this help and exit\n"
              "      --version  display version information\n"
@@ -254,15 +216,19 @@ main (int argc, char **argv)
       return EXIT_SUCCESS;
     }
 
-  if (optind + 1 != argc)
-    errx (EX_USAGE, "Usage: %s [OPTION]... TABLE", argv[0]);
+  if (optind + 2 > argc)
+    errx (EX_USAGE, "Usage: %s [OPTION]... OUTPUT INPUT...", argv[0]);
 
-  struct table *input;
+  struct table **inputs;
 
-  input = table_open (argv[optind]);
-  output = table_create ("optimized");
+  output = table_create (argv[optind++]);
 
-  table_iterate (input, data_callback, TABLE_ORDER_KEY);
+  inputs = safe_malloc (sizeof (*inputs) * (argc - optind));
+
+  for (i = 0; i < argc - optind; ++i)
+    inputs[i] = table_open (argv[optind + i]);
+
+  table_iterate_multiple (inputs, argc - optind, data_callback);
 
   if (prev_key)
     {
@@ -272,6 +238,9 @@ main (int argc, char **argv)
     }
 
   table_close (output);
+
+  for (i = 0; i < argc - optind; ++i)
+    table_close (inputs[i]);
 
   return EXIT_SUCCESS;
 }

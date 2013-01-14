@@ -50,7 +50,7 @@ table_iterate (struct table *t, table_iterate_callback callback,
 
 /* Iterate multiple tables at once, in key order.  Useful for merging */
 void
-table_iterate_multiple (struct table *tables, size_t table_count,
+table_iterate_multiple (struct table **tables, size_t table_count,
                         table_iterate_callback callback);
 
 void

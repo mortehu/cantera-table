@@ -374,70 +374,6 @@ table_iterate (struct table *t, table_iterate_callback callback,
     }
 }
 
-void
-table_iterate_multiple (struct table **tables, size_t table_count,
-                        table_iterate_callback callback)
-{
-  size_t i, *positions;
-
-  for (i = 0; i < table_count; ++i)
-    if (!(tables[i]->header->flags & TABLE_FLAG_ORDERED) && !tables[i]->sorted_entries)
-      TABLE_build_sorted_entries (tables[i]);
-
-  positions = safe_malloc (sizeof (*positions) * table_count);
-
-  /* XXX: Does N comparisons for every iteration, even though only log N are needed */
-
-  for (;;)
-    {
-      const char *lowest_key = NULL;
-      size_t lowest_key_size = 0;
-      size_t lowest_key_table = 0;
-
-      for (i = 0; i < table_count; ++i)
-        {
-          const char *key;
-          size_t j, size;
-
-          j = positions[i];
-
-          if (j == tables[i]->entry_count)
-            continue;
-
-          if (tables[i]->sorted_entries)
-            {
-              key = tables[i]->sorted_entries[j].data;
-              size = tables[i]->sorted_entries[j].size;
-            }
-          else
-            {
-              key = tables[i]->buffer + tables[i]->entries[j];
-
-              if (j + 1 == tables[i]->entry_count)
-                size = tables[i]->header->index_offset - tables[i]->entries[j];
-              else
-                size = tables[i]->entries[j + 1] - tables[i]->entries[j];
-            }
-
-          if (!lowest_key || 0 > strcmp (key, lowest_key))
-            {
-              lowest_key = key;
-              lowest_key_size = size;
-              lowest_key_table = i;
-            }
-        }
-
-      if (!lowest_key)
-        break;
-
-      callback (lowest_key, lowest_key_size);
-
-      ++positions[lowest_key_table];
-    }
-
-  free (positions);
-}
-
 static uint64_t
 TABLE_parse_integer (const uint8_t **input)
 {
@@ -476,4 +412,149 @@ table_parse_time_series (const uint8_t **input,
   p += sizeof (**sample_values) * *count;
 
   *input = p;
+}
+
+/*****************************************************************************/
+
+struct TABLE_iterate_heap
+{
+  const void *data;
+  size_t size, table;
+};
+
+static void
+TABLE_heap_push (struct TABLE_iterate_heap *heap, size_t heap_size,
+                 const struct TABLE_iterate_heap *entry)
+{
+  size_t parent, i;
+
+  i = heap_size;
+
+  while (i)
+    {
+      parent = (i - 1) / 2;
+
+      if (strcmp (heap[parent].data, entry->data) <= 0)
+        break;
+
+      heap[i] = heap[parent];
+      i = parent;
+    }
+
+  heap[i] = *entry;
+}
+
+void
+TABLE_heap_pop (struct TABLE_iterate_heap *heap, size_t heap_size,
+                struct TABLE_iterate_heap *dest)
+{
+  size_t i, child, parent;
+
+  *dest = heap[0];
+
+  for(i = 0, child = 1; child < heap_size; i = child, child = i * 2 + 1)
+    {
+      if(child + 1 < heap_size
+         && strcmp (heap[child].data, heap[child + 1].data) > 0)
+        ++child;
+
+      heap[i] = heap[child];
+    }
+
+  if(i != heap_size)
+    {
+      while (i)
+        {
+          parent = (i - 1) / 2;
+
+          if (strcmp (heap[parent].data, heap[heap_size - 1].data) <= 0)
+            break;
+
+          heap[i] = heap[parent];
+          i = parent;
+        }
+
+      heap[i] = heap[heap_size - 1];
+    }
+}
+
+void
+table_iterate_multiple (struct table **tables, size_t table_count,
+                        table_iterate_callback callback)
+{
+  struct TABLE_iterate_heap *heap;
+  size_t heap_size = 0;
+
+  size_t i, *positions;
+
+  heap = safe_malloc (sizeof (*heap) * table_count);
+  positions = safe_malloc (sizeof (*positions) * table_count);
+
+  for (i = 0; i < table_count; ++i)
+    {
+      struct TABLE_iterate_heap e;
+
+      if (!tables[i]->entry_count)
+        continue;
+
+      e.table = i;
+
+      if (!(tables[i]->header->flags & TABLE_FLAG_ORDERED) && !tables[i]->sorted_entries)
+        {
+          TABLE_build_sorted_entries (tables[i]);
+
+          e.data = tables[i]->sorted_entries[0].data;
+          e.size = tables[i]->sorted_entries[0].size;
+        }
+      else
+        {
+          e.data = tables[i]->buffer + tables[i]->entries[0];
+
+          if (1 == tables[i]->entry_count)
+            e.size = tables[i]->header->index_offset - tables[i]->entries[0];
+          else
+            e.size = tables[i]->entries[1] - tables[i]->entries[0];
+        }
+
+      TABLE_heap_push (heap, heap_size++, &e);
+
+      positions[i] = 1;
+    }
+
+  while (heap_size)
+    {
+      struct TABLE_iterate_heap e;
+
+      TABLE_heap_pop (heap, heap_size, &e);
+      --heap_size;
+
+      callback (e.data, e.size);
+
+      if (positions[e.table] < tables[e.table]->entry_count)
+        {
+          size_t j;
+
+          j = positions[e.table]++;
+
+          if (tables[e.table]->sorted_entries)
+            {
+              e.data = tables[e.table]->sorted_entries[j].data;
+              e.size = tables[e.table]->sorted_entries[j].size;
+            }
+          else
+            {
+              e.data = tables[e.table]->buffer + tables[e.table]->entries[j];
+
+              if (j + 1 == tables[e.table]->entry_count)
+                e.size = tables[e.table]->header->index_offset - tables[e.table]->entries[j];
+              else
+                e.size = tables[e.table]->entries[j + 1] - tables[e.table]->entries[j];
+            }
+
+          TABLE_heap_push (heap, heap_size++, &e);
+        }
+    }
+
+  free (positions);
+  free (heap);
 }

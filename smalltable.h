@@ -1,6 +1,9 @@
 #ifndef TABLE_H_
 #define TABLE_H_ 1
 
+#include <stdint.h>
+#include <stdlib.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

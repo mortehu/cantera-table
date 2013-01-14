@@ -9,7 +9,7 @@
 #include <sysexits.h>
 
 #include "memory.h"
-#include "table.h"
+#include "smalltable.h"
 
 #define DATADIR "/tmp/ts"
 

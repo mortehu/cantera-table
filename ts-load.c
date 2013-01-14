@@ -15,7 +15,7 @@
 #include <sysexits.h>
 #include <unistd.h>
 
-#include "table.h"
+#include "smalltable.h"
 #include "memory.h"
 
 static int print_version;

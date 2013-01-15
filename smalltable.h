@@ -56,6 +56,10 @@ void
 table_iterate_multiple (struct table **tables, size_t table_count,
                         table_iterate_callback callback);
 
+const void *
+table_lookup (struct table *t, const char *key,
+              size_t *size);
+
 void
 table_parse_time_series (const uint8_t **input,
                          uint64_t *start_time, uint32_t *interval,

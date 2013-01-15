@@ -23,6 +23,14 @@
 #define TMP_SUFFIX ".tmp.XXXXXX"
 #define BUFFER_SIZE (1024 * 1024)
 
+#ifdef __GNUC__
+#  define likely(x)       __builtin_expect((x),1)
+#  define unlikely(x)     __builtin_expect((x),0)
+#else
+#  define likely(x)       (x)
+#  define unlikely(x)     (x)
+#endif
+
 enum TABLE_flags
 {
   TABLE_FLAG_ORDERED = 0x0001
@@ -606,4 +614,63 @@ table_iterate_multiple (struct table **tables, size_t table_count,
 
   free (positions);
   free (heap);
+}
+
+const void *
+table_lookup (struct table *t, const char *key, size_t *size)
+{
+  size_t first = 0, half, middle, count;
+  size_t key_length;
+
+  /* XXX: Maybe use t->sorted_entries */
+
+  if (!(t->header->flags & TABLE_FLAG_ORDERED))
+    {
+      for (middle = 0; middle < t->entry_count; ++middle)
+        {
+          if (!strcmp (t->buffer + t->entries[middle], key))
+            goto found;
+        }
+
+      if (!strcmp (t->buffer + t->entries[middle], key))
+        goto found;
+
+      return NULL;
+    }
+
+  count = t->entry_count;
+
+  while (count > 0)
+    {
+      int cmp;
+
+      half = count >> 1;
+      middle = first + half;
+
+      cmp = strcmp (t->buffer + t->entries[middle], key);
+
+      if (cmp < 0)
+        {
+          first = middle + 1;
+          count -= half + 1;
+        }
+      else if (likely (cmp > 0))
+        count = half;
+      else
+        goto found;
+    }
+
+  return NULL;
+
+found:
+
+  if (middle + 1 < t->entry_count)
+    *size = t->entries[middle + 1] - t->entries[middle];
+  else
+    *size = t->header->index_offset - t->entries[middle];
+
+  key_length = strlen (t->buffer + t->entries[middle]) + 1;
+  *size -= key_length;
+
+  return t->buffer + t->entries[middle] + key_length;
 }

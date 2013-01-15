@@ -1,7 +1,7 @@
 lib_LTLIBRARIES = libsmalltable.la
 include_HEADERS = smalltable.h
 
-bin_PROGRAMS = ts-load ts-compact
+bin_PROGRAMS = ts-load ts-compact ts-extract
 
 ACLOCAL_AMFLAGS = -I m4
 AM_CPPFLAGS = -D_GNU_SOURCE -Wall
@@ -18,3 +18,6 @@ ts_load_LDADD = libsmalltable.la
 
 ts_compact_SOURCES = ts-compact.c
 ts_compact_LDADD = libsmalltable.la
+
+ts_extract_SOURCES = ts-extract.c
+ts_extract_LDADD = libsmalltable.la

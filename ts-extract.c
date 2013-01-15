@@ -23,30 +23,6 @@ static struct option long_options[] =
     { 0, 0, 0, 0 }
 };
 
-struct table
-{
-  char *path;
-  char *tmp_path;
-
-  int fd;
-
-  char *buffer;
-  size_t buffer_size, buffer_fill;
-
-  uint64_t write_offset;
-  char *prev_key;
-  uint64_t prev_time;
-
-  uint32_t crc32;
-  uint16_t flags;
-
-  struct TABLE_header *header;
-
-  uint64_t *entries;
-  size_t entry_alloc, entry_count;
-
-  struct TABLE_entry *sorted_entries;
-};
 int
 main (int argc, char **argv)
 {

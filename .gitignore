@@ -27,5 +27,6 @@ ltmain.sh
 missing
 stamp-h1
 ts-compact
+ts-correlate
 ts-extract
 ts-load

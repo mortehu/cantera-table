@@ -36,6 +36,9 @@ table_open (const char *path);
 void
 table_close (struct table *t);
 
+int
+table_is_sorted (const struct table *t);
+
 /* Writes a key/timestamp/float combination to a table */
 void
 table_write_sample (struct table *t, const char *key, uint64_t sample_time,
@@ -46,6 +49,9 @@ void
 table_write_samples (struct table *t, const char *key,
                      uint64_t start_time, uint32_t interval,
                      const float *sample_values, size_t count);
+
+void
+table_sort (struct table *output, struct table *input);
 
 void
 table_iterate (struct table *t, table_iterate_callback callback,

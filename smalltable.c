@@ -46,12 +46,6 @@ struct TABLE_header
   uint64_t index_offset;
 };
 
-struct TABLE_entry
-{
-  const void *data;
-  size_t size;
-};
-
 struct table
 {
   char *path;
@@ -73,8 +67,6 @@ struct table
 
   uint64_t *entries;
   size_t entry_alloc, entry_count;
-
-  struct TABLE_entry *sorted_entries;
 };
 
 static void
@@ -200,6 +192,12 @@ table_close (struct table *t)
   free (t);
 }
 
+int
+table_is_sorted (const struct table *t)
+{
+  return 0 != (t->header->flags & TABLE_FLAG_ORDERED);
+}
+
 /* Retrieves pointers to all values in a table */
 const void **
 table_values (struct table *t, size_t *count)
@@ -214,57 +212,6 @@ const char *
 table_value_key (const void *value)
 {
   return (const char *)value;
-}
-
-/* Writes a key/timestamp/float combination to a table */
-void
-table_write_sample (struct table *t, const char *key, uint64_t sample_time,
-                    float sample_value)
-{
-  table_write_samples (t, key, sample_time, 1, &sample_value, 1);
-}
-
-/* Writes multiple key/timestamp/float combinations to a table */
-void
-table_write_samples (struct table *t, const char *key,
-                     uint64_t start_time, uint32_t interval,
-                     const float *sample_values, size_t count)
-{
-  int cmp = 1;
-
-  if (t->entry_alloc == t->entry_count)
-    ARRAY_GROW (&t->entries, &t->entry_alloc);
-
-  if (!t->prev_key || (cmp = strcmp (key, t->prev_key)))
-    {
-      if (cmp < 0)
-        t->flags &= ~TABLE_FLAG_ORDERED;
-
-      free (t->prev_key);
-      t->prev_key = safe_strdup (key);
-      t->prev_time = 0;
-
-      t->entries[t->entry_count++] = t->write_offset + t->buffer_fill;
-
-      TABLE_write (t, key, strlen (key) + 1);
-    }
-
-  if (!t->prev_time || start_time < t->prev_time)
-    {
-      TABLE_putc (t, TABLE_TIME_SERIES);
-      TABLE_put_integer (t, start_time);
-    }
-  else
-    {
-      TABLE_putc (t, TABLE_RELATIVE_TIME_SERIES);
-      TABLE_put_integer (t, start_time - t->prev_time);
-    }
-
-  t->prev_time = start_time;
-
-  TABLE_put_integer (t, interval);
-  TABLE_put_integer (t, count);
-  TABLE_write (t, sample_values, sizeof (*sample_values) * count);
 }
 
 static void
@@ -316,6 +263,65 @@ TABLE_put_integer (struct table *t, uint64_t value)
   TABLE_write (t, &buffer[ptr], 10 - ptr);
 }
 
+/* Writes a key/timestamp/float combination to a table */
+void
+table_write_sample (struct table *t, const char *key, uint64_t sample_time,
+                    float sample_value)
+{
+  table_write_samples (t, key, sample_time, 1, &sample_value, 1);
+}
+
+/* Writes multiple key/timestamp/float combinations to a table */
+void
+table_write_samples (struct table *t, const char *key,
+                     uint64_t start_time, uint32_t interval,
+                     const float *sample_values, size_t count)
+{
+  int cmp = 1;
+
+  if (!t->prev_key || (cmp = strcmp (key, t->prev_key)))
+    {
+      if (t->entry_alloc == t->entry_count)
+        ARRAY_GROW (&t->entries, &t->entry_alloc);
+
+      if (cmp < 0)
+        t->flags &= ~TABLE_FLAG_ORDERED;
+
+      free (t->prev_key);
+      t->prev_key = safe_strdup (key);
+      t->prev_time = 0;
+
+      t->entries[t->entry_count++] = t->write_offset + t->buffer_fill;
+
+      TABLE_write (t, key, strlen (key) + 1);
+    }
+
+  if (!t->prev_time || start_time < t->prev_time)
+    {
+      TABLE_putc (t, TABLE_TIME_SERIES);
+      TABLE_put_integer (t, start_time);
+    }
+  else
+    {
+      TABLE_putc (t, TABLE_RELATIVE_TIME_SERIES);
+      TABLE_put_integer (t, start_time - t->prev_time);
+    }
+
+  t->prev_time = start_time;
+
+  TABLE_put_integer (t, interval);
+  TABLE_put_integer (t, count);
+  TABLE_write (t, sample_values, sizeof (*sample_values) * count);
+}
+
+/*****************************************************************************/
+
+struct TABLE_entry
+{
+  const void *data;
+  size_t size;
+};
+
 static int
 TABLE_entrycmp (const void *vlhs, const void *vrhs)
 {
@@ -325,25 +331,62 @@ TABLE_entrycmp (const void *vlhs, const void *vrhs)
   return strcmp (lhs->data, rhs->data);
 }
 
-static void
-TABLE_build_sorted_entries (struct table *t)
+void
+table_sort (struct table *output, struct table *input)
 {
+  struct TABLE_entry *sorted_entries;
+  const char *prev_key = NULL;
   size_t i;
 
-  t->sorted_entries = safe_malloc (sizeof (*t->sorted_entries) * t->entry_count);
+  sorted_entries = safe_malloc (sizeof (*sorted_entries) * input->entry_count);
 
-  for (i = 0; i + 1 < t->entry_count; ++i)
+  for (i = 0; i + 1 < input->entry_count; ++i)
     {
-      t->sorted_entries[i].data = t->buffer + t->entries[i];
-      t->sorted_entries[i].size = t->entries[i + 1] - t->entries[i];
+      sorted_entries[i].data = input->buffer + input->entries[i];
+      sorted_entries[i].size = input->entries[i + 1] - input->entries[i];
     }
 
-  t->sorted_entries[i].data = t->buffer + t->entries[i];
-  t->sorted_entries[i].size = t->header->index_offset - t->entries[i];
+  sorted_entries[i].data = input->buffer + input->entries[i];
+  sorted_entries[i].size = input->header->index_offset - input->entries[i];
 
-  qsort (t->sorted_entries, t->entry_count, sizeof (*t->sorted_entries),
+  qsort (sorted_entries, input->entry_count, sizeof (*sorted_entries),
          TABLE_entrycmp);
+
+  for (i = 0; i < input->entry_count; ++i)
+    {
+      const char *key;
+      size_t key_length;
+      int cmp = 1;
+
+      key = sorted_entries[i].data;
+      key_length = strlen (key + 1);
+
+      if (!prev_key || (cmp = strcmp (key, prev_key)))
+        {
+          assert (cmp > 0);
+
+          if (output->entry_alloc == output->entry_count)
+            ARRAY_GROW (&output->entries, &output->entry_alloc);
+
+          output->entries[output->entry_count++] = output->write_offset + output->buffer_fill;
+
+          TABLE_write (output, key, strlen (key) + 1);
+
+          prev_key = key;
+        }
+
+      TABLE_write (output, (const char *) sorted_entries[i].data + key_length,
+                   sorted_entries[i].size - key_length);
+    }
+
+  free (output->prev_key);
+  output->prev_key = NULL;
+  output->prev_time = 0;
+
+  free (sorted_entries);
 }
+
+/*****************************************************************************/
 
 void
 table_iterate (struct table *t, table_iterate_callback callback,
@@ -354,32 +397,30 @@ table_iterate (struct table *t, table_iterate_callback callback,
   if (!t->entry_count)
     return;
 
-  if ((t->header->flags & TABLE_FLAG_ORDERED) && order == TABLE_ORDER_KEY)
-    order = TABLE_ORDER_PHYSICAL;
-
   switch (order)
     {
     case TABLE_ORDER_PHYSICAL:
-
-      for (i = 0; i + 1 < t->entry_count; ++i)
-        callback (t->buffer + t->entries[i],
-                  t->entries[i + 1] - t->entries[i]);
-
-      callback (t->buffer + t->entries[i],
-                t->header->index_offset - t->entries[i]);
 
       break;
 
     case TABLE_ORDER_KEY:
 
-      if (!t->sorted_entries)
-        TABLE_build_sorted_entries (t);
-
-      for (i = 0; i < t->entry_count; ++i)
-        callback (t->sorted_entries[i].data, t->sorted_entries[i].size);
+      if (!(t->header->flags & TABLE_FLAG_ORDERED))
+        errx (EX_DATAERR, "Table '%s' is not sorted", t->path);
 
       break;
+
+    default:
+
+      errx (EX_SOFTWARE, "Unknown sort order (%d)", order);
     }
+
+  for (i = 0; i + 1 < t->entry_count; ++i)
+    callback (t->buffer + t->entries[i],
+              t->entries[i + 1] - t->entries[i]);
+
+  callback (t->buffer + t->entries[i],
+            t->header->index_offset - t->entries[i]);
 }
 
 static uint64_t
@@ -552,22 +593,15 @@ table_iterate_multiple (struct table **tables, size_t table_count,
 
       e.table = i;
 
-      if (!(tables[i]->header->flags & TABLE_FLAG_ORDERED) && !tables[i]->sorted_entries)
-        {
-          TABLE_build_sorted_entries (tables[i]);
+      if (!(tables[i]->header->flags & TABLE_FLAG_ORDERED))
+        errx (EX_DATAERR, "Table '%s' is not sorted.  Use ts-sort", tables[i]->path);
 
-          e.data = tables[i]->sorted_entries[0].data;
-          e.size = tables[i]->sorted_entries[0].size;
-        }
+      e.data = tables[i]->buffer + tables[i]->entries[0];
+
+      if (1 == tables[i]->entry_count)
+        e.size = tables[i]->header->index_offset - tables[i]->entries[0];
       else
-        {
-          e.data = tables[i]->buffer + tables[i]->entries[0];
-
-          if (1 == tables[i]->entry_count)
-            e.size = tables[i]->header->index_offset - tables[i]->entries[0];
-          else
-            e.size = tables[i]->entries[1] - tables[i]->entries[0];
-        }
+        e.size = tables[i]->entries[1] - tables[i]->entries[0];
 
       TABLE_heap_push (heap, heap_size++, &e);
 
@@ -588,20 +622,12 @@ table_iterate_multiple (struct table **tables, size_t table_count,
 
           j = positions[e.table]++;
 
-          if (tables[e.table]->sorted_entries)
-            {
-              e.data = tables[e.table]->sorted_entries[j].data;
-              e.size = tables[e.table]->sorted_entries[j].size;
-            }
-          else
-            {
-              e.data = tables[e.table]->buffer + tables[e.table]->entries[j];
+          e.data = tables[e.table]->buffer + tables[e.table]->entries[j];
 
-              if (j + 1 == tables[e.table]->entry_count)
-                e.size = tables[e.table]->header->index_offset - tables[e.table]->entries[j];
-              else
-                e.size = tables[e.table]->entries[j + 1] - tables[e.table]->entries[j];
-            }
+          if (j + 1 == tables[e.table]->entry_count)
+            e.size = tables[e.table]->header->index_offset - tables[e.table]->entries[j];
+          else
+            e.size = tables[e.table]->entries[j + 1] - tables[e.table]->entries[j];
 
           TABLE_heap_replace_top (heap, heap_size, &e);
         }
@@ -621,8 +647,6 @@ table_lookup (struct table *t, const char *key, size_t *size)
 {
   size_t first = 0, half, middle, count;
   size_t key_length;
-
-  /* XXX: Maybe use t->sorted_entries */
 
   if (!(t->header->flags & TABLE_FLAG_ORDERED))
     {

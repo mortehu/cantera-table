@@ -15,6 +15,7 @@
 Makefile
 Makefile.in
 aclocal.m4
+ca-shell
 config.guess
 config.h
 config.h.in
@@ -24,7 +25,11 @@ depcomp
 install-sh
 libtool
 ltmain.sh
+m4
 missing
+query-lexer.c
+query-parser.c
+query-parser.h
 stamp-h1
 ts-correlate
 ts-extract

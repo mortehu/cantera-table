@@ -6,6 +6,9 @@
 void *
 safe_malloc (size_t size);
 
+void *
+safe_memdup (const void *data, size_t size);
+
 char *
 safe_strdup (const char *string);
 

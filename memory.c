@@ -19,19 +19,23 @@ safe_malloc (size_t size)
   return result;
 }
 
+void *
+safe_memdup (const void *data, size_t size)
+{
+  void *result;
+
+  if (!(result = malloc (size)))
+    err (EX_OSERR, "malloc failed (%zu bytes)", size);
+
+  memcpy (result, data, size);
+
+  return result;
+}
+
 char *
 safe_strdup (const char *string)
 {
-  size_t length;
-  char *result;
-
-  length = strlen (string) + 1;
-
-  result = safe_malloc (length);
-
-  memcpy (result, string, length);
-
-  return result;
+  return safe_memdup (string, strlen (string) + 1);
 }
 
 void

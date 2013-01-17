@@ -49,21 +49,17 @@ sum (const float *values, size_t count)
 }
 
 static void
-data_callback (const void *data, size_t size)
+data_callback (const char *key, const void *value, size_t value_size,
+               void *opaque)
 {
-  const char *key;
   const uint8_t *begin, *end;
-  size_t key_length;
   uint64_t last_time = 0;
 
   size_t sample_offset = 0;
   size_t sample_pair_count = 0;
 
-  key = data;
-  key_length = strlen (key) + 1;
-
-  begin = (const uint8_t *) data + key_length;
-  end = (const uint8_t *) data + size;
+  begin = (const uint8_t *) value;
+  end = (const uint8_t *) value + value_size;
 
   while (begin != end)
     {
@@ -74,7 +70,7 @@ data_callback (const void *data, size_t size)
 
       switch (*begin++)
         {
-        case TABLE_TIME_SERIES:
+        case CA_TIME_SERIES:
 
           table_parse_time_series (&begin,
                                    &start_time, &interval,
@@ -82,7 +78,7 @@ data_callback (const void *data, size_t size)
 
           break;
 
-        case TABLE_RELATIVE_TIME_SERIES:
+        case CA_RELATIVE_TIME_SERIES:
 
           table_parse_time_series (&begin,
                                    &start_time, &interval,
@@ -226,7 +222,7 @@ main (int argc, char **argv)
 
       switch (*begin++)
         {
-        case TABLE_TIME_SERIES:
+        case CA_TIME_SERIES:
 
           table_parse_time_series (&begin,
                                    &start_time, &interval,
@@ -234,7 +230,7 @@ main (int argc, char **argv)
 
           break;
 
-        case TABLE_RELATIVE_TIME_SERIES:
+        case CA_RELATIVE_TIME_SERIES:
 
           table_parse_time_series (&begin,
                                    &start_time, &interval,
@@ -264,7 +260,7 @@ main (int argc, char **argv)
   samples_lhs = safe_malloc (sizeof (*samples_lhs) * sample_count);
   samples_rhs = safe_malloc (sizeof (*samples_rhs) * sample_count);
 
-  table_iterate (table, data_callback, TABLE_ORDER_PHYSICAL);
+  table_iterate (table, data_callback, TABLE_ORDER_PHYSICAL, NULL);
 
   table_close (table);
 

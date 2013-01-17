@@ -119,14 +119,10 @@ data_flush (const char *key)
 }
 
 static void
-data_callback (const void *data, size_t size)
+data_callback (const char *key, const void *value, size_t value_size,
+               void *opaque)
 {
-  const char *key;
   const uint8_t *begin, *end;
-  size_t key_length;
-
-  key = data;
-  key_length = strlen (key);
 
   if (!prev_key || strcmp (key, prev_key))
     {
@@ -137,14 +133,14 @@ data_callback (const void *data, size_t size)
       prev_key = safe_strdup (key);
     }
 
-  begin = (const uint8_t *) data + key_length + 1;
-  end = (const uint8_t *) data + size;
+  begin = (const uint8_t *) value;
+  end = (const uint8_t *) value + value_size;
 
   while (begin != end)
     {
       switch (*begin++)
         {
-        case TABLE_TIME_SERIES:
+        case CA_TIME_SERIES:
 
             {
               uint64_t start_time;
@@ -228,7 +224,7 @@ main (int argc, char **argv)
 
   output = table_create (argv[optind]);
 
-  table_iterate_multiple (inputs, argc - optind - 1, data_callback);
+  table_iterate_multiple (inputs, argc - optind - 1, data_callback, NULL);
 
   if (prev_key)
     {

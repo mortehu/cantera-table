@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,10 +12,11 @@
 #include <sysexits.h>
 #include <unistd.h>
 
-#include "crc32.h"
+#include "error.h"
 #include "io.h"
 #include "memory.h"
 #include "smalltable.h"
+#include "smalltable-internal.h"
 
 #define MAGIC 0x6c6261742e692e70ULL
 #define MAJOR_VERSION 0
@@ -30,55 +32,6 @@
 #  define likely(x)       (x)
 #  define unlikely(x)     (x)
 #endif
-
-enum TABLE_flags
-{
-  TABLE_FLAG_ORDERED = 0x0001
-};
-
-struct TABLE_header
-{
-  uint64_t magic;
-  uint8_t major_version;
-  uint8_t minor_version;
-  uint16_t flags;
-  uint32_t data_crc32;
-  uint64_t index_offset;
-};
-
-struct table
-{
-  char *path;
-  char *tmp_path;
-
-  int fd;
-
-  char *buffer;
-  size_t buffer_size, buffer_fill;
-
-  uint64_t write_offset;
-  char *prev_key;
-  uint64_t prev_time;
-
-  uint32_t crc32;
-  uint16_t flags;
-
-  struct TABLE_header *header;
-
-  uint64_t *entries;
-  size_t entry_alloc, entry_count;
-};
-
-static void
-TABLE_flush (struct table *t);
-
-static void
-TABLE_write (struct table *t, const void *data, size_t size);
-
-#define TABLE_putc(t, c) do { if ((t)->buffer_fill == (t)->buffer_size) TABLE_flush ((t)); (t)->buffer[(t)->buffer_fill++] = (c); } while (0)
-
-static void
-TABLE_put_integer (struct table *t, uint64_t value);
 
 struct table *
 table_create (const char *path)
@@ -108,36 +61,77 @@ struct table *
 table_open (const char *path)
 {
   struct table *result;
-  off_t end;
+  off_t end = 0;
 
   result = safe_malloc (sizeof (*result));
+  result->fd = -1;
+
   result->path = safe_strdup (path);
 
   if (-1 == (result->fd = open (path, O_RDONLY)))
-    err (EXIT_FAILURE, "Failed to open '%s' for reading", path);
+    {
+      ca_set_error ("Failed to open '%s' for reading: %s", path, strerror (errno));
+
+      goto fail;
+    }
 
   if (-1 == (end = lseek (result->fd, 0, SEEK_END)))
-    err (EXIT_FAILURE, "Failed to seek to end of '%s'", path);
+    {
+      ca_set_error ("Failed to seek to end of '%s': %s", path, strerror (errno));
+
+      goto fail;
+    }
+
+  if (end < sizeof (struct TABLE_header))
+    {
+      ca_set_error ("Table file '%s' is too small.  Got %zu bytes, expected %zu",
+                    path, (size_t) end, sizeof (struct TABLE_header));
+
+      goto fail;
+    }
 
   result->buffer_size = end;
   result->buffer_fill = end;
 
-  if (end)
+  if (MAP_FAILED == (result->buffer = mmap (NULL, end, PROT_READ, MAP_SHARED, result->fd, 0)))
     {
-      if (MAP_FAILED == (result->buffer = mmap (NULL, end, PROT_READ, MAP_SHARED, result->fd, 0)))
-        err (EXIT_FAILURE, "Failed to mmap '%s'", path);
+      ca_set_error ("Failed to mmap '%s': %s", path, strerror (errno));
+
+      goto fail;
     }
 
   result->header = (struct TABLE_header *) result->buffer;
 
   if (result->header->magic != MAGIC)
-    errx (EX_DATAERR, "Unexpected magic header in '%s'", path);
+    {
+      ca_set_error ("Unexpected magic header in '%s'. Got %016llx, expected %016llx", path,
+                    (unsigned long long) result->header->magic,
+                    (unsigned long long) MAGIC);
+
+      goto fail;
+    }
 
   result->entries = (uint64_t *) (result->buffer + result->header->index_offset);
   result->entry_alloc = (result->buffer_size - result->header->index_offset) / sizeof (uint64_t);
   result->entry_count = result->entry_alloc;
 
   return result;
+
+fail:
+
+  if (result)
+    {
+      if (result->buffer)
+        munmap (result->buffer, end);
+
+      if (result->fd >= 0)
+        close (result->fd);
+
+      free (result->path);
+      free (result);
+    }
+
+  return NULL;
 }
 
 /* Closes a previously opened table */
@@ -214,105 +208,6 @@ table_value_key (const void *value)
   return (const char *)value;
 }
 
-static void
-TABLE_flush (struct table *t)
-{
-  write_all (t->fd, t->buffer, t->buffer_fill);
-  t->write_offset += t->buffer_fill;
-
-  t->crc32 = crc32 (t->crc32, t->buffer, t->buffer_fill);
-
-  t->buffer_fill = 0;
-}
-
-static void
-TABLE_write (struct table *t, const void *data, size_t size)
-{
-  if (t->buffer_fill + size > t->buffer_size)
-    {
-      TABLE_flush (t);
-
-      if (size >= t->buffer_size)
-        {
-          write_all (t->fd, data, size);
-
-          return;
-        }
-    }
-
-  memcpy (t->buffer + t->buffer_fill, data, size);
-  t->buffer_fill += size;
-}
-
-static void
-TABLE_put_integer (struct table *t, uint64_t value)
-{
-  uint8_t buffer[10];
-  unsigned int ptr = 9;
-
-  buffer[ptr] = value & 0x7f;
-  value >>= 7;
-
-  while (value)
-    {
-      buffer[--ptr] = 0x80 | value;
-
-      value >>= 7;
-    }
-
-  TABLE_write (t, &buffer[ptr], 10 - ptr);
-}
-
-/* Writes a key/timestamp/float combination to a table */
-void
-table_write_sample (struct table *t, const char *key, uint64_t sample_time,
-                    float sample_value)
-{
-  table_write_samples (t, key, sample_time, 1, &sample_value, 1);
-}
-
-/* Writes multiple key/timestamp/float combinations to a table */
-void
-table_write_samples (struct table *t, const char *key,
-                     uint64_t start_time, uint32_t interval,
-                     const float *sample_values, size_t count)
-{
-  int cmp = 1;
-
-  if (!t->prev_key || (cmp = strcmp (key, t->prev_key)))
-    {
-      if (t->entry_alloc == t->entry_count)
-        ARRAY_GROW (&t->entries, &t->entry_alloc);
-
-      if (cmp < 0)
-        t->flags &= ~TABLE_FLAG_ORDERED;
-
-      free (t->prev_key);
-      t->prev_key = safe_strdup (key);
-      t->prev_time = 0;
-
-      t->entries[t->entry_count++] = t->write_offset + t->buffer_fill;
-
-      TABLE_write (t, key, strlen (key) + 1);
-    }
-
-  if (!t->prev_time || start_time < t->prev_time)
-    {
-      TABLE_putc (t, TABLE_TIME_SERIES);
-      TABLE_put_integer (t, start_time);
-    }
-  else
-    {
-      TABLE_putc (t, TABLE_RELATIVE_TIME_SERIES);
-      TABLE_put_integer (t, start_time - t->prev_time);
-    }
-
-  t->prev_time = start_time;
-
-  TABLE_put_integer (t, interval);
-  TABLE_put_integer (t, count);
-  TABLE_write (t, sample_values, sizeof (*sample_values) * count);
-}
 
 /*****************************************************************************/
 
@@ -390,9 +285,11 @@ table_sort (struct table *output, struct table *input)
 
 void
 table_iterate (struct table *t, table_iterate_callback callback,
-               enum table_order order)
+               enum table_order order, void *opaque)
 {
   size_t i;
+  const char *key;
+  size_t key_length;
 
   if (!t->entry_count)
     return;
@@ -416,52 +313,21 @@ table_iterate (struct table *t, table_iterate_callback callback,
     }
 
   for (i = 0; i + 1 < t->entry_count; ++i)
-    callback (t->buffer + t->entries[i],
-              t->entries[i + 1] - t->entries[i]);
-
-  callback (t->buffer + t->entries[i],
-            t->header->index_offset - t->entries[i]);
-}
-
-static uint64_t
-TABLE_parse_integer (const uint8_t **input)
-{
-  const uint8_t *i;
-  uint64_t result = 0;
-
-  i = *input;
-
-  result = *i & 0x7F;
-
-  while (0 != (*i & 0x80))
     {
-      result <<= 7;
-      result |= *++i & 0x7F;
+      key = t->buffer + t->entries[i];
+      key_length = strlen (key) + 1;
+
+      callback (key, key + key_length,
+                t->entries[i + 1] - t->entries[i] - key_length, opaque);
     }
 
-  *input = ++i;
+  key = t->buffer + t->entries[i];
+  key_length = strlen (key) + 1;
 
-  return result;
+  callback (key, key + key_length,
+            t->header->index_offset - t->entries[i] - key_length, opaque);
 }
 
-void
-table_parse_time_series (const uint8_t **input,
-                         uint64_t *start_time, uint32_t *interval,
-                         const float **sample_values, size_t *count)
-{
-  const uint8_t *p;
-
-  p = *input;
-
-  *start_time = TABLE_parse_integer (&p);
-  *interval = TABLE_parse_integer (&p);
-  *count = TABLE_parse_integer (&p);
-  *sample_values = (const float *) p;
-
-  p += sizeof (**sample_values) * *count;
-
-  *input = p;
-}
 
 /*****************************************************************************/
 
@@ -574,7 +440,7 @@ TABLE_heap_pop (struct TABLE_iterate_heap *heap, size_t heap_size)
 
 void
 table_iterate_multiple (struct table **tables, size_t table_count,
-                        table_iterate_callback callback)
+                        table_iterate_callback callback, void *opaque)
 {
   struct TABLE_iterate_heap *heap;
   size_t heap_size = 0;
@@ -611,10 +477,15 @@ table_iterate_multiple (struct table **tables, size_t table_count,
   while (heap_size)
     {
       struct TABLE_iterate_heap e;
+      const char *key;
+      size_t key_length;
 
       e = heap[0];
 
-      callback (e.data, e.size);
+      key = e.data;
+      key_length = strlen (key) + 1;
+
+      callback (key, key + key_length, e.size - key_length, opaque);
 
       if (positions[e.table] < tables[e.table]->entry_count)
         {

@@ -88,7 +88,7 @@ main (int argc, char **argv)
 
       switch (*begin++)
         {
-        case TABLE_TIME_SERIES:
+        case CA_TIME_SERIES:
 
           table_parse_time_series (&begin,
                                    &start_time, &interval,
@@ -96,7 +96,7 @@ main (int argc, char **argv)
 
           break;
 
-        case TABLE_RELATIVE_TIME_SERIES:
+        case CA_RELATIVE_TIME_SERIES:
 
           table_parse_time_series (&begin,
                                    &start_time, &interval,

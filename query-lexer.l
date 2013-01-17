@@ -16,13 +16,13 @@ unsigned int character;
 unsigned int line = 0;
 
 static void
-comment(yyscan_t yyscanner);
+comment (yyscan_t yyscanner);
 
 static int
-stringliteral(yyscan_t yyscanner);
+stringliteral (yyscan_t yyscanner);
 
 static void
-strtolower(char *c);
+strtolower (char *c);
 %}
 %option reentrant
 %option noyywrap
@@ -56,28 +56,32 @@ X [xX]
 Y [yY]
 Z [zZ]
 %%
-"/*"                              { character += 2; comment(yyscanner); }
+"/*"                              { character += 2; comment (yyscanner); }
 --[^\n]*
 
 {A}{N}{D}                         { character += yyleng; return AND; }
 {C}{R}{E}{A}{T}{E}                { character += yyleng; return CREATE; }
+{F}{R}{O}{M}                      { character += yyleng; return FROM; }
 {N}{O}{T}                         { character += yyleng; return NOT; }
 {N}{U}{L}{L}                      { character += yyleng; return _NULL; }
+{O}{I}{D}                         { character += yyleng; return OID; }
 {O}{R}                            { character += yyleng; return OR; }
 {P}{A}{T}{H}                      { character += yyleng; return PATH; }
+{S}{E}{L}{E}{C}{T}                { character += yyleng; return SELECT; }
 {S}{H}{O}{W}                      { character += yyleng; return SHOW; }
 {T}{A}{B}{L}{E}                   { character += yyleng; return TABLE; }
 {T}{A}{B}{L}{E}{S}                { character += yyleng; return TABLES; }
 {T}{I}{M}{E}_{F}{L}{O}{A}{T}4     { character += yyleng; return TIME_FLOAT4; }
+{W}{H}{E}{R}{E}                   { character += yyleng; return WHERE; }
 
-0x[A-Fa-f0-9]*      { yylval->l = strtol(yytext + 2, 0, 16); character += yyleng; return Integer; }
-[0-9]+              { yylval->l = strtol(yytext, 0, 0); character += yyleng; return Integer; }
-[0-9]+\.[0-9]+      { yylval->p = ca_arena_strdup(yyextra, yytext); character += yyleng; return Numeric; }
+0x[A-Fa-f0-9]*      { yylval->l = strtol (yytext + 2, 0, 16); character += yyleng; return Integer; }
+[0-9]+              { yylval->l = strtol (yytext, 0, 0); character += yyleng; return Integer; }
+[0-9]+\.[0-9]+      { yylval->p = ca_arena_strdup (yyextra, yytext); character += yyleng; return Numeric; }
 
-\' { return stringliteral(yyscanner); }
+\' { return stringliteral (yyscanner); }
 \" |
 
-[A-Za-z_#][A-za-z0-9_]*  { yylval->p = ca_arena_strdup(yyextra, yytext); strtolower(yylval->p); character += yyleng; return Identifier; }
+[A-Za-z_#][A-za-z0-9_]*  { yylval->p = ca_arena_strdup (yyextra, yytext); strtolower (yylval->p); character += yyleng; return Identifier; }
 [ \t\r\026]+             { character += yyleng; }
 
 \n                       { ++line; character = 1; }
@@ -91,23 +95,23 @@ comment(yyscan_t yyscanner)
   struct yyguts_t *yyg = (struct yyguts_t *) yyscanner;
   int c, last = -1;
 
-  while(EOF != (c = input(yyscanner)))
+  while (EOF != (c = input (yyscanner)))
   {
     ++character;
 
-    if(last == '*' && c == '/')
+    if (last == '*' && c == '/')
       return;
 
     last = c;
 
-    if(c == '\n')
+    if (c == '\n')
     {
       ++line;
       character = 1;
     }
   }
 
-  unput(c);
+  unput (c);
 }
 
 static int
@@ -154,41 +158,35 @@ stringliteral(yyscan_t yyscanner)
 static void
 strtolower(char *c)
 {
-  while(*c)
+  while (*c)
     {
-      *c = tolower(*c);
+      *c = tolower (*c);
       ++c;
     }
 }
 
 int
-ca_query_parse(const char *query)
+ca_query_parse(FILE *input)
 {
   struct ca_query_parse_context context;
   YY_BUFFER_STATE buf;
-  FILE* file;
   int result = -1;
-
-  if (!(file = fmemopen ((void *) query, strlen (query), "r")))
-    return -1;
 
   memset (&context, 0, sizeof (context));
   yylex_init (&context.scanner);
 
   ca_arena_init (&context.arena);
 
-  if(0 != (buf = yy_create_buffer(file, YY_BUF_SIZE, context.scanner)))
+  if (0 != (buf = yy_create_buffer (input, YY_BUF_SIZE, context.scanner)))
   {
     character = 1;
     line = 1;
 
-    yy_switch_to_buffer(buf, context.scanner);
-    yyset_extra(&context.arena, context.scanner);
-    result = yyparse(&context);
-    yy_delete_buffer(buf, context.scanner);
+    yy_switch_to_buffer (buf, context.scanner);
+    yyset_extra (&context.arena, context.scanner);
+    result = yyparse (&context);
+    yy_delete_buffer (buf, context.scanner);
   }
-
-  fclose (file);
 
   ca_arena_free (&context.arena);
   yylex_destroy (context.scanner);

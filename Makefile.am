@@ -25,6 +25,7 @@ libsmalltable_la_SOURCES = \
   io.c io.h \
   memory.c memory.h \
   schema.c schema.h \
+  select.c \
   smalltable.c smalltable.h \
   table-write.c
 

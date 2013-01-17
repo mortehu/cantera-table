@@ -8,7 +8,7 @@
 #include "smalltable.h"
 #include "smalltable-internal.h"
 
-struct ca_schema_table
+struct schema_table
 {
   char *name;
   struct ca_table_declaration declaration;
@@ -18,11 +18,13 @@ struct ca_schema_table
 
 static struct table *schema_table;
 
-static struct ca_schema_table *tables;
+/* XXX: Switch to hashmap */
+
+static struct schema_table *tables;
 static size_t table_alloc, table_count;
 
 void
-schema_value_callback (struct ca_data *data, void *opaque)
+schema_value_callback (const struct ca_data *data, void *opaque)
 {
   const char *key = opaque;
 
@@ -131,4 +133,23 @@ ca_schema_show_tables (void)
 
   for (i = 0; i < table_count; ++i)
     printf ("%s\t%s\n", tables[i].name, tables[i].declaration.path);
+}
+
+struct table *
+ca_schema_table_with_name (const char *name)
+{
+  size_t i;
+
+  for (i = 0; i < table_count; ++i)
+    {
+      if (strcmp (tables[i].name, name))
+        continue;
+
+      if (!tables[i].handle)
+        tables[i].handle = table_open (tables[i].declaration.path);
+
+      return tables[i].handle;
+    }
+
+  return NULL;
 }

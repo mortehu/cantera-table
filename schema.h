@@ -16,4 +16,7 @@ ca_schema_add_table (const char *name,
 void
 ca_schema_show_tables (void);
 
+struct table *
+ca_schema_table_with_name (const char *name);
+
 #endif /* !CA_SCHEMA_H_ */

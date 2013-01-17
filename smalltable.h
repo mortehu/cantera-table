@@ -129,7 +129,7 @@ table_parse_time_series (const uint8_t **input,
 
 /*****************************************************************************/
 
-typedef void (*ca_data_iterate_callback) (struct ca_data *data, void *opaque);
+typedef void (*ca_data_iterate_callback) (const struct ca_data *data, void *opaque);
 
 void
 ca_data_iterate (const void *data, size_t size,

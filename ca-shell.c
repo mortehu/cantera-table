@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,6 +8,7 @@
 #include <getopt.h>
 #include <sys/mman.h>
 #include <sysexits.h>
+#include <unistd.h>
 
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -30,9 +32,7 @@ static struct option long_options[] =
 int
 main (int argc, char **argv)
 {
-  const char *prompt;
-  char *line;
-  int i, is_tty = 1;
+  int i;
 
   while ((i = getopt_long (argc, argv, "", long_options, 0)) != -1)
     {
@@ -74,23 +74,36 @@ main (int argc, char **argv)
   if (-1 == ca_schema_load ("/data/tables/schema.ca"))
     errx (EXIT_FAILURE, "Failed to load schema: %s", ca_last_error ());
 
-  if (is_tty)
-    prompt = "\033[32;1mca\033[00m$ ";
-
-  while (NULL != (line = readline (prompt)))
+  if (isatty (STDIN_FILENO))
     {
-      ca_clear_error ();
+      const char *prompt = "\033[32;1mca\033[00m$ ";
+      FILE *file;
+      char *line;
 
-      add_history (line);
+      while (NULL != (line = readline (prompt)))
+        {
+          ca_clear_error ();
 
-      if (-1 == ca_query_parse(line))
-        fprintf (stderr, "Error executing query: %s\n", ca_last_error ());
+          add_history (line);
 
-      free (line);
-    }
+          if (!(file = fmemopen ((void *) line, strlen (line), "r")))
+            fprintf (stderr, "fmemopen failed: %s\n", strerror (errno));
 
-  if (is_tty)
+          if (-1 == ca_query_parse (file))
+            fprintf (stderr, "Error: %s\n", ca_last_error ());
+
+          fclose (file);
+
+          free (line);
+        }
+
       printf ("\n");
+    }
+  else
+    {
+      if (-1 == ca_query_parse (stdin))
+        fprintf (stderr, "Error: %s\n", ca_last_error ());
+    }
 
   ca_schema_close ();
 

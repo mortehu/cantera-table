@@ -33,14 +33,18 @@ yyerror(YYLTYPE *loc, struct ca_query_parse_context *context, const char *messag
 
 %token AND
 %token CREATE
+%token FROM
 %token NOT
+%token OID
 %token OR
 %token PATH
+%token SELECT
 %token SHOW
 %token TABLE
 %token TABLES
 %token TIME_FLOAT4
 %token UTF8BOM
+%token WHERE
 %token _NULL
 
 %token Identifier
@@ -52,6 +56,10 @@ yyerror(YYLTYPE *loc, struct ca_query_parse_context *context, const char *messag
 %type<p> createTableArg
 %type<p> createTableArgs
 %type<p> columnDefinition
+%type<p> expression
+%type<p> whereClause
+%type<p> selectItem
+%type<p> selectList
 
 %type<l> Integer
 %type<l> notNull
@@ -109,6 +117,16 @@ statement
 
         ca_schema_add_table ($3, &declaration);
       }
+    | SELECT selectList FROM Identifier whereClause
+      {
+        struct select_statement *stmt;
+        ALLOC(stmt);
+        stmt->list = $2;
+        stmt->from = $4;
+        stmt->where = $5;
+
+        CA_select (stmt); 
+      }
     ;
 
 createTableArgs
@@ -156,6 +174,96 @@ createTableArg
         arg->u.column = $1;
         $$ = arg;
       }
+    ;
+
+selectList
+    : selectItem
+      {
+        $$ = $1;
+      }
+    | selectItem ',' selectList
+      {
+        struct select_item *left;
+        left = $1;
+        left->next = $3;;
+        $$ = left;
+      }
+    ;
+
+selectItem
+    : expression
+      {
+        struct select_item *item;
+        ALLOC(item);
+        item->expression = $1;
+        item->alias = 0;
+        item->next = 0;
+        $$ = item;
+      }
+    ;
+
+
+expression
+    : '*'
+      {
+        struct expression *expr;
+        ALLOC(expr);
+        expr->type = EXPR_ASTERISK;
+        $$ = expr;
+      }
+    | Integer
+      {
+        struct expression *expr;
+        ALLOC(expr);
+        expr->type = EXPR_INTEGER;
+        expr->d.integer = $1;
+        $$ = expr;
+      }
+    | Numeric
+      {
+        struct expression *expr;
+        ALLOC(expr);
+        expr->type = EXPR_NUMERIC;
+        expr->d.numeric = $1;
+        $$ = expr;
+      }
+    | StringLiteral
+      {
+        struct expression *expr;
+        ALLOC(expr);
+        expr->type = EXPR_STRING_LITERAL;
+        expr->d.string_literal = $1;
+        $$ = expr;
+      }
+    | Identifier
+      {
+        struct expression *expr;
+        ALLOC(expr);
+        expr->type = EXPR_IDENTIFIER;
+        expr->d.identifier = $1;
+        $$ = expr;
+      }
+    | OID
+      {
+        struct expression *expr;
+        ALLOC(expr);
+        expr->type = EXPR_OID;
+        $$ = expr;
+      }
+    | expression '=' expression
+      {
+        struct expression *expr;
+        ALLOC(expr);
+        expr->type = EXPR_EQUAL;
+        expr->lhs = $1;
+        expr->rhs = $3;
+        $$ = expr;
+      }
+    ;
+
+whereClause
+    :                  { $$ = 0; }
+    | WHERE expression { $$ = $2; }
     ;
 %%
 #include <stdio.h>

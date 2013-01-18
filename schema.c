@@ -3,9 +3,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "ca-table.h"
 #include "memory.h"
 #include "schema.h"
-#include "smalltable.h"
 #include "smalltable-internal.h"
 
 struct schema_table

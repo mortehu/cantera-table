@@ -9,9 +9,8 @@
 #include <sysexits.h>
 #include <unistd.h>
 
-#include "error.h"
+#include "ca-table.h"
 #include "memory.h"
-#include "smalltable.h"
 
 #define DATADIR "/tmp/ts"
 

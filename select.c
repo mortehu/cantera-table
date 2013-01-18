@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "error.h"
+#include "ca-table.h"
 #include "schema.h"
 #include "query.h"
 

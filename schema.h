@@ -1,7 +1,7 @@
 #ifndef CA_SCHEMA_H_
 #define CA_SCHEMA_H_ 1
 
-#include "smalltable.h"
+#include "ca-table.h"
 
 int
 ca_schema_load (const char *path);

@@ -1,10 +1,9 @@
 #include <string.h>
 
+#include "ca-table.h"
 #include "crc32.h"
-#include "error.h"
 #include "io.h"
 #include "memory.h"
-#include "smalltable.h"
 #include "smalltable-internal.h"
 
 void

@@ -3,7 +3,7 @@
 #include <err.h>
 #include <sysexits.h>
 
-#include "smalltable.h"
+#include "ca-table.h"
 
 static uint64_t
 CA_data_parse_integer (const uint8_t **input)

@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "error.h"
+#include "ca-table.h"
 
 static __thread char* CA_last_error;
 static __thread int CA_last_error_was_malloced;

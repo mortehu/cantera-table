@@ -13,9 +13,8 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
-#include "error.h"
+#include "ca-table.h"
 #include "memory.h"
-#include "smalltable.h"
 #include "schema.h"
 #include "query.h"
 

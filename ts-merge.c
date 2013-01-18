@@ -7,20 +7,26 @@
 #include <getopt.h>
 #include <sys/mman.h>
 #include <sysexits.h>
+#include <unistd.h>
 
+#include "error.h"
 #include "memory.h"
 #include "smalltable.h"
 
 #define DATADIR "/tmp/ts"
 
+static int do_ignore_missing;
+static int do_destructive;
 static int print_version;
 static int print_help;
 
 static struct option long_options[] =
 {
-    { "version",        no_argument,       &print_version, 1 },
-    { "help",           no_argument,       &print_help,    1 },
-    { 0, 0, 0, 0 }
+    { "ignore-missing", no_argument, &do_ignore_missing, 1 },
+    { "destructive",    no_argument, &do_destructive,    1 },
+    { "version",        no_argument, &print_version,     1 },
+    { "help",           no_argument, &print_help,        1 },
+    { NULL, 0, NULL, 0 }
 };
 
 static struct table *output;
@@ -196,6 +202,8 @@ main (int argc, char **argv)
     {
       printf ("Usage: %s [OPTION]... OUTPUT INPUT...\n"
              "\n"
+             "      --ignore-missing       ignore missing input files\n"
+             "      --destructive          remove input files after processing\n"
              "      --help     display this help and exit\n"
              "      --version  display version information\n"
              "\n"
@@ -215,16 +223,47 @@ main (int argc, char **argv)
   if (optind + 2 > argc)
     errx (EX_USAGE, "Usage: %s [OPTION]... OUTPUT INPUT...", argv[0]);
 
+  char *output_path = argv[optind];
+
   struct table **inputs;
+  char **input_paths;
+  int input_count;
 
-  inputs = safe_malloc (sizeof (*inputs) * (argc - optind - 1));
+  input_paths = argv + optind + 1;
+  input_count = argc - optind - 1;
 
-  for (i = 0; i < argc - optind - 1; ++i)
-    inputs[i] = table_open (argv[optind + i + 1]);
+  inputs = safe_malloc (sizeof (*inputs) * input_count);
 
-  output = table_create (argv[optind]);
+  for (i = 0; i < input_count; )
+    {
+      if (!(inputs[i] = table_open (input_paths[i])))
+        {
+          if (do_ignore_missing)
+            {
+              fprintf (stderr, "Warning: %s\n", ca_last_error ());
 
-  table_iterate_multiple (inputs, argc - optind - 1, data_callback, NULL);
+              --input_count;
+
+              memmove (input_paths + i,
+                       input_paths + i + 1,
+                       sizeof (*input_paths) * (input_count - i));
+
+              continue;
+            }
+
+          errx (EX_NOINPUT, "Error: %s", ca_last_error ());
+        }
+
+      ++i;
+    }
+
+  if (!input_count)
+    errx (EX_NOINPUT, "No input files");
+
+  if (!(output = table_create (output_path)))
+    errx (EX_CANTCREAT, "Failed to create '%s': %s", output_path, ca_last_error ());
+
+  table_iterate_multiple (inputs, input_count, data_callback, NULL);
 
   if (prev_key)
     {
@@ -235,8 +274,13 @@ main (int argc, char **argv)
 
   table_close (output);
 
-  for (i = 0; i < argc - optind - 1; ++i)
-    table_close (inputs[i]);
+  for (i = 0; i < input_count; ++i)
+    {
+      table_close (inputs[i]);
+
+      if (do_destructive && strcmp (input_paths[i], output_path))
+        unlink (input_paths[i]);
+    }
 
   return EXIT_SUCCESS;
 }

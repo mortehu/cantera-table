@@ -254,7 +254,7 @@ table_sort (struct table *output, struct table *input)
       int cmp = 1;
 
       key = sorted_entries[i].data;
-      key_length = strlen (key + 1);
+      key_length = strlen (key) + 1;
 
       if (!prev_key || (cmp = strcmp (key, prev_key)))
         {
@@ -265,7 +265,7 @@ table_sort (struct table *output, struct table *input)
 
           output->entries[output->entry_count++] = output->write_offset + output->buffer_fill;
 
-          TABLE_write (output, key, strlen (key) + 1);
+          TABLE_write (output, key, key_length);
 
           prev_key = key;
         }

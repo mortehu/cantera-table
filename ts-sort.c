@@ -13,6 +13,7 @@
 
 #define DATADIR "/tmp/ts"
 
+static int do_debug;
 static int print_version;
 static int print_help;
 
@@ -48,6 +49,7 @@ main (int argc, char **argv)
     {
       printf ("Usage: %s [OPTION]... OUTPUT INPUT...\n"
              "\n"
+             "      --debug                print debug output\n"
              "      --help     display this help and exit\n"
              "      --version  display version information\n"
              "\n"
@@ -64,7 +66,7 @@ main (int argc, char **argv)
       return EXIT_SUCCESS;
     }
 
-  if (optind + 1 > argc)
+  if (optind + 1 != argc)
     errx (EX_USAGE, "Usage: %s [OPTION]... TABLE", argv[0]);
 
   input = table_open (argv[optind]);
@@ -73,7 +75,10 @@ main (int argc, char **argv)
     {
       table_close (input);
 
-      errx (EXIT_SUCCESS, "Table '%s' is already sorted", argv[optind]);
+      if (do_debug)
+        fprintf (stderr, "Table '%s' is already sorted\n", argv[optind]);
+
+      return EXIT_SUCCESS;
     }
 
   output = table_create (argv[optind]);

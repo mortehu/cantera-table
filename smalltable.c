@@ -485,6 +485,9 @@ table_iterate_multiple (struct table **tables, size_t table_count,
       key = e.data;
       key_length = strlen (key) + 1;
 
+      if (e.size < key_length)
+        errx (EX_DATAERR, "Cell size is shorter than key");
+
       callback (key, key + key_length, e.size - key_length, opaque);
 
       if (positions[e.table] < tables[e.table]->entry_count)

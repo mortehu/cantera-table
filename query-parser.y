@@ -18,9 +18,8 @@
 #include <string.h>
 
 #include "arena.h"
-#include "error.h"
+#include "ca-table.h"
 #include "schema.h"
-#include "smalltable.h"
 #include "query.h"
 
 #define ALLOC(t) do { t = ca_arena_calloc(&context->arena, sizeof(*t)); } while(0)

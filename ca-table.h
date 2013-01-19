@@ -68,6 +68,11 @@ enum table_order
   TABLE_ORDER_KEY
 };
 
+enum ca_table_flag
+{
+  CA_TABLE_NO_RELATIVE
+};
+
 typedef void (*table_iterate_callback) (const char *key,
                                         const void *value, size_t value_size,
                                         void *opaque);
@@ -83,6 +88,9 @@ table_open (const char *path);
 /* Closes a previously opened table */
 void
 table_close (struct table *t);
+
+void
+table_set_flag (struct table *t, enum ca_table_flag flag);
 
 int
 table_is_sorted (const struct table *t);

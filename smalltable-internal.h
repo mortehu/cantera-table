@@ -35,6 +35,8 @@ struct table
 
   uint64_t *entries;
   size_t entry_alloc, entry_count;
+
+  int no_relative;
 };
 
 void

@@ -16,6 +16,7 @@
 
 static int do_ignore_missing;
 static int do_destructive;
+static int do_no_relative;
 static int print_version;
 static int print_help;
 
@@ -23,6 +24,7 @@ static struct option long_options[] =
 {
     { "ignore-missing", no_argument, &do_ignore_missing, 1 },
     { "destructive",    no_argument, &do_destructive,    1 },
+    { "no-relative",    no_argument, &do_no_relative,    1 },
     { "version",        no_argument, &print_version,     1 },
     { "help",           no_argument, &print_help,        1 },
     { NULL, 0, NULL, 0 }
@@ -203,6 +205,7 @@ main (int argc, char **argv)
              "\n"
              "      --ignore-missing       ignore missing input files\n"
              "      --destructive          remove input files after processing\n"
+             "      --no-relative          do not store relative timestamps\n"
              "      --help     display this help and exit\n"
              "      --version  display version information\n"
              "\n"
@@ -261,6 +264,9 @@ main (int argc, char **argv)
 
   if (!(output = table_create (output_path)))
     errx (EX_CANTCREAT, "Failed to create '%s': %s", output_path, ca_last_error ());
+
+  if (do_no_relative)
+    table_set_flag (output, CA_TABLE_NO_RELATIVE);
 
   table_iterate_multiple (inputs, input_count, data_callback, NULL);
 

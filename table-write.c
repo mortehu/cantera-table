@@ -94,7 +94,7 @@ table_write_samples (struct table *t, const char *key,
 {
   TABLE_write_key (t, key);
 
-  if (!t->prev_time || start_time < t->prev_time)
+  if (t->no_relative || (!t->prev_time || start_time < t->prev_time))
     {
       TABLE_putc (t, CA_TIME_SERIES);
       TABLE_put_integer (t, start_time);

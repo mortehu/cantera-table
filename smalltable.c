@@ -185,6 +185,23 @@ table_close (struct table *t)
   free (t);
 }
 
+void
+table_set_flag (struct table *t, enum ca_table_flag flag)
+{
+  switch (flag)
+    {
+    case CA_TABLE_NO_RELATIVE:
+
+      t->no_relative = 1;
+
+      break;
+
+    default:
+
+      errx (EX_SOFTWARE, "Unknown flag passed to table_set_flag");
+    }
+}
+
 int
 table_is_sorted (const struct table *t)
 {

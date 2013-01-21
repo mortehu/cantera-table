@@ -41,7 +41,7 @@ ca_arena_reset(struct ca_arena_info* arena)
     free(tmp);
   }
 
-  arena->used = NULL;
+  arena->used = 0;
   arena->next = NULL;
   arena->last = NULL;
 }

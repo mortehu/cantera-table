@@ -15,6 +15,8 @@
 
 unsigned int character;
 unsigned int line = 0;
+int
+yyparse ();
 
 static void
 comment (yyscan_t yyscanner);

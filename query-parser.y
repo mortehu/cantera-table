@@ -28,8 +28,11 @@
 
 #define ALLOC(t) do { t = ca_arena_calloc(&context->arena, sizeof(*t)); } while(0)
 
+int
+yylex ();
+
 void
-yyerror(YYLTYPE *loc, struct ca_query_parse_context *context, const char *message);
+yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *message);
 
 #define scanner context->scanner
 %}

@@ -10,8 +10,28 @@
 #include <sysexits.h>
 #include <unistd.h>
 
-#include <readline/readline.h>
-#include <readline/history.h>
+#ifdef HAVE_LIBREADLINE
+#  if defined(HAVE_READLINE_READLINE_H)
+#    include <readline/readline.h>
+#  elif defined(HAVE_READLINE_H)
+#    include <readline.h>
+#  else
+extern char *readline ();
+#  endif
+char *cmdline = NULL;
+#endif
+
+#ifdef HAVE_READLINE_HISTORY
+#  if defined(HAVE_READLINE_HISTORY_H)
+#    include <readline/history.h>
+#  elif defined(HAVE_HISTORY_H)
+#    include <history.h>
+#  else
+extern void add_history ();
+extern int write_history ();
+extern int read_history ();
+#  endif
+#endif
 
 #include "ca-table.h"
 #include "memory.h"
@@ -75,15 +95,52 @@ main (int argc, char **argv)
 
   if (isatty (STDIN_FILENO))
     {
-      const char *prompt = "\033[32;1mca\033[00m$ ";
-      FILE *file;
-      char *line;
 
-      while (NULL != (line = readline (prompt)))
+      for (;;)
         {
-          ca_clear_error ();
+          const char *prompt = "\033[32;1mca\033[00m$ ";
+          FILE *file;
+          char *line = NULL;
 
+#if HAVE_LIBREADLINE
+          if (!(line = readline (prompt)))
+            break;
+#else
+          size_t line_alloc = 0, line_length = 0;
+          int ch;
+
+          printf ("%s", prompt);
+          fflush (stdout);
+
+          while (EOF != (ch = getchar ()))
+            {
+              /* Perform this check before the EOL check to make room for
+               * terminating NUL */
+              if (line_length == line_alloc)
+                ARRAY_GROW (&line, &line_alloc);
+
+              if (ch == '\n')
+                break;
+
+              line[line_length++] = ch;
+            }
+
+          if (!line_length)
+            {
+              if (ch == EOF)
+                break;
+
+              continue;
+            }
+
+          line[line_length] = 0;
+#endif
+
+#if HAVE_READLINE_HISTORY
           add_history (line);
+#endif
+
+          ca_clear_error ();
 
           if (!(file = fmemopen ((void *) line, strlen (line), "r")))
             fprintf (stderr, "fmemopen failed: %s\n", strerror (errno));

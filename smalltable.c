@@ -159,7 +159,7 @@ table_close (struct table *t)
 
       write_all (t->fd, &header, sizeof (header));
 
-      if (-1 == fsync (t->fd))
+      if (!t->no_fsync && -1 == fsync (t->fd))
         err (EXIT_FAILURE, "Failed to fsync '%s'", t->tmp_path);
 
       if (-1 == close (t->fd))
@@ -193,6 +193,12 @@ table_set_flag (struct table *t, enum ca_table_flag flag)
     case CA_TABLE_NO_RELATIVE:
 
       t->no_relative = 1;
+
+      break;
+
+    case CA_TABLE_NO_FSYNC:
+
+      t->no_fsync = 1;
 
       break;
 

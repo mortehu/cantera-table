@@ -17,6 +17,7 @@
 static int do_ignore_missing;
 static int do_destructive;
 static int do_no_relative;
+static int do_no_fsync;
 static int print_version;
 static int print_help;
 
@@ -25,6 +26,7 @@ static struct option long_options[] =
     { "ignore-missing", no_argument, &do_ignore_missing, 1 },
     { "destructive",    no_argument, &do_destructive,    1 },
     { "no-relative",    no_argument, &do_no_relative,    1 },
+    { "no-fsync",       no_argument, &do_no_fsync,       1 },
     { "version",        no_argument, &print_version,     1 },
     { "help",           no_argument, &print_help,        1 },
     { NULL, 0, NULL, 0 }
@@ -86,7 +88,7 @@ data_flush (const char *key)
 
       memmove (samples + i + 1,
                samples + next,
-               sizeof (*samples) * sample_count - i - 1);
+               sizeof (*samples) * (sample_count - i - 1));
     }
 
   float *series_values = NULL;
@@ -121,6 +123,8 @@ data_flush (const char *key)
 
       table_write_samples (output, key, start_time, interval, series_values, series_count);
     }
+
+  free (series_values);
 
   sample_count = 0;
 }
@@ -206,6 +210,7 @@ main (int argc, char **argv)
              "      --ignore-missing       ignore missing input files\n"
              "      --destructive          remove input files after processing\n"
              "      --no-relative          do not store relative timestamps\n"
+             "      --no-fsync             do not use fsync on new tables\n"
              "      --help     display this help and exit\n"
              "      --version  display version information\n"
              "\n"
@@ -256,6 +261,26 @@ main (int argc, char **argv)
           errx (EX_NOINPUT, "Error: %s", ca_last_error ());
         }
 
+      if (!table_is_sorted (inputs[i]))
+        {
+          struct table *sort_tmp;
+
+          fprintf (stderr, "Sorting '%s'...\n", input_paths[i]);
+
+          sort_tmp = table_create (input_paths[i]);
+
+          if (do_no_fsync)
+            table_set_flag (sort_tmp, CA_TABLE_NO_FSYNC);
+
+          table_sort (sort_tmp, inputs[i]);
+
+          table_close (sort_tmp);
+          table_close (inputs[i]);
+
+          if (!(inputs[i] = table_open (input_paths[i])))
+            errx (EX_NOINPUT, "Error: %s", ca_last_error ());
+        }
+
       ++i;
     }
 
@@ -267,6 +292,9 @@ main (int argc, char **argv)
 
   if (do_no_relative)
     table_set_flag (output, CA_TABLE_NO_RELATIVE);
+
+  if (do_no_fsync)
+    table_set_flag (output, CA_TABLE_NO_FSYNC);
 
   table_iterate_multiple (inputs, input_count, data_callback, NULL);
 
@@ -286,6 +314,8 @@ main (int argc, char **argv)
       if (do_destructive && strcmp (input_paths[i], output_path))
         unlink (input_paths[i]);
     }
+
+  free (inputs);
 
   return EXIT_SUCCESS;
 }

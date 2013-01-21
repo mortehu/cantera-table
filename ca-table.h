@@ -70,7 +70,8 @@ enum table_order
 
 enum ca_table_flag
 {
-  CA_TABLE_NO_RELATIVE
+  CA_TABLE_NO_RELATIVE,
+  CA_TABLE_NO_FSYNC
 };
 
 typedef void (*table_iterate_callback) (const char *key,

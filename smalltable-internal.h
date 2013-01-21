@@ -37,6 +37,7 @@ struct table
   size_t entry_alloc, entry_count;
 
   int no_relative;
+  int no_fsync;
 };
 
 void

@@ -22,6 +22,7 @@ libca_table_la_SOURCES = \
   data.c \
   error.c error.h \
   io.c io.h \
+  hashmap.c hashmap.h \
   merge.c \
   memory.c memory.h \
   schema.c schema.h \

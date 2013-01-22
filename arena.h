@@ -41,7 +41,7 @@ char*
 ca_arena_strndup(struct ca_arena_info *arena, const char *string, size_t length) CA_MALLOC;
 
 #ifdef __cplusplus
-}
+} /* extern "C" */
 #endif
 
 #endif /* !CA_ARENA_H_ */

@@ -4,6 +4,10 @@
 #include "arena.h"
 #include "ca-table.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct ca_query_parse_context
 {
   void *scanner;
@@ -116,5 +120,9 @@ struct select_statement
 
 int
 CA_select (struct ca_schema *schema, struct select_statement *stmt);
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif /* !CA_QUERY_H_ */

@@ -471,7 +471,7 @@ CA_wo_seek_to_key (void *handle, const char *key)
 
           if (cmp < 0)
             {
-              first = t->offset + 1;
+              first = middle + 1;
               count -= half + 1;
             }
           else if (likely (cmp > 0))
@@ -497,7 +497,7 @@ CA_wo_seek_to_key (void *handle, const char *key)
 
           if (cmp > 0)
             {
-              first = t->offset + 1;
+              first = middle + 1;
               count -= half + 1;
             }
           else if (likely (cmp < 0))

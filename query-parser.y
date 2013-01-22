@@ -226,24 +226,27 @@ expression
       {
         struct expression *expr;
         ALLOC(expr);
-        expr->type = EXPR_INTEGER;
-        expr->d.integer = $1;
+        expr->type = EXPR_CONSTANT;
+        expr->value.type = CA_INT64;
+        expr->value.d.integer = $1;
         $$ = expr;
       }
     | Numeric
       {
         struct expression *expr;
         ALLOC(expr);
-        expr->type = EXPR_NUMERIC;
-        expr->d.numeric = $1;
+        expr->type = EXPR_CONSTANT;
+        expr->value.type = CA_NUMERIC;
+        expr->value.d.numeric = $1;
         $$ = expr;
       }
     | StringLiteral
       {
         struct expression *expr;
         ALLOC(expr);
-        expr->type = EXPR_STRING_LITERAL;
-        expr->d.string_literal = $1;
+        expr->type = EXPR_CONSTANT;
+        expr->value.type = CA_TEXT;
+        expr->value.d.string_literal = $1;
         $$ = expr;
       }
     | Identifier
@@ -251,7 +254,7 @@ expression
         struct expression *expr;
         ALLOC(expr);
         expr->type = EXPR_IDENTIFIER;
-        expr->d.identifier = $1;
+        expr->value.d.identifier = $1;
         $$ = expr;
       }
     | expression '=' expression

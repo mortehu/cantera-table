@@ -37,6 +37,8 @@ struct create_table_arg
 
 enum expression_type
 {
+  EXPR_CONSTANT,
+
   EXPR_ADD,
   EXPR_AND,
   EXPR_ASTERISK,
@@ -66,11 +68,7 @@ enum expression_type
   EXPR_SELECT,
   EXPR_SUB,
 
-  EXPR_INTEGER,
-  EXPR_NUMERIC,
-  EXPR_STRING_LITERAL,
-
-  EXPR_FIELD
+  EXPR_VARIABLE
 };
 
 struct column_definition
@@ -81,22 +79,29 @@ struct column_definition
   int primary_key;
 };
 
-struct expression
+struct expression_value
 {
-  enum expression_type type;
+  enum ca_value_type type;
   union
     {
-      long integer;
+      int64_t integer;
       char *numeric;
       char *string_literal;
       char *identifier;
       struct column_type *type;
       struct select_statement *select;
-      struct ca_field *field;
+      struct select_variable *variable;
     } d;
+};
+
+struct expression
+{
+  enum expression_type type;
+
+  struct expression_value value;
 
   int _not;
-  char *identifier2;
+  /* char *identifier2; */
 
   struct expression *lhs, *rhs;
 
@@ -116,6 +121,15 @@ struct select_statement
   struct select_item *list;
   char *from;
   struct expression *where;
+};
+
+struct select_variable
+{
+  const char *name;
+  struct ca_field *field;
+  struct expression_value value;
+
+  struct select_variable *next;
 };
 
 int

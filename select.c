@@ -22,18 +22,20 @@ expr_primary_key_filter (struct expression *expr)
     {
     case EXPR_EQUAL:
 
-      if (expr->lhs->type == EXPR_FIELD
-          && (expr->lhs->d.field->flags & CA_FIELD_PRIMARY_KEY)
-          && expr->rhs->type == EXPR_STRING_LITERAL)
+      if (expr->lhs->type == EXPR_VARIABLE
+          && (expr->lhs->value.d.variable->field->flags & CA_FIELD_PRIMARY_KEY)
+          && expr->rhs->type == EXPR_CONSTANT
+          && expr->rhs->value.type == CA_TEXT)
         {
-          return expr->rhs->d.string_literal;
+          return expr->rhs->value.d.string_literal;
         }
 
-      if (expr->rhs->type == EXPR_FIELD
-          && (expr->rhs->d.field->flags & CA_FIELD_PRIMARY_KEY)
-          && expr->lhs->type == EXPR_STRING_LITERAL)
+      if (expr->rhs->type == EXPR_VARIABLE
+          && (expr->rhs->value.d.variable->field->flags & CA_FIELD_PRIMARY_KEY)
+          && expr->lhs->type == EXPR_CONSTANT
+          && expr->lhs->value.type == CA_TEXT)
         {
-          return expr->lhs->d.string_literal;
+          return expr->lhs->value.d.string_literal;
         }
 
       return NULL;
@@ -132,10 +134,10 @@ format_output (enum ca_value_type type,
 }
 
 static int
-CA_query_resolve_fields (struct expression *expression,
-                         const struct ca_hashmap *fields)
+CA_query_resolve_variables (struct expression *expression,
+                            const struct ca_hashmap *variables)
 {
-  struct ca_field *field;
+  struct select_variable *variable;
 
   while (expression)
     {
@@ -143,15 +145,15 @@ CA_query_resolve_fields (struct expression *expression,
         {
         case EXPR_IDENTIFIER:
 
-          if (!(field = ca_hashmap_get (fields, expression->d.identifier)))
+          if (!(variable = ca_hashmap_get (variables, expression->value.d.identifier)))
             {
-              ca_set_error ("Unknown field name '%s'", expression->d.identifier);
+              ca_set_error ("Unknown field name '%s'", expression->value.d.identifier);
 
               return -1;
             }
 
-          expression->type = EXPR_FIELD;
-          expression->d.field = field;
+          expression->type = EXPR_VARIABLE;
+          expression->value.d.variable = variable;
 
           return 0;
 
@@ -170,7 +172,7 @@ CA_query_resolve_fields (struct expression *expression,
         case EXPR_OR:
         case EXPR_SUB:
 
-          if (-1 == CA_query_resolve_fields (expression->rhs, fields))
+          if (-1 == CA_query_resolve_variables (expression->rhs, variables))
             return -1;
 
           /* Fall through */
@@ -183,15 +185,13 @@ CA_query_resolve_fields (struct expression *expression,
 
           continue;
 
-        case EXPR_STRING_LITERAL:
-        case EXPR_INTEGER:
-        case EXPR_NUMERIC:
+        case EXPR_CONSTANT:
 
           return 0;
 
         default:
 
-          fprintf (stderr, "Type %d not implemented\n", expression->type);
+          fprintf (stderr, "Type %d not implemented\n", expression->value.type);
 
           assert (!"fix me");
         }
@@ -206,31 +206,45 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
   struct ca_table *table;
   struct ca_table_declaration *declaration;
 
-  struct ca_hashmap *fields = NULL;
+  struct select_variable *first_variable = NULL;
+  struct select_variable **last_variable = &first_variable;
+  struct ca_hashmap *variables = NULL;
 
   size_t i;
-  int result = -1;
+  int ret, result = -1;
 
   ca_clear_error ();
 
   if (!(table = ca_schema_table (schema, stmt->from, &declaration)))
     goto done;
 
-  fields = ca_hashmap_create (63);
+  variables = ca_hashmap_create (63);
 
   for (i = 0; i < declaration->field_count; ++i)
     {
-      if (-1 == ca_hashmap_insert (fields, declaration->fields[i].name, &declaration->fields[i])
-          && errno != EEXIST)
+      struct select_variable *new_variable;
+
+      /* XXX: Use arena allocator */
+
+      new_variable = calloc (1, sizeof (*new_variable));
+      new_variable->name = declaration->fields[i].name;
+      new_variable->field = &declaration->fields[i];
+      new_variable->value.type = declaration->fields[i].type;
+
+      if (-1 == ca_hashmap_insert (variables, declaration->fields[i].name, new_variable))
+        goto done;
+
+      *last_variable = new_variable;
+      last_variable = &new_variable->next;
+    }
+
+  if (stmt->where)
+    {
+      if (-1 == CA_query_resolve_variables (stmt->where, variables))
         goto done;
     }
 
-  if (stmt->where
-      && -1 == CA_query_resolve_fields (stmt->where, fields))
-    goto done;
-
   const char *primary_key_filter;
-  int ret;
 
   if (NULL != (primary_key_filter = expr_primary_key_filter (stmt->where)))
     {
@@ -254,12 +268,26 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
                      value.iov_base,
                      (const uint8_t *) value.iov_base + value.iov_len);
     }
+  else
+    {
+      const char *key;
+      struct iovec value;
+
+      while (1 == (ret = ca_table_read_row (table, &key, &value)))
+        {
+          /* XXX: ... */
+
+        }
+
+      if (ret == -1)
+        goto done;
+    }
 
   result = 0;
 
 done:
 
-  ca_hashmap_free (fields);
+  ca_hashmap_free (variables);
 
   return result;
 }

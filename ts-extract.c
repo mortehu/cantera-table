@@ -65,57 +65,75 @@ main (int argc, char **argv)
       return EXIT_SUCCESS;
     }
 
-  if (optind + 2 != argc)
-    errx (EX_USAGE, "Usage: %s [OPTION]... TABLE KEY", argv[0]);
+  if (optind + 1 > argc)
+    errx (EX_USAGE, "Usage: %s [OPTION]... TABLE [KEY]", argv[0]);
 
   if (!(table = ca_table_open ("write-once", argv[optind++], O_RDONLY, 0)))
     errx (EX_NOINPUT, "%s", ca_last_error ());
 
-  const char *key = argv[optind++];
-  struct iovec value;
-  const uint8_t *begin, *end;
-  ssize_t ret;
-
-  if (-1 == (ret = ca_table_seek_to_key (table, key)))
-    errx (EXIT_FAILURE, "%s", ca_last_error());
-
-  if (!ret)
+  if (optind == argc)
     {
-      fprintf (stderr, "'%s' not found\n", key);
+      const char *key;
+      ssize_t ret;
 
-      return EXIT_FAILURE;
-    }
+      while (1 == (ret = ca_table_read_row (table, &key, NULL)))
+        printf ("%s\n", key);
 
-
-  if (1 != (ret = ca_table_read_row (table, NULL, &value)))
-    {
-      if (ret < 0)
-        fprintf (stderr, "%s\n", ca_last_error ());
-      else if (!ret) /* Key both exists and does not exist? */
-        fprintf (stderr, "ca_table_read_row unexpectedly returned 0\n");
-
-      return EXIT_FAILURE;
-    }
-
-  begin = value.iov_base;
-  end = begin + value.iov_len;
-
-  while (begin != end)
-    {
-      uint64_t start_time;
-      uint32_t i, interval, count;
-      const float *sample_values;
-
-      ca_data_parse_time_float4 (&begin,
-                                 &start_time, &interval,
-                                 &sample_values, &count);
-
-
-      for (i = 0; i < count; ++i)
+      if (ret == -1)
         {
-          printf ("%llu\t%.7g\n",
-                  (unsigned long long) (start_time + i * interval),
-                  sample_values[i]);
+          fprintf (stderr, "Error: %s\n", ca_last_error ());
+
+          return EXIT_FAILURE;
+        }
+    }
+  else
+    {
+      const char *key = argv[optind++];
+      struct iovec value;
+      const uint8_t *begin, *end;
+      ssize_t ret;
+
+      if (-1 == (ret = ca_table_seek_to_key (table, key)))
+        errx (EXIT_FAILURE, "Error: %s", ca_last_error());
+
+      if (!ret)
+        {
+          fprintf (stderr, "'%s' not found\n", key);
+
+          return EXIT_FAILURE;
+        }
+
+
+      if (1 != (ret = ca_table_read_row (table, NULL, &value)))
+        {
+          if (ret < 0)
+            fprintf (stderr, "Error: %s\n", ca_last_error ());
+          else if (!ret) /* Key both exists and does not exist? */
+            fprintf (stderr, "Error: ca_table_read_row unexpectedly returned 0\n");
+
+          return EXIT_FAILURE;
+        }
+
+      begin = value.iov_base;
+      end = begin + value.iov_len;
+
+      while (begin != end)
+        {
+          uint64_t start_time;
+          uint32_t i, interval, count;
+          const float *sample_values;
+
+          ca_data_parse_time_float4 (&begin,
+                                     &start_time, &interval,
+                                     &sample_values, &count);
+
+
+          for (i = 0; i < count; ++i)
+            {
+              printf ("%llu\t%.7g\n",
+                      (unsigned long long) (start_time + i * interval),
+                      sample_values[i]);
+            }
         }
     }
 

@@ -36,22 +36,10 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 #define scanner context->scanner
 %}
 
-%token AND
-%token CREATE
-%token FROM
-%token NOT
-%token OID
-%token OR
-%token PATH
-%token SELECT
-%token SHOW
-%token TABLE
-%token TABLES
-%token TEXT
-%token TIME_FLOAT4
-%token UTF8BOM
-%token WHERE
-%token _NULL
+%token AND CREATE FROM NOT OR PATH SELECT SHOW TABLE TABLES TEXT
+%token TIME_FLOAT4 UTF8BOM WHERE _NULL
+%token PRIMARY
+%token KEY
 
 %token Identifier
 %token Integer
@@ -69,6 +57,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 
 %type<l> Integer
 %type<l> notNull
+%type<l> primaryKey
 %type<l> columnType
 
 %left '=' '<' '>' '+' '-' '*' '/' LIKE AND OR UMINUS
@@ -119,9 +108,14 @@ statement
 
             strncpy (declaration.fields[i].name, arg->u.column->name, CA_NAMEDATALEN - 1);
 
+            if (arg->u.column->not_null)
+              declaration.fields[i].flags |= CA_FIELD_NOT_NULL;
+
+            if (arg->u.column->primary_key)
+              declaration.fields[i].flags |= CA_FIELD_PRIMARY_KEY;
+
             ++i;
           }
-          ++declaration.field_count;
 
         if (-1 == ca_schema_create_table (context->schema, $3, &declaration))
           context->error = 1;
@@ -134,7 +128,8 @@ statement
         stmt->from = $4;
         stmt->where = $5;
 
-        CA_select (context->schema, stmt); 
+        if (-1 == CA_select (context->schema, stmt))
+          fprintf (stderr, "Error: %s\n", ca_last_error ());
       }
     ;
 
@@ -152,25 +147,31 @@ createTableArgs
       }
     ;
 
+columnType
+    : TEXT        { $$ = CA_TEXT; }
+    | TIME_FLOAT4 { $$ = CA_TIME_SERIES; }
+    ;
+
 notNull
     :           { $$ = 0; }
     | _NULL     { $$ = 0; }
     | NOT _NULL { $$ = 1; }
     ;
 
-columnType
-    : TEXT        { $$ = CA_TEXT; }
-    | TIME_FLOAT4 { $$ = CA_TIME_SERIES; }
+primaryKey
+    :             { $$ = 0; }
+    | PRIMARY KEY { $$ = 1; }
     ;
 
 columnDefinition
-    : Identifier columnType notNull
+    : Identifier columnType notNull primaryKey
       {
         struct column_definition *col;
         ALLOC(col);
         col->name = $1;
         col->type = $2;
         col->not_null = $3;
+        col->primary_key = $4;
         $$ = col;
       }
     ;
@@ -251,13 +252,6 @@ expression
         ALLOC(expr);
         expr->type = EXPR_IDENTIFIER;
         expr->d.identifier = $1;
-        $$ = expr;
-      }
-    | OID
-      {
-        struct expression *expr;
-        ALLOC(expr);
-        expr->type = EXPR_OID;
         $$ = expr;
       }
     | expression '=' expression

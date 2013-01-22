@@ -69,9 +69,10 @@ Z [zZ]
 {F}{R}{O}{M}                      { character += yyleng; return FROM; }
 {N}{O}{T}                         { character += yyleng; return NOT; }
 {N}{U}{L}{L}                      { character += yyleng; return _NULL; }
-{O}{I}{D}                         { character += yyleng; return OID; }
+{K}{E}{Y}                         { character += yyleng; return KEY; }
 {O}{R}                            { character += yyleng; return OR; }
 {P}{A}{T}{H}                      { character += yyleng; return PATH; }
+{P}{R}{I}{M}{A}{R}{Y}             { character += yyleng; return PRIMARY; }
 {S}{E}{L}{E}{C}{T}                { character += yyleng; return SELECT; }
 {S}{H}{O}{W}                      { character += yyleng; return SHOW; }
 {T}{A}{B}{L}{E}                   { character += yyleng; return TABLE; }

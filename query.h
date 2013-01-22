@@ -46,7 +46,6 @@ enum expression_type
   EXPR_GREATER_EQUAL,
   EXPR_GREATER_THAN,
   EXPR_IDENTIFIER,
-  EXPR_INTEGER,
   EXPR_IN_LIST,
   EXPR_IN_SELECT,
   EXPR_IS_NULL,
@@ -58,13 +57,16 @@ enum expression_type
   EXPR_NEGATIVE,
   EXPR_NOT,
   EXPR_NOT_EQUAL,
-  EXPR_NUMERIC,
-  EXPR_OID,
   EXPR_OR,
   EXPR_PARENTHESIS,
   EXPR_SELECT,
+  EXPR_SUB,
+
+  EXPR_INTEGER,
+  EXPR_NUMERIC,
   EXPR_STRING_LITERAL,
-  EXPR_SUB
+
+  EXPR_FIELD
 };
 
 struct column_definition
@@ -72,6 +74,7 @@ struct column_definition
   const char *name;
   int type;
   int not_null;
+  int primary_key;
 };
 
 struct expression
@@ -85,6 +88,7 @@ struct expression
       char *identifier;
       struct column_type *type;
       struct select_statement *select;
+      struct ca_field *field;
     } d;
 
   int _not;
@@ -110,7 +114,7 @@ struct select_statement
   struct expression *where;
 };
 
-void
+int
 CA_select (struct ca_schema *schema, struct select_statement *stmt);
 
 #endif /* !CA_QUERY_H_ */

@@ -38,7 +38,8 @@ enum ca_value_type
 
 enum ca_field_flag
 {
-  CA_FIELD_NOT_NULL = 0x00000001
+  CA_FIELD_NOT_NULL =    0x0001,
+  CA_FIELD_PRIMARY_KEY = 0x0002
 };
 
 struct ca_field
@@ -176,14 +177,15 @@ struct ca_schema *
 ca_schema_load (const char *path) CA_USE_RESULT;
 
 void
-ca_schema_close (struct ca_schema *s);
+ca_schema_close (struct ca_schema *schema);
 
 int
-ca_schema_create_table (struct ca_schema *s, const char *table_name,
+ca_schema_create_table (struct ca_schema *schema, const char *table_name,
                         struct ca_table_declaration *declaration) CA_USE_RESULT;
 
 struct ca_table *
-ca_schema_table (struct ca_schema *s, const char *table_name) CA_USE_RESULT;
+ca_schema_table (struct ca_schema *schema, const char *table_name,
+                 struct ca_table_declaration **declaration) CA_USE_RESULT;
 
 int
 ca_schema_parse_script (struct ca_schema *schema, FILE *input);

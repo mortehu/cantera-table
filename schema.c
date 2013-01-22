@@ -210,7 +210,8 @@ fail:
 }
 
 struct ca_table *
-ca_schema_table (struct ca_schema *schema, const char *table_name)
+ca_schema_table (struct ca_schema *schema, const char *table_name,
+                 struct ca_table_declaration **declaration)
 {
   struct ca_table *result;
   size_t i;
@@ -238,6 +239,9 @@ ca_schema_table (struct ca_schema *schema, const char *table_name)
 
           schema->tables[i].handle = result;
         }
+
+      if (declaration)
+        *declaration = &schema->tables[i].declaration;
 
       return schema->tables[i].handle;
     }

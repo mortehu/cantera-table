@@ -122,10 +122,18 @@ ca_arena_alloc(struct ca_arena_info* arena, size_t size)
       struct ca_arena_info* new_arena;
 
       if (!(new_arena = malloc(sizeof(*new_arena))))
-        ca_set_error ("Failed to allocate %zu bytes", sizeof (*new_arena));
+        {
+          ca_set_error ("Failed to allocate %zu bytes", sizeof (*new_arena));
+
+          return NULL;
+        }
 
       if (!(new_arena->data = malloc(ARENA_BLOCK_SIZE)))
-        ca_set_error ("Failed to allocate %u bytes", ARENA_BLOCK_SIZE);
+        {
+          ca_set_error ("Failed to allocate %u bytes", ARENA_BLOCK_SIZE);
+
+          return NULL;
+        }
 
       new_arena->size = ARENA_BLOCK_SIZE;
       new_arena->used = 0;

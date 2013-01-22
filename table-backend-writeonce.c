@@ -12,6 +12,7 @@
 #include <err.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sysexits.h>
 #include <unistd.h>
@@ -194,7 +195,17 @@ CA_wo_open (const char *path, int flags, mode_t mode)
           goto fail;
         }
 
+
+      if (-1 == fchmod (result->fd, mode))
+        {
+          ca_set_error ("fchmod failed on path `%s': %s",
+                        result->tmp_path, strerror (errno));
+
+          goto fail;
+        }
+
       /* We use mmap instead of malloc to be more compatible with read code */
+
       if (MAP_FAILED == (result->buffer = mmap (NULL, /* address */
                                                 BUFFER_SIZE,
                                                 PROT_READ | PROT_WRITE,

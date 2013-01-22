@@ -2,6 +2,7 @@
 #  include "config.h"
 #endif
 
+#include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +17,16 @@
 #include "ca-table.h"
 #include "memory.h"
 
+enum aggregate_function
+{
+  aggregate_abort,
+  aggregate_avg,
+  aggregate_sum,
+  aggregate_min,
+  aggregate_max
+};
+
+static enum aggregate_function aggregate_function = aggregate_abort;
 static int do_ignore_missing;
 static int do_no_fsync;
 static int print_version;
@@ -23,10 +34,11 @@ static int print_help;
 
 static struct option long_options[] =
 {
-    { "ignore-missing", no_argument, &do_ignore_missing, 1 },
-    { "no-fsync",       no_argument, &do_no_fsync,       1 },
-    { "version",        no_argument, &print_version,     1 },
-    { "help",           no_argument, &print_help,        1 },
+    { "aggregate",      required_argument, NULL,               'A' },
+    { "ignore-missing", no_argument,       &do_ignore_missing, 1 },
+    { "no-fsync",       no_argument,       &do_no_fsync,       1 },
+    { "version",        no_argument,       &print_version,     1 },
+    { "help",           no_argument,       &print_help,        1 },
     { NULL, 0, NULL, 0 }
 };
 
@@ -57,17 +69,74 @@ samplecmp (const void *vlhs, const void *vrhs)
 static int
 data_flush (const char *key) CA_USE_RESULT;
 
+static float
+aggregate (const float *values, size_t count)
+{
+  double tmp = 0.0;
+  size_t i;
+
+  switch (aggregate_function)
+    {
+    case aggregate_avg:
+
+      for (i = 0; i < count; ++i)
+        tmp += values[count];
+
+      return tmp / i;
+
+    case aggregate_sum:
+
+      for (i = 0; i < count; ++i)
+        tmp += values[count];
+
+      return tmp;
+
+    case aggregate_min:
+
+      tmp = values[0];
+
+      for (i = 1; i < count; ++i)
+        {
+          if (tmp > values[i])
+            tmp = values[i];
+        }
+
+      return tmp;
+
+    case aggregate_max:
+
+      tmp = values[0];
+
+      for (i = 1; i < count; ++i)
+        {
+          if (tmp < values[i])
+            tmp = values[i];
+        }
+
+      return tmp;
+
+    default:
+
+      assert (!"invalid aggregate function");
+
+      return 0;
+    }
+}
+
 static int
 data_flush (const char *key)
 {
   size_t i, next;
   int result = -1;
 
+  float *aggregate_values = NULL;
+  size_t aggregate_alloc = 0, aggregate_count;
+
   qsort (samples, sample_count, sizeof (*samples), samplecmp);
 
   /* XXX: Should be able to perform these two loops as one */
 
-  /* Average samples with duplicate time values */
+  /* Combine samples with duplicate time values */
 
   for (i = 0; i < sample_count; ++i)
     {
@@ -76,15 +145,28 @@ data_flush (const char *key)
       if (next == sample_count || samples[next].time != samples[i].time)
         continue;
 
+      if (aggregate_function == aggregate_abort)
+        {
+          ca_set_error ("Duplicate time values found for '%s', but no aggregate function given", key);
+
+          return -1;
+        }
+
+      aggregate_count = 0;
+
       do
         {
-          samples[i].value += samples[next].value;
+          if (aggregate_count == aggregate_alloc
+              && -1 == ARRAY_GROW (&aggregate_values, &aggregate_alloc))
+            return -1;
+
+          aggregate_values[aggregate_count++] = samples[next].value;
 
           ++next;
         }
       while (next < sample_count && samples[next].time == samples[i].time);
 
-      samples[i].value /= (next - i);
+      samples[i].value = aggregate (aggregate_values, aggregate_count);
 
       sample_count -= (next - i - 1);
 
@@ -192,6 +274,21 @@ main (int argc, char **argv)
     {
       switch (i)
         {
+        case 'A':
+
+          if (!strcmp (optarg, "avg"))
+            aggregate_function = aggregate_avg;
+          else if (!strcmp (optarg, "sum"))
+            aggregate_function = aggregate_sum;
+          else if (!strcmp (optarg, "min"))
+            aggregate_function = aggregate_min;
+          else if (!strcmp (optarg, "max"))
+            aggregate_function = aggregate_max;
+          else
+            errx (EX_USAGE, "Unknown aggregate function '%s'", optarg);
+
+          break;
+
         case 0:
 
           break;
@@ -206,6 +303,8 @@ main (int argc, char **argv)
     {
       printf ("Usage: %s [OPTION]... OUTPUT INPUT...\n"
              "\n"
+             "      --aggregate=NAME       set aggregate function for duplicates\n"
+             "                             (avg, sum, min, max)\n"
              "      --ignore-missing       ignore missing input files\n"
              "      --no-relative          do not store relative timestamps\n"
              "      --no-fsync             do not use fsync on new tables\n"
@@ -265,12 +364,13 @@ main (int argc, char **argv)
 
           fprintf (stderr, "Sorting '%s'...\n", input_paths[i]);
 
-          sort_tmp = ca_table_open ("write-once", input_paths[i], O_CREAT | O_TRUNC | O_WRONLY, 0666);
+          sort_tmp = ca_table_open ("write-once", input_paths[i], O_CREAT | O_TRUNC | O_RDWR, 0666);
 
           if (do_no_fsync)
             ca_table_set_flag (sort_tmp, CA_TABLE_NO_FSYNC);
 
-          if (-1 == ca_table_sort (sort_tmp, inputs[i]))
+          if (-1 == ca_table_sort (sort_tmp, inputs[i])
+              || -1 == ca_table_sync (sort_tmp))
             {
               ca_table_close (sort_tmp);
               ca_table_close (inputs[i]);
@@ -278,11 +378,9 @@ main (int argc, char **argv)
               goto done;
             }
 
-          ca_table_close (sort_tmp);
           ca_table_close (inputs[i]);
 
-          if (!(inputs[i] = ca_table_open ("write-once", input_paths[i], O_RDONLY, 0)))
-            goto done;
+          inputs[i] = sort_tmp;
         }
 
       ++i;

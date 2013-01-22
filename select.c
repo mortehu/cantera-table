@@ -203,6 +203,8 @@ CA_query_resolve_variables (struct expression *expression,
 int
 CA_select (struct ca_schema *schema, struct select_statement *stmt)
 {
+  ca_expression_function where = NULL;
+
   struct ca_table *table;
   struct ca_table_declaration *declaration;
 
@@ -241,6 +243,9 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
   if (stmt->where)
     {
       if (-1 == CA_query_resolve_variables (stmt->where, variables))
+        goto done;
+
+      if (!(where = ca_expression_compile (stmt->where)))
         goto done;
     }
 

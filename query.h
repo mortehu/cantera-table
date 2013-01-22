@@ -135,6 +135,11 @@ struct select_variable
 int
 CA_select (struct ca_schema *schema, struct select_statement *stmt);
 
+typedef uint8_t /*struct expression_value */(*ca_expression_function)(void);
+
+ca_expression_function
+ca_expression_compile (struct expression *expr);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

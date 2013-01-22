@@ -552,8 +552,11 @@ CA_wo_read_row (void *handle, const char **out_key,
   if (out_key)
     *out_key = key;
 
-  value[0].iov_base = (void *) (key + key_length);
-  value[0].iov_len = t->entries[t->offset + 1] - t->entries[t->offset] - key_length;
+  if (value)
+    {
+      value->iov_base = (void *) (key + key_length);
+      value->iov_len = t->entries[t->offset + 1] - t->entries[t->offset] - key_length;
+    }
 
   ++t->offset;
 

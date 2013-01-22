@@ -124,7 +124,7 @@ parse_data (const char *begin, const char *end)
               if (*end)
                 errx (EX_DATAERR, "Junk at end of date '%s': %s", date, end);
 
-              input_time = mktime (&tm);
+              input_time = timegm (&tm);
 
               date_length = 0;
 

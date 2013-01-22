@@ -33,7 +33,9 @@ enum ca_value_type
 {
   CA_TEXT = 0,
   CA_TIME_SERIES = 1,
-  CA_TABLE_DECLARATION = 2
+  CA_TABLE_DECLARATION = 2,
+  CA_INT64 = 3,
+  CA_NUMERIC = 4
 };
 
 enum ca_field_flag

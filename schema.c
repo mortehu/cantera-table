@@ -212,6 +212,7 @@ fail:
 struct ca_table *
 ca_schema_table (struct ca_schema *schema, const char *table_name)
 {
+  struct ca_table *result;
   size_t i;
 
   for (i = 0; i < schema->table_count; ++i)
@@ -220,7 +221,23 @@ ca_schema_table (struct ca_schema *schema, const char *table_name)
         continue;
 
       if (!schema->tables[i].handle)
-        schema->tables[i].handle = ca_table_open ("write-once", schema->tables[i].declaration.path, O_RDONLY, 0);
+        {
+          result = ca_table_open ("write-once", schema->tables[i].declaration.path, O_RDONLY, 0);
+
+          if (!result)
+            {
+              if (errno != ENOENT)
+                return NULL;
+
+              if (!(result = ca_table_open ("write-once", schema->tables[i].declaration.path, O_CREAT | O_TRUNC | O_RDWR, 0666)))
+                return NULL;
+
+              if (-1 == ca_table_sync (result))
+                return NULL;
+            }
+
+          schema->tables[i].handle = result;
+        }
 
       return schema->tables[i].handle;
     }

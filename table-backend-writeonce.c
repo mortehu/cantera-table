@@ -116,6 +116,7 @@ struct CA_wo
   char *tmp_path;
 
   int fd;
+  int open_flags;
 
   char *buffer;
   size_t buffer_size, buffer_fill;
@@ -166,6 +167,7 @@ CA_wo_open (const char *path, int flags, mode_t mode)
     return NULL;
 
   result->fd = -1;
+  result->open_flags = flags;
 
   if (!(result->path = safe_strdup (path)))
     goto fail;
@@ -327,7 +329,10 @@ CA_wo_sync (void *handle)
   munmap (t->buffer, t->buffer_size);
   t->buffer_size = 0;
 
-  return CA_wo_mmap (t);
+  if ((t->open_flags & O_RDWR) == O_RDWR)
+    return CA_wo_mmap (t);
+
+  return 0;
 }
 
 static void

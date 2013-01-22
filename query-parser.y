@@ -23,7 +23,6 @@
 
 #include "arena.h"
 #include "ca-table.h"
-#include "schema.h"
 #include "query.h"
 
 #define ALLOC(t) do { t = ca_arena_calloc(&context->arena, sizeof(*t)); } while(0)
@@ -48,6 +47,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token SHOW
 %token TABLE
 %token TABLES
+%token TEXT
 %token TIME_FLOAT4
 %token UTF8BOM
 %token WHERE
@@ -91,7 +91,9 @@ statement
     : ';'
     | SHOW TABLES
       {
+        #if 0
         ca_schema_show_tables ();
+        #endif
       }
     | CREATE TABLE Identifier '(' createTableArgs ')' PATH StringLiteral ';'
       {
@@ -121,7 +123,8 @@ statement
           }
           ++declaration.field_count;
 
-        ca_schema_add_table ($3, &declaration);
+        if (-1 == ca_schema_create_table (context->schema, $3, &declaration))
+          context->error = 1;
       }
     | SELECT selectList FROM Identifier whereClause
       {
@@ -131,7 +134,7 @@ statement
         stmt->from = $4;
         stmt->where = $5;
 
-        CA_select (stmt); 
+        CA_select (context->schema, stmt); 
       }
     ;
 
@@ -156,7 +159,8 @@ notNull
     ;
 
 columnType
-    : TIME_FLOAT4 { $$ = CA_TIME_SERIES; }
+    : TEXT        { $$ = CA_TEXT; }
+    | TIME_FLOAT4 { $$ = CA_TIME_SERIES; }
     ;
 
 columnDefinition
@@ -278,7 +282,7 @@ extern unsigned int character;
 extern unsigned int line;
 
 void
-yyerror(YYLTYPE *loc, struct ca_query_parse_context *context, const char *message)
+yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *message)
 {
   ca_set_error ("%s", message);
 

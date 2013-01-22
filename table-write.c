@@ -5,43 +5,12 @@
 #include <string.h>
 
 #include "ca-table.h"
-#include "crc32.h"
-#include "io.h"
 #include "memory.h"
-#include "smalltable-internal.h"
 
-void
-TABLE_flush (struct table *t)
-{
-  write_all (t->fd, t->buffer, t->buffer_fill);
-  t->write_offset += t->buffer_fill;
+#define MAX_HEADER_SIZE 64
 
-  t->crc32 = crc32 (t->crc32, t->buffer, t->buffer_fill);
-
-  t->buffer_fill = 0;
-}
-
-void
-TABLE_write (struct table *t, const void *data, size_t size)
-{
-  if (t->buffer_fill + size > t->buffer_size)
-    {
-      TABLE_flush (t);
-
-      if (size >= t->buffer_size)
-        {
-          write_all (t->fd, data, size);
-
-          return;
-        }
-    }
-
-  memcpy (t->buffer + t->buffer_fill, data, size);
-  t->buffer_fill += size;
-}
-
-void
-TABLE_put_integer (struct table *t, uint64_t value)
+static void
+CA_put_integer (uint8_t **output, uint64_t value)
 {
   uint8_t buffer[10];
   unsigned int ptr = 9;
@@ -56,74 +25,53 @@ TABLE_put_integer (struct table *t, uint64_t value)
       value >>= 7;
     }
 
-  TABLE_write (t, &buffer[ptr], 10 - ptr);
+  memcpy (*output, &buffer[ptr], 10 - ptr);
+
+  *output += 10 - ptr;
 }
 
-static void
-TABLE_write_key (struct table *t, const char *key)
+int
+ca_table_write_time_float4 (struct ca_table *table, const char *key,
+                            uint64_t start_time, uint32_t interval,
+                            const float *sample_values, size_t sample_count)
 {
-  int cmp = 1;
+  struct iovec value[2];
+  uint8_t header[MAX_HEADER_SIZE], *o;
 
-  if (!t->prev_key || (cmp = strcmp (key, t->prev_key)))
-    {
-      if (t->entry_alloc == t->entry_count)
-        ARRAY_GROW (&t->entries, &t->entry_alloc);
+  o = header;
 
-      if (cmp < 0)
-        t->flags &= ~TABLE_FLAG_ORDERED;
+  CA_put_integer (&o, start_time);
+  CA_put_integer (&o, interval);
+  CA_put_integer (&o, sample_count);
 
-      free (t->prev_key);
-      t->prev_key = safe_strdup (key);
-      t->prev_time = 0;
+  value[0].iov_base = header;
+  value[0].iov_len = o - header;
+  value[1].iov_base = (void *) sample_values;
+  value[1].iov_len = sizeof (*sample_values) * sample_count;
 
-      t->entries[t->entry_count++] = t->write_offset + t->buffer_fill;
-
-      TABLE_write (t, key, strlen (key) + 1);
-    }
+  return ca_table_insert_row (table, key,
+                              value, sizeof (value) / sizeof (value[0]));
 }
 
-/* Writes a key/timestamp/float combination to a table */
-void
-table_write_sample (struct table *t, const char *key, uint64_t sample_time,
-                    float sample_value)
+int
+ca_table_write_table_declaration (struct ca_table *table,
+                                  const char *table_name,
+                                  const struct ca_table_declaration *decl)
 {
-  table_write_samples (t, key, sample_time, 1, &sample_value, 1);
-}
+  struct iovec value[3];
+  uint8_t header[MAX_HEADER_SIZE], *o;
 
-/* Writes multiple key/timestamp/float combinations to a table */
-void
-table_write_samples (struct table *t, const char *key,
-                     uint64_t start_time, uint32_t interval,
-                     const float *sample_values, size_t count)
-{
-  TABLE_write_key (t, key);
+  o = header;
 
-  if (t->no_relative || (!t->prev_time || start_time < t->prev_time))
-    {
-      TABLE_putc (t, CA_TIME_SERIES);
-      TABLE_put_integer (t, start_time);
-    }
-  else
-    {
-      TABLE_putc (t, CA_RELATIVE_TIME_SERIES);
-      TABLE_put_integer (t, start_time - t->prev_time);
-    }
+  CA_put_integer (&o, decl->field_count);
 
-  t->prev_time = start_time;
+  value[0].iov_base = header;
+  value[0].iov_len = o - header;
+  value[1].iov_base = (void *) decl->path;
+  value[1].iov_len = strlen (decl->path) + 1;
+  value[2].iov_base = (void *) decl->fields;
+  value[2].iov_len = sizeof (*decl->fields) * decl->field_count;
 
-  TABLE_put_integer (t, interval);
-  TABLE_put_integer (t, count);
-  TABLE_write (t, sample_values, sizeof (*sample_values) * count);
-}
-
-void
-table_write_table_declaration (struct table *t, const char *key,
-                               const struct ca_table_declaration *declaration)
-{
-  TABLE_write_key (t, key);
-
-  TABLE_putc (t, CA_TABLE_DECLARATION);
-  TABLE_write (t, declaration->path, strlen (declaration->path) + 1);
-  TABLE_put_integer (t, declaration->field_count);
-  TABLE_write (t, declaration->fields, sizeof (*declaration->fields) * declaration->field_count);
+  return ca_table_insert_row (table, table_name,
+                              value, sizeof (value) / sizeof (value[0]));
 }

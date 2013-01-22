@@ -16,8 +16,6 @@
 #include "ca-table.h"
 #include "memory.h"
 
-#define DATADIR "/tmp/ts"
-
 static int print_version;
 static int print_help;
 
@@ -164,7 +162,7 @@ data_callback (const char *key, const void *value, size_t value_size,
 int
 main (int argc, char **argv)
 {
-  struct table *table;
+  struct ca_table *table;
   int i;
 
   while ((i = getopt_long (argc, argv, "", long_options, 0)) != -1)
@@ -204,7 +202,7 @@ main (int argc, char **argv)
   if (optind + 2 != argc)
     errx (EX_USAGE, "Usage: %s [OPTION]... TABLE KEY", argv[0]);
 
-  table = table_open (argv[optind++]);
+  table = ca_table_open ("write-once", argv[optind++], O_RDONLY, 0);
 
   const char *key = argv[optind++];
 
@@ -212,7 +210,7 @@ main (int argc, char **argv)
   const uint8_t *begin, *end;
   size_t size;
 
-  if (!(begin = table_lookup (table, key, &size)))
+  if (!(begin = ca_table_lookup (table, key, &size)))
     err (EX_DATAERR, "Key '%s' not found", key);
 
   end = begin + size;
@@ -231,15 +229,6 @@ main (int argc, char **argv)
           table_parse_time_series (&begin,
                                    &start_time, &interval,
                                    &sample_values, &count);
-
-          break;
-
-        case CA_RELATIVE_TIME_SERIES:
-
-          table_parse_time_series (&begin,
-                                   &start_time, &interval,
-                                   &sample_values, &count);
-          start_time += last_time;
 
           break;
 
@@ -264,7 +253,7 @@ main (int argc, char **argv)
   samples_lhs = safe_malloc (sizeof (*samples_lhs) * sample_count);
   samples_rhs = safe_malloc (sizeof (*samples_rhs) * sample_count);
 
-  table_iterate (table, data_callback, TABLE_ORDER_PHYSICAL, NULL);
+  ca_table_iterate (table, data_callback, TABLE_ORDER_PHYSICAL, NULL);
 
   table_close (table);
 

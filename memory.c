@@ -16,7 +16,11 @@ safe_malloc (size_t size)
   void *result;
 
   if (!(result = malloc (size)))
-    err (EX_OSERR, "malloc failed (%zu bytes)", size);
+    {
+      ca_set_error ("malloc failed (%zu bytes)", size);
+
+      return NULL;
+    }
 
   memset (result, 0, size);
 
@@ -29,7 +33,11 @@ safe_memdup (const void *data, size_t size)
   void *result;
 
   if (!(result = malloc (size)))
-    err (EX_OSERR, "malloc failed (%zu bytes)", size);
+    {
+      ca_set_error ("malloc failed (%zu bytes)", size);
+
+      return NULL;
+    }
 
   memcpy (result, data, size);
 
@@ -42,7 +50,7 @@ safe_strdup (const char *string)
   return safe_memdup (string, strlen (string) + 1);
 }
 
-void
+int
 array_grow (void **array, size_t *alloc, size_t element_size)
 {
   size_t new_alloc;
@@ -51,8 +59,14 @@ array_grow (void **array, size_t *alloc, size_t element_size)
   new_alloc = *alloc * 3 / 2 + 16;
 
   if (!(new_array = realloc (*array, new_alloc * element_size)))
-    err (EX_OSERR, "realloc failed (allocation size %zu)", new_alloc * element_size);
+    {
+      ca_set_error ("realloc failed (allocation size %zu)", new_alloc * element_size);
+
+      return -1;
+    }
 
   *array = new_array;
   *alloc = new_alloc;
+
+  return 0;
 }

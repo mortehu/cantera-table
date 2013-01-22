@@ -15,8 +15,6 @@
 #include "ca-table.h"
 #include "memory.h"
 
-#define DATADIR "/tmp/ts"
-
 static int print_version;
 static int print_help;
 
@@ -30,7 +28,7 @@ static struct option long_options[] =
 int
 main (int argc, char **argv)
 {
-  struct table *table;
+  struct ca_table *table;
   int i;
 
   while ((i = getopt_long (argc, argv, "", long_options, 0)) != -1)
@@ -70,49 +68,48 @@ main (int argc, char **argv)
   if (optind + 2 != argc)
     errx (EX_USAGE, "Usage: %s [OPTION]... TABLE KEY", argv[0]);
 
-  table = table_open (argv[optind++]);
+  if (!(table = ca_table_open ("write-once", argv[optind++], O_RDONLY, 0)))
+    errx (EX_NOINPUT, "%s", ca_last_error ());
 
   const char *key = argv[optind++];
-
-  uint64_t last_time = 0;
+  struct iovec value;
   const uint8_t *begin, *end;
-  size_t size;
+  ssize_t ret;
 
-  if (!(begin = table_lookup (table, key, &size)))
-    err (EX_DATAERR, "Key '%s' not found", key);
+  if (-1 == (ret = ca_table_seek_to_key (table, key)))
+    errx (EXIT_FAILURE, "%s", ca_last_error());
 
-  end = begin + size;
+  if (!ret)
+    {
+      fprintf (stderr, "'%s' not found\n", key);
+
+      return EXIT_FAILURE;
+    }
+
+
+  if (1 != (ret = ca_table_read_row (table, NULL, &value)))
+    {
+      if (ret < 0)
+        fprintf (stderr, "%s\n", ca_last_error ());
+      else if (!ret) /* Key both exists and does not exist? */
+        fprintf (stderr, "ca_table_read_row unexpectedly returned 0\n");
+
+      return EXIT_FAILURE;
+    }
+
+  begin = value.iov_base;
+  end = begin + value.iov_len;
 
   while (begin != end)
     {
       uint64_t start_time;
-      uint32_t interval;
+      uint32_t i, interval, count;
       const float *sample_values;
-      size_t count, i;
 
-      switch (*begin++)
-        {
-        case CA_TIME_SERIES:
+      ca_data_parse_time_float4 (&begin,
+                                 &start_time, &interval,
+                                 &sample_values, &count);
 
-          table_parse_time_series (&begin,
-                                   &start_time, &interval,
-                                   &sample_values, &count);
-
-          break;
-
-        case CA_RELATIVE_TIME_SERIES:
-
-          table_parse_time_series (&begin,
-                                   &start_time, &interval,
-                                   &sample_values, &count);
-          start_time += last_time;
-
-          break;
-
-        default:
-
-          errx (EX_DATAERR, "Unexpected data type %u", begin[-1]);
-        }
 
       for (i = 0; i < count; ++i)
         {
@@ -120,11 +117,9 @@ main (int argc, char **argv)
                   (unsigned long long) (start_time + i * interval),
                   sample_values[i]);
         }
-
-      last_time = start_time;
     }
 
-  table_close (table);
+  ca_table_close (table);
 
   return EXIT_SUCCESS;
 }

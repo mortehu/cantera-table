@@ -49,7 +49,7 @@ static struct option long_options[] =
     { 0, 0, 0, 0 }
 };
 
-static struct table *table_handle;
+static struct ca_table *table_handle;
 
 enum parse_state
 {
@@ -81,8 +81,9 @@ parse_data (const char *begin, const char *end)
         {
         case parse_key:
 
-          if (key_length == key_alloc)
-            ARRAY_GROW (&key, &key_alloc);
+          if (key_length == key_alloc
+              && -1 == ARRAY_GROW (&key, &key_alloc))
+            errx (EXIT_FAILURE, "%s", ca_last_error ());
 
           if (*begin == delimiter)
             {
@@ -103,8 +104,9 @@ parse_data (const char *begin, const char *end)
 
         case parse_date:
 
-          if (date_length == date_alloc)
-            ARRAY_GROW (&date, &date_alloc);
+          if (date_length == date_alloc
+              && -1 == ARRAY_GROW (&date, &date_alloc))
+            errx (EXIT_FAILURE, "%s", ca_last_error ());
 
           if (*begin == delimiter)
             {
@@ -140,8 +142,9 @@ parse_data (const char *begin, const char *end)
           if (*begin == '\r')
             continue;
 
-          if (value_length == value_alloc)
-            ARRAY_GROW (&value, &value_alloc);
+          if (value_length == value_alloc
+              && -1 == ARRAY_GROW (&value, &value_alloc))
+            errx (EXIT_FAILURE, "%s", ca_last_error ());
 
           if (*begin == '\n')
             {
@@ -158,7 +161,12 @@ parse_data (const char *begin, const char *end)
 
               value_length = 0;
 
-              table_write_sample (table_handle, input_key, input_time, fvalue);
+              if (-1 == ca_table_write_time_float4 (table_handle, input_key, input_time, 0, &fvalue, 1))
+                {
+                  ca_table_close (table_handle);
+
+                  errx (EXIT_FAILURE, "%s", ca_last_error ());
+                }
 
               if (!has_input_key)
                 state = parse_key;
@@ -302,7 +310,8 @@ main (int argc, char **argv)
   if (optind + 1 != argc)
     errx (EX_USAGE, "Usage: %s [OPTION]... TABLE", argv[0]);
 
-  table_handle = table_create (argv[optind]);
+  if (!(table_handle = ca_table_open ("write-once", argv[optind], O_CREAT | O_TRUNC | O_WRONLY, 0666)))
+    errx (EXIT_FAILURE, "Failed to create '%s': %s", argv[optind], ca_last_error ());
 
   if (!has_input_key)
     state = parse_key;
@@ -337,7 +346,10 @@ main (int argc, char **argv)
       munmap (map, file_size);
     }
 
-  table_close (table_handle);
+  if (-1 == ca_table_sync (table_handle))
+    errx (EXIT_FAILURE, "Failed to sync '%s': %s", argv[optind], ca_last_error ());
+
+  ca_table_close (table_handle);
 
   return EXIT_SUCCESS;
 }

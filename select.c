@@ -7,7 +7,6 @@
 #include <string.h>
 
 #include "ca-table.h"
-#include "schema.h"
 #include "query.h"
 
 static const char *
@@ -80,19 +79,37 @@ expr_oid_filter (struct expression *expr)
 }
 
 static void
-format_output (const struct ca_data *data, void *opaque)
+format_output (enum ca_value_type type,
+               const uint8_t *begin, const uint8_t *end)
 {
   size_t i;
 
-  switch (data->type)
+  switch (type)
     {
+    case CA_TEXT:
+
+      fwrite (begin, 1, end - begin, stdout);
+
+      break;
+
     case CA_TIME_SERIES:
 
-      for (i = 0; i < data->v.time_series.count; ++i)
+      while (begin != end)
         {
-          printf ("%llu\t%.7g\n",
-                  (unsigned long long) data->v.time_series.start_time + i * data->v.time_series.interval,
-                  data->v.time_series.values[i]);
+          uint64_t start_time;
+          uint32_t interval, sample_count;
+          const float *sample_values;
+
+          ca_data_parse_time_float4 (&begin,
+                                     &start_time, &interval,
+                                     &sample_values, &sample_count);
+
+          for (i = 0; i < sample_count; ++i)
+            {
+              printf ("%llu\t%.7g\n",
+                      (unsigned long long) start_time + i * interval,
+                      sample_values[i]);
+            }
         }
 
       break;
@@ -104,26 +121,44 @@ format_output (const struct ca_data *data, void *opaque)
 }
 
 void
-CA_select (struct select_statement *stmt)
+CA_select (struct ca_schema *schema, struct select_statement *stmt)
 {
-  struct table *t;
+  struct ca_table *table;
   const char *oid_filter;
+  int ret;
 
   ca_clear_error ();
 
-  if (!(t = ca_schema_table_with_name (stmt->from)))
+  if (!(table = ca_schema_table (schema, stmt->from)))
     fprintf (stderr, "Failed to open table '%s': %s\n", stmt->from, ca_last_error ());
 
-  if (table_is_sorted (t)
-      && NULL != (oid_filter = expr_oid_filter (stmt->where)))
+  if (NULL != (oid_filter = expr_oid_filter (stmt->where)))
     {
-      const void *data;
-      size_t size;
+      const char *key;
+      struct iovec value;
 
-      if (!(data = table_lookup (t, oid_filter, &size)))
-        return;
+      if (-1 == (ret = ca_table_seek_to_key (table, oid_filter)))
+        {
+          fprintf (stderr, "Could not look up '%s' in '%s': %s\n", oid_filter, stmt->from, ca_last_error ());
 
-      ca_data_iterate (data, size,
-                       format_output, stmt->list);
+          return;
+        }
+
+      if (!ret)
+        return; /* Key does not exist in table */
+
+      if (1 != (ret = ca_table_read_row (table, &key, &value)))
+        {
+          if (ret < 0)
+            fprintf (stderr, "Failed to read row data from '%s': %s\n", stmt->from, ca_last_error ());
+          else if (!ret) /* Key both exists and does not exist? */
+            fprintf (stderr, "ca_table_read_row on '%s' unexpectedly returned 0\n", stmt->from);
+
+          return;
+        }
+
+      format_output (CA_TIME_SERIES,
+                     value.iov_base,
+                     (const uint8_t *) value.iov_base + value.iov_len);
     }
 }

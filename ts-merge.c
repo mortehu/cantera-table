@@ -16,11 +16,7 @@
 #include "ca-table.h"
 #include "memory.h"
 
-#define DATADIR "/tmp/ts"
-
 static int do_ignore_missing;
-static int do_destructive;
-static int do_no_relative;
 static int do_no_fsync;
 static int print_version;
 static int print_help;
@@ -28,15 +24,13 @@ static int print_help;
 static struct option long_options[] =
 {
     { "ignore-missing", no_argument, &do_ignore_missing, 1 },
-    { "destructive",    no_argument, &do_destructive,    1 },
-    { "no-relative",    no_argument, &do_no_relative,    1 },
     { "no-fsync",       no_argument, &do_no_fsync,       1 },
     { "version",        no_argument, &print_version,     1 },
     { "help",           no_argument, &print_help,        1 },
     { NULL, 0, NULL, 0 }
 };
 
-static struct table *output;
+static struct ca_table *output;
 
 struct sample
 {
@@ -60,10 +54,14 @@ samplecmp (const void *vlhs, const void *vrhs)
   return 0;
 }
 
-static void
+static int
+data_flush (const char *key) CA_USE_RESULT;
+
+static int
 data_flush (const char *key)
 {
   size_t i, next;
+  int result = -1;
 
   qsort (samples, sample_count, sizeof (*samples), samplecmp);
 
@@ -99,7 +97,8 @@ data_flush (const char *key)
   size_t series_alloc = 0, series_count = 0;
 
   /* Make sure there's room for the first element */
-  ARRAY_GROW (&series_values, &series_alloc);
+  if (-1 == ARRAY_GROW (&series_values, &series_alloc))
+    goto done;
 
   for (i = 0; i < sample_count; )
     {
@@ -117,81 +116,77 @@ data_flush (const char *key)
 
           do
             {
-              if (series_count == series_alloc)
-                ARRAY_GROW (&series_values, &series_alloc);
+              if (series_count == series_alloc
+                  && -1 == ARRAY_GROW (&series_values, &series_alloc))
+                goto done;
 
               series_values[series_count++] = samples[i++].value;
             }
           while (i != sample_count && samples[i].time - samples[i - 1].time == interval);
         }
 
-      table_write_samples (output, key, start_time, interval, series_values, series_count);
+      if (-1 == ca_table_write_time_float4 (output, key, start_time, interval, series_values, series_count))
+        goto done;
     }
+
+  sample_count = 0;
+  result = 0;
+
+done:
 
   free (series_values);
 
-  sample_count = 0;
+  return result;
 }
 
-static void
-data_callback (const char *key, const void *value, size_t value_size,
-               void *opaque)
+static int
+data_callback (const char *key, const struct iovec *value, void *opaque)
 {
   const uint8_t *begin, *end;
 
   if (!prev_key || strcmp (key, prev_key))
     {
-      if (prev_key)
-        data_flush (prev_key);
+      if (prev_key && -1 == data_flush (prev_key))
+        return -1;
 
       free (prev_key);
-      prev_key = safe_strdup (key);
+
+      if (!(prev_key = safe_strdup (key)))
+        return -1;
     }
 
-  begin = (const uint8_t *) value;
-  end = (const uint8_t *) value + value_size;
+  begin = value->iov_base;
+  end = begin + value->iov_len;
 
   while (begin != end)
     {
-      switch (*begin++)
+      uint64_t start_time;
+      uint32_t i, interval, count;
+      const float *sample_values;
+
+      ca_data_parse_time_float4 (&begin,
+                                 &start_time, &interval,
+                                 &sample_values, &count);
+
+      for (i = 0; i < count; ++i)
         {
-        case CA_TIME_SERIES:
+          if (sample_count == sample_alloc
+              && -1 == ARRAY_GROW (&samples, &sample_alloc))
+            return -1;
 
-            {
-              uint64_t start_time;
-              uint32_t interval;
-              const float *sample_values;
-              size_t count, i;
-
-              table_parse_time_series (&begin,
-                                       &start_time, &interval,
-                                       &sample_values, &count);
-
-              for (i = 0; i < count; ++i)
-                {
-                  if (sample_count == sample_alloc)
-                    ARRAY_GROW (&samples, &sample_alloc);
-
-                  samples[sample_count].time = start_time + i * interval;
-                  samples[sample_count].value = sample_values[i];
-                  ++sample_count;
-                }
-            }
-
-          break;
-
-        default:
-
-          errx (EX_DATAERR, "Unexpected data type %d for key '%s'",
-                begin[-1], key);
+          samples[sample_count].time = start_time + i * interval;
+          samples[sample_count].value = sample_values[i];
+          ++sample_count;
         }
     }
+
+  return 0;
 }
 
 int
 main (int argc, char **argv)
 {
-  int i;
+  int i, result = EXIT_FAILURE;
 
   while ((i = getopt_long (argc, argv, "", long_options, 0)) != -1)
     {
@@ -212,7 +207,6 @@ main (int argc, char **argv)
       printf ("Usage: %s [OPTION]... OUTPUT INPUT...\n"
              "\n"
              "      --ignore-missing       ignore missing input files\n"
-             "      --destructive          remove input files after processing\n"
              "      --no-relative          do not store relative timestamps\n"
              "      --no-fsync             do not use fsync on new tables\n"
              "      --help     display this help and exit\n"
@@ -236,7 +230,7 @@ main (int argc, char **argv)
 
   char *output_path = argv[optind];
 
-  struct table **inputs;
+  struct ca_table **inputs;
   char **input_paths;
   int input_count;
 
@@ -247,7 +241,7 @@ main (int argc, char **argv)
 
   for (i = 0; i < input_count; )
     {
-      if (!(inputs[i] = table_open (input_paths[i])))
+      if (!(inputs[i] = ca_table_open ("write-once", input_paths[i], O_RDONLY, 0)))
         {
           if (do_ignore_missing)
             {
@@ -262,27 +256,33 @@ main (int argc, char **argv)
               continue;
             }
 
-          errx (EX_NOINPUT, "Error: %s", ca_last_error ());
+          goto done;
         }
 
-      if (!table_is_sorted (inputs[i]))
+      if (!ca_table_is_sorted (inputs[i]))
         {
-          struct table *sort_tmp;
+          struct ca_table *sort_tmp;
 
           fprintf (stderr, "Sorting '%s'...\n", input_paths[i]);
 
-          sort_tmp = table_create (input_paths[i]);
+          sort_tmp = ca_table_open ("write-once", input_paths[i], O_CREAT | O_TRUNC | O_WRONLY, 0666);
 
           if (do_no_fsync)
-            table_set_flag (sort_tmp, CA_TABLE_NO_FSYNC);
+            ca_table_set_flag (sort_tmp, CA_TABLE_NO_FSYNC);
 
-          table_sort (sort_tmp, inputs[i]);
+          if (-1 == ca_table_sort (sort_tmp, inputs[i]))
+            {
+              ca_table_close (sort_tmp);
+              ca_table_close (inputs[i]);
 
-          table_close (sort_tmp);
-          table_close (inputs[i]);
+              goto done;
+            }
 
-          if (!(inputs[i] = table_open (input_paths[i])))
-            errx (EX_NOINPUT, "Error: %s", ca_last_error ());
+          ca_table_close (sort_tmp);
+          ca_table_close (inputs[i]);
+
+          if (!(inputs[i] = ca_table_open ("write-once", input_paths[i], O_RDONLY, 0)))
+            goto done;
         }
 
       ++i;
@@ -291,33 +291,37 @@ main (int argc, char **argv)
   if (!input_count)
     errx (EX_NOINPUT, "No input files");
 
-  if (!(output = table_create (output_path)))
-    errx (EX_CANTCREAT, "Failed to create '%s': %s", output_path, ca_last_error ());
-
-  if (do_no_relative)
-    table_set_flag (output, CA_TABLE_NO_RELATIVE);
+  if (!(output = ca_table_open ("write-once", output_path, O_CREAT | O_TRUNC | O_WRONLY, 0666)))
+    goto done;
 
   if (do_no_fsync)
-    table_set_flag (output, CA_TABLE_NO_FSYNC);
+    ca_table_set_flag (output, CA_TABLE_NO_FSYNC);
 
-  table_iterate_multiple (inputs, input_count, data_callback, NULL);
+  if (-1 == ca_table_merge (inputs, input_count, data_callback, NULL))
+    goto done;
 
   if (prev_key)
     {
-      data_flush (prev_key);
-
-      free (prev_key);
+      if (-1 == data_flush (prev_key))
+        goto done;
     }
 
-  table_close (output);
+  if (-1 == ca_table_sync (output))
+    goto done;
+
+  result = EXIT_SUCCESS;
+
+done:
+
+  if (result == EXIT_FAILURE)
+    fprintf (stderr, "%s\n", ca_last_error ());
+
+  free (prev_key);
+
+  ca_table_close (output);
 
   for (i = 0; i < input_count; ++i)
-    {
-      table_close (inputs[i]);
-
-      if (do_destructive && strcmp (input_paths[i], output_path))
-        unlink (input_paths[i]);
-    }
+    ca_table_close (inputs[i]);
 
   free (inputs);
 

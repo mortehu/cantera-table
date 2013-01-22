@@ -39,7 +39,6 @@ extern int read_history ();
 
 #include "ca-table.h"
 #include "memory.h"
-#include "schema.h"
 #include "query.h"
 
 static int print_version;
@@ -55,6 +54,7 @@ static struct option long_options[] =
 int
 main (int argc, char **argv)
 {
+  struct ca_schema *schema;
   int i;
 
   while ((i = getopt_long (argc, argv, "", long_options, 0)) != -1)
@@ -94,12 +94,11 @@ main (int argc, char **argv)
   if (optind != argc)
     errx (EX_USAGE, "Usage: %s [OPTION]...", argv[0]);
 
-  if (-1 == ca_schema_load ("/data/tables/schema.ca"))
+  if (!(schema = ca_schema_load ("/data/tables/schema.ca")))
     errx (EXIT_FAILURE, "Failed to load schema: %s", ca_last_error ());
 
   if (isatty (STDIN_FILENO))
     {
-
       for (;;)
         {
           const char *prompt = "\033[32;1mca\033[00m$ ";
@@ -109,6 +108,9 @@ main (int argc, char **argv)
 #if HAVE_LIBREADLINE
           if (!(line = readline (prompt)))
             break;
+
+          if (!*line)
+            continue;
 #else
           size_t line_alloc = 0, line_length = 0;
           int ch;
@@ -149,7 +151,7 @@ main (int argc, char **argv)
           if (!(file = fmemopen ((void *) line, strlen (line), "r")))
             fprintf (stderr, "fmemopen failed: %s\n", strerror (errno));
 
-          if (-1 == ca_query_parse (file))
+          if (-1 == ca_schema_parse_script (schema, file))
             fprintf (stderr, "Error: %s\n", ca_last_error ());
 
           fclose (file);
@@ -161,11 +163,11 @@ main (int argc, char **argv)
     }
   else
     {
-      if (-1 == ca_query_parse (stdin))
+      if (-1 == ca_schema_parse_script (schema, stdin))
         fprintf (stderr, "Error: %s\n", ca_last_error ());
     }
 
-  ca_schema_close ();
+  ca_schema_close (schema);
 
   return EXIT_SUCCESS;
 }

@@ -9,8 +9,8 @@
 
 #include "ca-table.h"
 
-static uint64_t
-CA_data_parse_integer (const uint8_t **input)
+uint64_t
+ca_data_parse_integer (const uint8_t **input)
 {
   const uint8_t *i;
   uint64_t result = 0;
@@ -30,8 +30,8 @@ CA_data_parse_integer (const uint8_t **input)
   return result;
 }
 
-static const char *
-CA_data_parse_string (const uint8_t **input)
+const char *
+ca_data_parse_string (const uint8_t **input)
 {
   const char *result;
 
@@ -41,6 +41,28 @@ CA_data_parse_string (const uint8_t **input)
 
   return result;
 }
+
+void
+ca_data_parse_time_float4 (const uint8_t **input,
+                           uint64_t *start_time, uint32_t *interval,
+                           const float **sample_values, uint32_t *count)
+{
+  const uint8_t *p;
+
+  p = *input;
+
+  *start_time = ca_data_parse_integer (&p);
+  *interval = ca_data_parse_integer (&p);
+  *count = ca_data_parse_integer (&p);
+  *sample_values = (const float *) p;
+
+  p += sizeof (**sample_values) * *count;
+
+  *input = p;
+}
+#if 0
+
+
 
 void
 table_parse_time_series (const uint8_t **input,
@@ -122,3 +144,4 @@ ca_data_iterate (const void *data, size_t size,
       callback (&buffer, opaque);
     }
 }
+#endif

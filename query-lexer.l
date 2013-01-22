@@ -15,16 +15,19 @@ static unsigned int character;
 static unsigned int line = 0;
 
 int
-yyparse ();
+yyparse();
+
+void
+yyerror(YYLTYPE *loc, struct ca_query_parse_context *context, const char *message);
 
 static void
-comment (yyscan_t yyscanner);
+comment(yyscan_t yyscanner);
 
 static int
-stringliteral (yyscan_t yyscanner);
+stringliteral(yyscan_t yyscanner);
 
 static void
-strtolower (char *c);
+strtolower(char *c);
 %}
 %option reentrant
 %option noyywrap
@@ -73,6 +76,7 @@ Z [zZ]
 {S}{H}{O}{W}                      { character += yyleng; return SHOW; }
 {T}{A}{B}{L}{E}                   { character += yyleng; return TABLE; }
 {T}{A}{B}{L}{E}{S}                { character += yyleng; return TABLES; }
+{T}{E}{X}{T}                      { character += yyleng; return TEXT; }
 {T}{I}{M}{E}_{F}{L}{O}{A}{T}4     { character += yyleng; return TIME_FLOAT4; }
 {W}{H}{E}{R}{E}                   { character += yyleng; return WHERE; }
 
@@ -142,19 +146,29 @@ stringliteral(yyscan_t yyscanner)
           character = 1;
         }
 
-      if (result_size == result_alloc)
-        ARRAY_GROW (&result, &result_alloc);
+      if (result_size == result_alloc
+          && -1 == ARRAY_GROW (&result, &result_alloc))
+        {
+          goto fail;
+        }
 
       result[result_size++] = ch;
     }
 
   unput (ch);
 
-  yylval->p = ca_arena_strndup (yyextra, result, result_size);
+  if (!(yylval->p = ca_arena_strndup (yyextra, result, result_size)))
+    goto fail;
 
   free (result);
 
   return StringLiteral;
+
+fail:
+
+  free (result);
+
+  return -1;
 }
 
 static void
@@ -168,13 +182,15 @@ strtolower(char *c)
 }
 
 int
-ca_query_parse(FILE *input)
+ca_schema_parse_script(struct ca_schema *schema, FILE *input)
 {
   struct ca_query_parse_context context;
   YY_BUFFER_STATE buf;
   int result = -1;
 
   memset (&context, 0, sizeof (context));
+  context.schema = schema;
+
   yylex_init (&context.scanner);
 
   ca_arena_init (&context.arena);

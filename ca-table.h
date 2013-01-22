@@ -1,24 +1,39 @@
 #ifndef TABLE_H_
 #define TABLE_H_ 1
 
+#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+
+#include <fcntl.h>
+#include <sys/uio.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+#define CA_USE_RESULT __attribute__((warn_unused_result))
+
 #define CA_NAMEDATALEN 64
 
-struct table;
+/*****************************************************************************/
+
+const char *
+ca_last_error (void);
+
+void
+ca_clear_error (void);
+
+void
+ca_set_error (const char *format, ...);
 
 /*****************************************************************************/
 
 enum ca_value_type
 {
+  CA_TEXT = 0,
   CA_TIME_SERIES = 1,
-  CA_RELATIVE_TIME_SERIES = 2,
-  CA_TABLE_DECLARATION = 3
+  CA_TABLE_DECLARATION = 2
 };
 
 enum ca_field_flag
@@ -37,7 +52,7 @@ struct ca_field
 
 struct ca_table_declaration
 {
-  const char *path;
+  char *path;
   uint32_t field_count;
   struct ca_field *fields;
 };
@@ -62,98 +77,152 @@ struct ca_data
 
 /*****************************************************************************/
 
-enum table_order
-{
-  TABLE_ORDER_PHYSICAL,
-  TABLE_ORDER_KEY
-};
-
 enum ca_table_flag
 {
   CA_TABLE_NO_RELATIVE,
   CA_TABLE_NO_FSYNC
 };
 
-typedef void (*table_iterate_callback) (const char *key,
-                                        const void *value, size_t value_size,
-                                        void *opaque);
+struct ca_table_backend
+{
+  void *
+  (*open) (const char *path, int flags, mode_t mode);
 
-/* Opens a new table for writing.  Once written, a table is read-only */
-struct table *
-table_create (const char *path);
+  int
+  (*sync) (void *handle);
 
-/* Opens an existing table for reading */
-struct table *
-table_open (const char *path);
+  void
+  (*close) (void *handle);
 
-/* Closes a previously opened table */
+  int
+  (*set_flag) (void *handle, enum ca_table_flag flag);
+
+  int
+  (*is_sorted) (void *handle);
+
+  int
+  (*insert_row) (void *handle, const char *key,
+                 const struct iovec *value, size_t value_count);
+
+  int
+  (*seek) (void *handle, off_t offset, int whence);
+
+  int
+  (*seek_to_key) (void *handle, const char *key);
+
+  off_t
+  (*offset) (void *handle);
+
+  ssize_t
+  (*read_row) (void *handle, const char **key,
+               struct iovec *value);
+
+  int
+  (*delete_row) (void *handle);
+};
+
 void
-table_close (struct table *t);
+ca_table_register_backend (const char *name,
+                           const struct ca_table_backend *backend);
 
-void
-table_set_flag (struct table *t, enum ca_table_flag flag);
+struct ca_table_backend *
+ca_table_backend (const char *name);
+
+/*****************************************************************************/
+
+struct ca_table;
+
+struct ca_table *
+ca_table_open (const char *backend_name,
+               const char *path, int flags, mode_t mode) CA_USE_RESULT;
 
 int
-table_is_sorted (const struct table *t);
+ca_table_sync (struct ca_table *table) CA_USE_RESULT;
+
+void
+ca_table_close (struct ca_table *table);
+
+int
+ca_table_set_flag (struct ca_table *table, enum ca_table_flag flag);
+
+int
+ca_table_is_sorted (struct ca_table *table) CA_USE_RESULT;
+
+int
+ca_table_insert_row (struct ca_table *table, const char *key,
+                     const struct iovec *value, size_t value_count) CA_USE_RESULT;
+
+int
+ca_table_seek (struct ca_table *table, off_t offset, int whence) CA_USE_RESULT;
+
+int
+ca_table_seek_to_key (struct ca_table *table, const char *key) CA_USE_RESULT;
+
+off_t
+ca_table_offset (struct ca_table *table) CA_USE_RESULT;
+
+ssize_t
+ca_table_read_row (struct ca_table *table, const char **key,
+                   struct iovec *value) CA_USE_RESULT;
+
+int
+ca_table_delete_row (struct ca_table *table) CA_USE_RESULT;
 
 /*****************************************************************************/
 
-/* Writes a key/timestamp/float combination to a table */
-void
-table_write_sample (struct table *t, const char *key, uint64_t sample_time,
-                    float sample_value);
+struct ca_schema;
 
-/* Writes multiple key/timestamp/float combinations to a table */
-void
-table_write_samples (struct table *t, const char *key,
-                     uint64_t start_time, uint32_t interval,
-                     const float *sample_values, size_t count);
+struct ca_schema *
+ca_schema_load (const char *path) CA_USE_RESULT;
 
 void
-table_write_table_declaration (struct table *t, const char *key,
-                               const struct ca_table_declaration *declaration);
+ca_schema_close (struct ca_schema *s);
+
+int
+ca_schema_create_table (struct ca_schema *s, const char *table_name,
+                        struct ca_table_declaration *declaration) CA_USE_RESULT;
+
+struct ca_table *
+ca_schema_table (struct ca_schema *s, const char *table_name) CA_USE_RESULT;
+
+int
+ca_schema_parse_script (struct ca_schema *schema, FILE *input);
 
 /*****************************************************************************/
 
-void
-table_sort (struct table *output, struct table *input);
+int
+ca_table_write_time_float4 (struct ca_table *table, const char *key,
+                            uint64_t start_time, uint32_t interval,
+                            const float *sample_values, size_t sample_count) CA_USE_RESULT;
 
-void
-table_iterate (struct table *t, table_iterate_callback callback,
-               enum table_order order, void *opaque);
-
-/* Iterate multiple tables at once, in key order.  Useful for merging */
-void
-table_iterate_multiple (struct table **tables, size_t table_count,
-                        table_iterate_callback callback, void *opaque);
-
-const void *
-table_lookup (struct table *t, const char *key,
-              size_t *size);
-
-void
-table_parse_time_series (const uint8_t **input,
-                         uint64_t *start_time, uint32_t *interval,
-                         const float **sample_values, size_t *count);
+int
+ca_table_write_table_declaration (struct ca_table *table,
+                                  const char *table_name,
+                                  const struct ca_table_declaration *decl) CA_USE_RESULT;
 
 /*****************************************************************************/
 
-typedef void (*ca_data_iterate_callback) (const struct ca_data *data, void *opaque);
-
-void
-ca_data_iterate (const void *data, size_t size,
-                 ca_data_iterate_callback callback, void *opaque);
-
-/*****************************************************************************/
+uint64_t
+ca_data_parse_integer (const uint8_t **input);
 
 const char *
-ca_last_error (void);
+ca_data_parse_string (const uint8_t **input);
 
 void
-ca_clear_error (void);
+ca_data_parse_time_float4 (const uint8_t **input,
+                           uint64_t *start_time, uint32_t *interval,
+                           const float **sample_values, uint32_t *count);
 
-void
-ca_set_error (const char *format, ...);
+/*****************************************************************************/
+
+int
+ca_table_sort (struct ca_table *output, struct ca_table *input) CA_USE_RESULT;
+
+typedef int (*ca_merge_callback) (const char *key, const struct iovec *value,
+                                  void *opaque);
+int
+ca_table_merge (struct ca_table **tables, size_t table_count,
+                ca_merge_callback callback, void *opaque) CA_USE_RESULT;
 
 /*****************************************************************************/
 

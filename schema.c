@@ -7,152 +7,222 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <fcntl.h>
+#include <unistd.h>
+
 #include "ca-table.h"
 #include "memory.h"
-#include "schema.h"
 #include "smalltable-internal.h"
 
 struct schema_table
 {
   char *name;
   struct ca_table_declaration declaration;
-
-  struct table *handle;
+  struct ca_table *handle;
 };
 
-static struct table *schema_table;
-
-/* XXX: Switch to hashmap */
-
-static struct schema_table *tables;
-static size_t table_alloc, table_count;
-
-void
-schema_value_callback (const struct ca_data *data, void *opaque)
+struct ca_schema
 {
-  const char *key = opaque;
+  char *path;
 
-  if (data->type != CA_TABLE_DECLARATION)
-    return;
+  /* XXX: Switch to hashmap */
 
-  if (table_count == table_alloc)
-    ARRAY_GROW (&tables, &table_alloc);
+  struct schema_table *tables;
+  size_t table_alloc, table_count;
+};
 
-  memset (&tables[table_count], 0, sizeof (*tables));
+struct ca_schema *
+ca_schema_load (const char *path)
+{
+  struct ca_schema *result;
+  struct ca_table *schema_table;
+  size_t i;
 
-  tables[table_count].name = safe_strdup (key);
-  tables[table_count].declaration = data->v.table_declaration;
-  ++table_count;
+  if (!(result = safe_malloc (sizeof (*result))))
+    return NULL;
+
+  if (!(result->path = safe_strdup (path)))
+    return NULL;
+
+  if (!(schema_table = ca_table_open ("write-once", path, O_RDONLY, 0)))
+    {
+      if (errno != ENOENT)
+        goto fail;
+
+      return result;
+    }
+
+  for (;;)
+    {
+      const char *key;
+      struct iovec value;
+      ssize_t ret;
+
+      if (1 != (ret = ca_table_read_row (schema_table, &key, &value)))
+        {
+          if (ret == 0)
+            return result;
+
+          goto fail;
+        }
+
+      const uint8_t *data;
+
+      data = value.iov_base;
+
+      if (result->table_count == result->table_alloc
+          && -1 == ARRAY_GROW (&result->tables, &result->table_alloc))
+        goto fail;
+
+      struct schema_table *table;
+
+      table = &result->tables[result->table_count++];
+
+      memset (table, 0, sizeof (*table));
+
+      if (!(table->name = safe_strdup (key)))
+        goto fail;
+
+      table->declaration.field_count = ca_data_parse_integer (&data);
+
+      if (!(table->declaration.path = safe_strdup ((const char *) data)))
+        goto fail;
+
+      data += strlen ((const char *) data) + 1;
+
+      if (!(table->declaration.fields = safe_memdup (data, sizeof (struct ca_field) * table->declaration.field_count)))
+        goto fail;
+    }
+
+  ca_table_close (schema_table);
+
+  return result;
+
+fail:
+
+  for (i = 0; i < result->table_count; ++i)
+    {
+      free (result->tables[i].declaration.path);
+      free (result->tables[i].declaration.fields);
+      free (result->tables[i].name);
+    }
+
+  free (result->tables);
+  free (result->path);
+  free (result);
+
+  ca_table_close (schema_table);
+
+  return NULL;
 }
 
-static void
-schema_row_callback (const char *key, const void *value, size_t value_size,
-                     void *opaque)
+void
+ca_schema_close (struct ca_schema *schema)
 {
-  ca_data_iterate (value, value_size,
-                   schema_value_callback, (void *) key);
+  size_t i;
+
+  for (i = 0; i < schema->table_count; ++i)
+    {
+      free (schema->tables[i].declaration.path);
+      free (schema->tables[i].declaration.fields);
+    }
+
+  free (schema->tables);
+  free (schema->path);
+  free (schema);
+}
+
+static int
+CA_schema_save (struct ca_schema *schema)
+{
+  struct ca_table *new_schema;
+  size_t i;
+  int result = -1;
+
+  if (!(new_schema = ca_table_open ("write-once", schema->path, O_WRONLY | O_CREAT | O_TRUNC, 0666)))
+    return -1;
+
+  for (i = 0; i < schema->table_count; ++i)
+    {
+      if (-1 == ca_table_write_table_declaration (new_schema,
+                                                  schema->tables[i].name,
+                                                  &schema->tables[i].declaration))
+        {
+          goto done;
+        }
+    }
+
+  if (-1 == ca_table_sync (new_schema))
+    goto done;
+
+  result = 0;
+
+done:
+
+  ca_table_close (new_schema);
+
+  return result;
 }
 
 int
-ca_schema_load (const char *path)
+ca_schema_create_table (struct ca_schema *schema, const char *name,
+                        struct ca_table_declaration *declaration)
 {
-  if (!(schema_table = table_open (path)))
+  struct schema_table *table;
+
+  if (schema->table_count == schema->table_alloc
+      && -1 == ARRAY_GROW (&schema->tables, &schema->table_alloc))
+    return -1;
+
+  table = &schema->tables[schema->table_count];
+
+  memset (table, 0, sizeof (*table));
+
+  if (!(table->name = safe_strdup (name)))
+    goto fail;
+
+  if (!(table->declaration.path = safe_strdup (declaration->path)))
+    goto fail;
+
+  table->declaration.field_count = declaration->field_count;
+
+  if (!(table->declaration.fields = safe_memdup (declaration->fields, sizeof (struct ca_field) * declaration->field_count)))
+    goto fail;
+
+  ++schema->table_count;
+
+  if (-1 == CA_schema_save (schema))
     {
-      if (errno != ENOENT)
-        return -1;
+      --schema->table_count;
 
-      if (!(schema_table = table_create (path)))
-        return -1;
-
-      return 0;
+      goto fail;
     }
-
-  table_iterate (schema_table, schema_row_callback, TABLE_ORDER_PHYSICAL,
-                 NULL);
 
   return 0;
+
+fail:
+
+  free (table->name);
+  free (table->declaration.path);
+  free (table->declaration.fields);
+
+  return -1;
 }
 
-void
-ca_schema_close (void)
+struct ca_table *
+ca_schema_table (struct ca_schema *schema, const char *table_name)
 {
   size_t i;
 
-  assert (schema_table);
-
-  for (i = 0; i < table_count; ++i)
-    free (tables[i].name);
-
-  table_count = 0;
-
-  table_close (schema_table);
-}
-
-static void
-CA_schema_save (void)
-{
-  struct table *new_schema;
-  size_t i;
-
-  new_schema = table_create (schema_table->path);
-
-  for (i = 0; i < table_count; ++i)
+  for (i = 0; i < schema->table_count; ++i)
     {
-      table_write_table_declaration (new_schema, tables[i].name,
-                                     &tables[i].declaration);
-    }
-
-  table_close (schema_table);
-  schema_table = new_schema;
-}
-
-void
-ca_schema_add_table (const char *name,
-                     struct ca_table_declaration *declaration)
-{
-  if (table_count == table_alloc)
-    ARRAY_GROW (&tables, &table_alloc);
-
-  tables[table_count].name = safe_strdup (name);
-  tables[table_count].declaration.path = safe_strdup (declaration->path);
-  tables[table_count].declaration.field_count = declaration->field_count;
-  tables[table_count].declaration.fields = safe_memdup (declaration->fields, sizeof (struct ca_field) * declaration->field_count);
-
-  ++table_count;
-
-  CA_schema_save ();
-}
-
-void
-ca_schema_show_tables (void)
-{
-  size_t i;
-
-  if (!table_count)
-    {
-      fprintf (stderr, "No tables\n");
-
-      return;
-    }
-
-  for (i = 0; i < table_count; ++i)
-    printf ("%s\t%s\n", tables[i].name, tables[i].declaration.path);
-}
-
-struct table *
-ca_schema_table_with_name (const char *name)
-{
-  size_t i;
-
-  for (i = 0; i < table_count; ++i)
-    {
-      if (strcmp (tables[i].name, name))
+      if (strcmp (schema->tables[i].name, table_name))
         continue;
 
-      if (!tables[i].handle)
-        tables[i].handle = table_open (tables[i].declaration.path);
+      if (!schema->tables[i].handle)
+        schema->tables[i].handle = ca_table_open ("write-once", schema->tables[i].declaration.path, O_RDONLY, 0);
 
-      return tables[i].handle;
+      return schema->tables[i].handle;
     }
 
   return NULL;

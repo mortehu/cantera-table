@@ -2,16 +2,16 @@
 #define CA_QUERY_H_ 1
 
 #include "arena.h"
+#include "ca-table.h"
 
 struct ca_query_parse_context
 {
   void *scanner;
   struct ca_arena_info arena;
   int error;
-};
 
-int
-ca_query_parse (FILE *input);
+  struct ca_schema *schema;
+};
 
 enum create_table_arg_type
 {
@@ -111,6 +111,6 @@ struct select_statement
 };
 
 void
-CA_select (struct select_statement *stmt);
+CA_select (struct ca_schema *schema, struct select_statement *stmt);
 
 #endif /* !CA_QUERY_H_ */

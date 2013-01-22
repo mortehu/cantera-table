@@ -15,8 +15,6 @@
 #include "ca-table.h"
 #include "memory.h"
 
-#define DATADIR "/tmp/ts"
-
 static int do_debug;
 static int print_version;
 static int print_help;
@@ -32,8 +30,8 @@ static struct option long_options[] =
 int
 main (int argc, char **argv)
 {
-  struct table *input, *output;
-  int i;
+  struct ca_table *input = NULL, *output = NULL;
+  int i, result = EXIT_FAILURE;
 
   while ((i = getopt_long (argc, argv, "", long_options, 0)) != -1)
     {
@@ -73,11 +71,12 @@ main (int argc, char **argv)
   if (optind + 1 != argc)
     errx (EX_USAGE, "Usage: %s [OPTION]... TABLE", argv[0]);
 
-  input = table_open (argv[optind]);
+  if (!(input = ca_table_open ("write-once", argv[optind], O_RDONLY, 0)))
+    errx (EXIT_FAILURE, "%s", ca_last_error ());
 
-  if (table_is_sorted (input))
+  if (ca_table_is_sorted (input))
     {
-      table_close (input);
+      ca_table_close (input);
 
       if (do_debug)
         fprintf (stderr, "Table '%s' is already sorted\n", argv[optind]);
@@ -85,12 +84,21 @@ main (int argc, char **argv)
       return EXIT_SUCCESS;
     }
 
-  output = table_create (argv[optind]);
+  if (!(output = ca_table_open ("write-once", argv[optind], O_CREAT | O_TRUNC | O_WRONLY, 0666))
+      || -1 == ca_table_sort (output, input)
+      || -1 == ca_table_sync (output))
+    {
+      fprintf (stderr, "%s\n", ca_last_error ());
 
-  table_sort (output, input);
+      goto done;
+    }
 
-  table_close (output);
-  table_close (input);
+  result = EXIT_SUCCESS;
 
-  return EXIT_SUCCESS;
+done:
+
+  ca_table_close (output);
+  ca_table_close (input);
+
+  return result;
 }

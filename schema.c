@@ -242,5 +242,7 @@ ca_schema_table (struct ca_schema *schema, const char *table_name)
       return schema->tables[i].handle;
     }
 
+  ca_set_error ("Table does not exist");
+
   return NULL;
 }

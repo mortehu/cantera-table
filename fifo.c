@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <pthread.h>
 #include <string.h>
+#include <stddef.h>
 
 #include "ca-table.h"
 #include "memory.h"
@@ -24,7 +25,7 @@ ca_fifo_create (size_t size)
 {
   struct ca_fifo *result;
 
-  if (!(result = safe_malloc (sizeof (*result) + size)))
+  if (!(result = safe_malloc (offsetof (struct ca_fifo, data) + size)))
     return NULL;
 
   result->size = size;

@@ -21,6 +21,7 @@ static int print_help;
 
 static struct option long_options[] =
 {
+    { "debug",          no_argument,       &do_debug,      1 },
     { "version",        no_argument,       &print_version, 1 },
     { "help",           no_argument,       &print_help,    1 },
     { 0, 0, 0, 0 }

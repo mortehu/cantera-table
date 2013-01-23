@@ -1,7 +1,8 @@
 #include <assert.h>
-#include <pthread.h>
-#include <string.h>
 #include <stddef.h>
+#include <string.h>
+
+#include <pthread.h>
 
 #include "ca-table.h"
 #include "memory.h"

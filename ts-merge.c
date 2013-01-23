@@ -27,6 +27,7 @@ enum aggregate_function
 };
 
 static enum aggregate_function aggregate_function = aggregate_abort;
+static int do_debug;
 static int do_ignore_missing;
 static int do_no_fsync;
 static int print_version;
@@ -35,6 +36,7 @@ static int print_help;
 static struct option long_options[] =
 {
     { "aggregate",      required_argument, NULL,               'A' },
+    { "debug",          no_argument,       &do_debug,          1 },
     { "ignore-missing", no_argument,       &do_ignore_missing, 1 },
     { "no-fsync",       no_argument,       &do_no_fsync,       1 },
     { "version",        no_argument,       &print_version,     1 },
@@ -305,6 +307,7 @@ main (int argc, char **argv)
              "\n"
              "      --aggregate=NAME       set aggregate function for duplicates\n"
              "                             (avg, sum, min, max)\n"
+             "      --debug                print debug output\n"
              "      --ignore-missing       ignore missing input files\n"
              "      --no-relative          do not store relative timestamps\n"
              "      --no-fsync             do not use fsync on new tables\n"
@@ -362,7 +365,8 @@ main (int argc, char **argv)
         {
           struct ca_table *sort_tmp;
 
-          fprintf (stderr, "Sorting '%s'...\n", input_paths[i]);
+          if (do_debug)
+            fprintf (stderr, "Sorting '%s'...\n", input_paths[i]);
 
           sort_tmp = ca_table_open ("write-once", input_paths[i], O_CREAT | O_TRUNC | O_RDWR, 0666);
 

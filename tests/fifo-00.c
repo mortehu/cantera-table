@@ -11,7 +11,7 @@ writer_thread (void *opaque)
   uint8_t buffer[16];
   size_t i, j;
 
-  for (j = 0; j < 10; ++j)
+  for (j = 0; j < 10000; ++j)
     {
       for (i = 0; i < 16; ++i)
         buffer[i] = i;
@@ -30,7 +30,7 @@ reader_thread (void *opaque)
   uint8_t buffer[16];
   size_t i, j;
 
-  for (j = 0; j < 10; ++j)
+  for (j = 0; j < 10000; ++j)
     {
       ca_fifo_get (fifo, buffer, sizeof (buffer));
 

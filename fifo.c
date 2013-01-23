@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 
 #include <pthread.h>
@@ -7,17 +8,24 @@
 #include "ca-table.h"
 #include "memory.h"
 
+/* Limitations of this implementation:
+ *
+ *   - Single writer only
+ *   - Single reader only
+ *   - Cannot write blocks larger than FIFO size
+ *   - Cannot read blocks larger than FIFO size
+ */
+
 struct ca_fifo
 {
-  size_t size;
+  pthread_cond_t fill_available;  /* sizeof == 48 bytes */
+  pthread_cond_t space_available; /* sizeof == 48 bytes */
+  pthread_mutex_t state_lock;     /* sizeof == 40 bytes */
+  uint32_t fill, space;
 
-  size_t fill, space;
-  size_t write_offset, read_offset;
+  uint32_t write_offset, read_offset;
 
-  pthread_mutex_t state_lock;
-  pthread_cond_t fill_available;
-  pthread_cond_t space_available;
-
+  /* Must be the last member.  See use of offsetof () */
   uint8_t data[1];
 };
 
@@ -29,12 +37,11 @@ ca_fifo_create (size_t size)
   if (!(result = safe_malloc (offsetof (struct ca_fifo, data) + size)))
     return NULL;
 
-  result->size = size;
-  result->space = size;
-
-  pthread_mutex_init (&result->state_lock, NULL);
   pthread_cond_init (&result->fill_available, NULL);
   pthread_cond_init (&result->space_available, NULL);
+  pthread_mutex_init (&result->state_lock, NULL);
+
+  result->space = size;
 
   return result;
 }
@@ -48,7 +55,9 @@ ca_fifo_free (struct ca_fifo *fifo)
 void
 ca_fifo_put (struct ca_fifo *fifo, const void *data, size_t size)
 {
-  size_t tail_space, remaining;
+  uint_fast32_t tail_space, remaining;
+
+  assert (size <= fifo->fill + fifo->space);
 
   pthread_mutex_lock (&fifo->state_lock);
 
@@ -57,7 +66,7 @@ ca_fifo_put (struct ca_fifo *fifo, const void *data, size_t size)
 
   pthread_mutex_unlock (&fifo->state_lock);
 
-  tail_space = fifo->size - fifo->write_offset;
+  tail_space = fifo->fill + fifo->space - fifo->write_offset;
   remaining = size;
 
   if (tail_space <= remaining)
@@ -78,7 +87,7 @@ ca_fifo_put (struct ca_fifo *fifo, const void *data, size_t size)
 
   fifo->fill += size;
   fifo->space -= size;
-  pthread_cond_broadcast (&fifo->fill_available);
+  pthread_cond_signal (&fifo->fill_available);
 
   pthread_mutex_unlock (&fifo->state_lock);
 }
@@ -86,7 +95,9 @@ ca_fifo_put (struct ca_fifo *fifo, const void *data, size_t size)
 void
 ca_fifo_get (struct ca_fifo *fifo, void *data, size_t size)
 {
-  size_t tail_fill, remaining;
+  uint_fast32_t tail_fill, remaining;
+
+  assert (size <= fifo->fill + fifo->space);
 
   pthread_mutex_lock (&fifo->state_lock);
 
@@ -95,7 +106,7 @@ ca_fifo_get (struct ca_fifo *fifo, void *data, size_t size)
 
   pthread_mutex_unlock (&fifo->state_lock);
 
-  tail_fill = fifo->size - fifo->read_offset;
+  tail_fill = fifo->fill + fifo->space - fifo->read_offset;
   remaining = size;
 
   if (tail_fill <= remaining)
@@ -116,7 +127,7 @@ ca_fifo_get (struct ca_fifo *fifo, void *data, size_t size)
 
   fifo->space += size;
   fifo->fill -= size;
-  pthread_cond_broadcast (&fifo->space_available);
+  pthread_cond_signal (&fifo->space_available);
 
   pthread_mutex_unlock (&fifo->state_lock);
 }

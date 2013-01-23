@@ -73,8 +73,6 @@ ca_fifo_put (struct ca_fifo *fifo, const void *data, size_t size)
 
   fifo->write_offset += remaining;
 
-  assert (fifo->write_offset < fifo->size);
-
   pthread_mutex_lock (&fifo->state_lock);
 
   fifo->fill += size;
@@ -109,12 +107,9 @@ ca_fifo_get (struct ca_fifo *fifo, void *data, size_t size)
       remaining -= tail_fill;
     }
 
-  memcpy (&fifo->data[fifo->read_offset],
-          data, remaining);
+  memcpy (data, &fifo->data[fifo->read_offset], remaining);
 
   fifo->read_offset += remaining;
-
-  assert (fifo->read_offset < fifo->size);
 
   pthread_mutex_lock (&fifo->state_lock);
 

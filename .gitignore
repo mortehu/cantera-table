@@ -11,6 +11,7 @@
 *.tab
 *~
 .deps
+.dirstamp
 .libs
 /aclocal.m4
 /ca-shell
@@ -41,3 +42,7 @@
 /ylwrap
 Makefile
 Makefile.in
+core
+core.*
+tests/fifo-00
+vgcore.*

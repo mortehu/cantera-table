@@ -12,9 +12,6 @@ struct ca_fifo
   size_t fill, space;
   size_t write_offset, read_offset;
 
-  pthread_mutex_t write_lock;
-  pthread_mutex_t read_lock;
-
   pthread_mutex_t state_lock;
   pthread_cond_t fill_available;
   pthread_cond_t space_available;
@@ -33,8 +30,6 @@ ca_fifo_create (size_t size)
   result->size = size;
   result->space = size;
 
-  pthread_mutex_init (&result->write_lock, NULL);
-  pthread_mutex_init (&result->read_lock, NULL);
   pthread_mutex_init (&result->state_lock, NULL);
   pthread_cond_init (&result->fill_available, NULL);
   pthread_cond_init (&result->space_available, NULL);
@@ -52,8 +47,6 @@ void
 ca_fifo_put (struct ca_fifo *fifo, const void *data, size_t size)
 {
   size_t tail_space, remaining;
-
-  pthread_mutex_lock (&fifo->write_lock);
 
   pthread_mutex_lock (&fifo->state_lock);
 
@@ -88,15 +81,12 @@ ca_fifo_put (struct ca_fifo *fifo, const void *data, size_t size)
   pthread_cond_broadcast (&fifo->fill_available);
 
   pthread_mutex_unlock (&fifo->state_lock);
-  pthread_mutex_unlock (&fifo->write_lock);
 }
 
 void
 ca_fifo_get (struct ca_fifo *fifo, void *data, size_t size)
 {
   size_t tail_fill, remaining;
-
-  pthread_mutex_lock (&fifo->read_lock);
 
   pthread_mutex_lock (&fifo->state_lock);
 
@@ -132,5 +122,4 @@ ca_fifo_get (struct ca_fifo *fifo, void *data, size_t size)
   pthread_cond_broadcast (&fifo->space_available);
 
   pthread_mutex_unlock (&fifo->state_lock);
-  pthread_mutex_unlock (&fifo->read_lock);
 }

@@ -24,7 +24,7 @@
 #include "smalltable-internal.h"
 
 #define MAGIC 0x6c6261742e692e70ULL
-#define MAJOR_VERSION 0
+#define MAJOR_VERSION 1
 #define MINOR_VERSION 0
 
 #define TMP_SUFFIX ".tmp.XXXXXX"
@@ -664,6 +664,14 @@ CA_wo_mmap (struct CA_wo *t)
     }
 
   t->header = (struct CA_wo_header *) t->buffer;
+
+  if (t->header->major_version != MAJOR_VERSION)
+    {
+      ca_set_error ("Unsupported major version %u in '%s'",
+                    t->header->major_version, t->path);
+
+      return -1;
+    }
 
   if (t->header->magic != MAGIC)
     {

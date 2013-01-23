@@ -1,14 +1,29 @@
+#ifdef HAVE_CONFIG_H
+#  include "config.h"
+#endif
+
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Analysis/Verifier.h>
 #include <llvm/DerivedTypes.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/JIT.h>
-#include <llvm/IRBuilder.h>
 #include <llvm/LLVMContext.h>
 #include <llvm/Module.h>
 #include <llvm/PassManager.h>
-#include <llvm/Support/TargetSelect.h>
 #include <llvm/Transforms/Scalar.h>
+
+/* The LLVM project likes to move headers between versions */
+#if HAVE_LLVM_SUPPORT_TARGETSELECT_H
+#  include <llvm/Support/TargetSelect.h>
+#elif HAVE_LLVM_TARGET_TARGETSELECT_H
+#  include <llvm/Target/TargetSelect.h>
+#endif
+
+#if HAVE_LLVM_SUPPORT_IRBUILDER_H
+#  include <llvm/Support/IRBuilder.h>
+#elif HAVE_LLVM_IRBUILDER_H
+#  include <llvm/IRBuilder.h>
+#endif
 
 #include "ca-table.h"
 #include "query.h"
@@ -100,6 +115,7 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module, struct 
         case llvm::Type::PointerTyID:
 
             {
+#if 0
               auto callee = module->getFunction ("strcmp");
 
               if (!callee)
@@ -115,6 +131,7 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module, struct 
                 }
 
               return builder->CreateCall2 (callee, lhs, rhs);
+#endif
             }
 
         default:
@@ -152,9 +169,9 @@ ca_expression_compile (struct expression *expr)
       return NULL;
     }
 
-  std::vector<llvm::Type *> argument_types;
+  std::vector<const llvm::Type *> argument_types;
 
-  auto function_type = llvm::FunctionType::get (llvm::Type::getInt32Ty (llvm::getGlobalContext ()),
+  auto function_type = llvm::FunctionType::get ((const llvm::Type *) llvm::Type::getInt32Ty (llvm::getGlobalContext ()),
                                                 argument_types, false);
 
   auto function = llvm::Function::Create (function_type, llvm::Function::InternalLinkage, "my_function", module);
@@ -170,6 +187,7 @@ ca_expression_compile (struct expression *expr)
 
   llvm::verifyFunction (*function);
 
+#if 0
   auto fpm = new llvm::FunctionPassManager (module);
 
   /* XXX: From example code: fpm->add (new llvm::DataLayout (engine->getDataLayout ())); */
@@ -182,6 +200,7 @@ ca_expression_compile (struct expression *expr)
   fpm->run (*function);
 
   delete fpm;
+#endif
 
   return (ca_expression_function) engine->getPointerToFunction (function);
 }

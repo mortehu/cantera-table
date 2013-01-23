@@ -13,7 +13,7 @@ bin_PROGRAMS = \
   ts-merge
 
 ACLOCAL_AMFLAGS = -I m4
-AM_CPPFLAGS = -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -I/usr/lib/llvm-3.2/include
+AM_CPPFLAGS = -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -I/usr/lib/llvm-3.2/include -I.
 AM_CFLAGS = -Wall -Werror -g
 AM_CXXFLAGS = -std=c++0x -Wall -Werror -g
 
@@ -23,6 +23,7 @@ libca_table_la_SOURCES = \
   data.c \
   error.c error.h \
   expression-llvm.cc \
+  fifo.c \
   io.c io.h \
   hashmap.c hashmap.h \
   merge.c \
@@ -50,3 +51,9 @@ ts_load_LDADD = libca-table.la
 
 ts_merge_SOURCES = ts-merge.c
 ts_merge_LDADD = libca-table.la
+
+TESTS = tests/fifo-00
+check_PROGRAMS = tests/fifo-00
+
+tests_fifo_00_SOURCES = tests/fifo-00.c
+tests_fifo_00_LDADD = libca-table.la

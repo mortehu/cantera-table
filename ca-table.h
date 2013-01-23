@@ -173,6 +173,22 @@ ca_table_delete_row (struct ca_table *table) CA_USE_RESULT;
 
 /*****************************************************************************/
 
+struct ca_fifo;
+
+struct ca_fifo *
+ca_fifo_create (size_t size);
+
+void
+ca_fifo_free (struct ca_fifo *fifo);
+
+void
+ca_fifo_put (struct ca_fifo *fifo, const void *data, size_t size);
+
+void
+ca_fifo_get (struct ca_fifo *fifo, void *data, size_t size);
+
+/*****************************************************************************/
+
 struct ca_schema;
 
 struct ca_schema *

@@ -158,6 +158,11 @@ ca_table_insert_row (struct ca_table *table, const char *key,
 int
 ca_table_seek (struct ca_table *table, off_t offset, int whence) CA_USE_RESULT;
 
+/**
+ * Returns -1 on failure.  Use ca_last_error() to get an error description.
+ * Returns 0 if the key was not found.
+ * Returns 1 if the key was found.
+ */
 int
 ca_table_seek_to_key (struct ca_table *table, const char *key) CA_USE_RESULT;
 

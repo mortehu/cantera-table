@@ -31,6 +31,8 @@ ca_set_error (const char *format, ...);
 
 enum ca_type
 {
+  CA_INVALID = -1,
+
   CA_TEXT = 0,
   CA_TIME_SERIES = 1,
   CA_TABLE_DECLARATION = 2,

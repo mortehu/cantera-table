@@ -73,6 +73,12 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module, struct 
           ca_set_error ("Numeric constants not supported yet");
 
           return NULL;
+
+        default:
+
+          ca_set_error ("Unknown type id %d", expr->value.type);
+
+          return NULL;
         }
 
     case EXPR_VARIABLE:

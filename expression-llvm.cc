@@ -64,6 +64,7 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module, struct 
           return NULL;
 
         case CA_INT64:
+        case CA_TIME:
 
           return llvm::ConstantInt::get (llvm::getGlobalContext (), llvm::APInt (64, expr->value.d.integer, true /* signed */));
 

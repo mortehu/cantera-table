@@ -639,5 +639,5 @@ done:
 
   free (inputs);
 
-  return EXIT_SUCCESS;
+  return result;
 }

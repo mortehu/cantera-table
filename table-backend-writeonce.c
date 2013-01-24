@@ -31,14 +31,6 @@
 #define TMP_SUFFIX ".tmp.XXXXXX"
 #define BUFFER_SIZE (1024 * 1024)
 
-#ifdef __GNUC__
-#  define likely(x)       __builtin_expect((x),1)
-#  define unlikely(x)     __builtin_expect((x),0)
-#else
-#  define likely(x)       (x)
-#  define unlikely(x)     (x)
-#endif
-
 /*****************************************************************************/
 
 static void *
@@ -513,7 +505,7 @@ CA_wo_seek_to_key (void *handle, const char *key)
               first = middle + 1;
               count -= half + 1;
             }
-          else if (likely (cmp > 0))
+          else if (ca_likely (cmp > 0))
             count = half;
           else
             {
@@ -539,7 +531,7 @@ CA_wo_seek_to_key (void *handle, const char *key)
               first = middle + 1;
               count -= half + 1;
             }
-          else if (likely (cmp < 0))
+          else if (ca_likely (cmp < 0))
             count = half;
           else
             {

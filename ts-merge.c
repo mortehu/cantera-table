@@ -119,13 +119,14 @@ samplecmp (const void *vlhs, const void *vrhs)
 
                   return strcmp ((const char *) begin_lhs, (const char *) begin_rhs);
 
-                  break;
-
                 case CA_TIME:
                 case CA_INT64:
 
                     {
                       int64_t int_lhs, int_rhs;
+
+                      assert (begin_lhs + sizeof (int64_t) <= end_lhs);
+                      assert (begin_rhs + sizeof (int64_t) <= end_rhs);
 
                       memcpy (&int_lhs, begin_lhs, sizeof (int64_t)); begin_lhs += sizeof (int64_t);
                       memcpy (&int_rhs, begin_rhs, sizeof (int64_t)); begin_rhs += sizeof (int64_t);
@@ -141,10 +142,12 @@ samplecmp (const void *vlhs, const void *vrhs)
                   errx (EXIT_FAILURE, "Don't know how to compare type %d", column_types[i]);
                 }
 
-              assert (begin_lhs <= end_rhs);
+              assert (begin_lhs <= end_lhs);
+              assert (begin_rhs <= end_rhs);
             }
 
-          assert (begin_lhs == end_rhs);
+          assert (begin_lhs == end_lhs);
+          assert (begin_rhs == end_rhs);
         }
 
       break;

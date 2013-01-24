@@ -23,7 +23,8 @@ enum aggregate_function
   aggregate_avg,
   aggregate_sum,
   aggregate_min,
-  aggregate_max
+  aggregate_max,
+  aggregate_equal
 };
 
 static enum aggregate_function aggregate_function = aggregate_abort;
@@ -72,30 +73,30 @@ static int
 data_flush (const char *key) CA_USE_RESULT;
 
 static float
-aggregate (const float *values, size_t count)
+aggregate (const float *values, size_t count, int *error)
 {
-  double tmp = 0.0;
+  double tmp = values[0];
   size_t i;
+
+  *error = 0;
 
   switch (aggregate_function)
     {
     case aggregate_avg:
 
-      for (i = 0; i < count; ++i)
+      for (i = 1; i < count; ++i)
         tmp += values[count];
 
       return tmp / i;
 
     case aggregate_sum:
 
-      for (i = 0; i < count; ++i)
+      for (i = 1; i < count; ++i)
         tmp += values[count];
 
       return tmp;
 
     case aggregate_min:
-
-      tmp = values[0];
 
       for (i = 1; i < count; ++i)
         {
@@ -107,8 +108,6 @@ aggregate (const float *values, size_t count)
 
     case aggregate_max:
 
-      tmp = values[0];
-
       for (i = 1; i < count; ++i)
         {
           if (tmp < values[i])
@@ -116,6 +115,24 @@ aggregate (const float *values, size_t count)
         }
 
       return tmp;
+
+    case aggregate_equal:
+
+      for (i = 1; i < count; ++i)
+        {
+          if (tmp != values[i])
+            {
+              *error = 1;
+
+              ca_set_error ("equal aggregate used, but not all samples are equal");
+
+              return 0;
+            }
+        }
+
+      return tmp;
+
+      break;
 
     default:
 
@@ -142,6 +159,8 @@ data_flush (const char *key)
 
   for (i = 0; i < sample_count; ++i)
     {
+      int error;
+
       next = i + 1;
 
       if (next == sample_count || samples[next].time != samples[i].time)
@@ -168,7 +187,10 @@ data_flush (const char *key)
         }
       while (next < sample_count && samples[next].time == samples[i].time);
 
-      samples[i].value = aggregate (aggregate_values, aggregate_count);
+      samples[i].value = aggregate (aggregate_values, aggregate_count, &error);
+
+      if (error)
+        return -1;
 
       sample_count -= (next - i - 1);
 
@@ -286,6 +308,8 @@ main (int argc, char **argv)
             aggregate_function = aggregate_min;
           else if (!strcmp (optarg, "max"))
             aggregate_function = aggregate_max;
+          else if (!strcmp (optarg, "equal"))
+            aggregate_function = aggregate_equal;
           else
             errx (EX_USAGE, "Unknown aggregate function '%s'", optarg);
 
@@ -306,7 +330,7 @@ main (int argc, char **argv)
       printf ("Usage: %s [OPTION]... OUTPUT INPUT...\n"
              "\n"
              "      --aggregate=NAME       set aggregate function for duplicates\n"
-             "                             (avg, sum, min, max)\n"
+             "                             (avg, sum, min, max, equal)\n"
              "      --debug                print debug output\n"
              "      --ignore-missing       ignore missing input files\n"
              "      --no-relative          do not store relative timestamps\n"

@@ -175,6 +175,11 @@ CA_wo_open (const char *path, int flags, mode_t mode)
 
   if (flags & O_CREAT)
     {
+      mode_t mask;
+
+      mask = umask (0);
+      umask (mask);
+
       if ((flags & O_TRUNC) != O_TRUNC
           || (((flags & O_RDWR) != O_RDWR) && (flags & O_WRONLY) != O_WRONLY))
         {
@@ -199,7 +204,7 @@ CA_wo_open (const char *path, int flags, mode_t mode)
         }
 
 
-      if (-1 == fchmod (result->fd, mode))
+      if (-1 == fchmod (result->fd, mode & ~mask))
         {
           ca_set_error ("fchmod failed on path `%s': %s",
                         result->tmp_path, strerror (errno));

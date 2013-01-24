@@ -108,6 +108,12 @@ struct ca_table_backend
   (*open) (const char *path, int flags, mode_t mode);
 
   int
+  (*stat) (void *handle, struct stat *buf);
+
+  int
+  (*utime) (void *handle, const struct timeval tv[2]);
+
+  int
   (*sync) (void *handle);
 
   void
@@ -154,6 +160,12 @@ struct ca_table;
 struct ca_table *
 ca_table_open (const char *backend_name,
                const char *path, int flags, mode_t mode) CA_USE_RESULT;
+
+int
+ca_table_stat (struct ca_table *table, struct stat *buf);
+
+int
+ca_table_utime (struct ca_table *table, const struct timeval tv[2]);
 
 int
 ca_table_sync (struct ca_table *table) CA_USE_RESULT;

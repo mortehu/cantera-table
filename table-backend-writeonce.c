@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sysexits.h>
 #include <unistd.h>
@@ -42,6 +43,12 @@
 
 static void *
 CA_wo_open (const char *path, int flags, mode_t mode);
+
+static int
+CA_wo_stat (void *handle, struct stat *buf);
+
+static int
+CA_wo_utime (void *handle, const struct timeval tv[2]);
 
 static int
 CA_wo_sync (void *handle);
@@ -80,6 +87,8 @@ CA_wo_delete_row (void *handle);
 struct ca_table_backend CA_table_writeonce =
 {
   .open = CA_wo_open,
+  .stat = CA_wo_stat,
+  .utime = CA_wo_utime,
   .sync = CA_wo_sync,
   .close = CA_wo_close,
   .set_flag = CA_wo_set_flag,
@@ -260,6 +269,36 @@ fail:
   CA_wo_free (result);
 
   return NULL;
+}
+
+static int
+CA_wo_stat (void *handle, struct stat *buf)
+{
+  struct CA_wo *t = handle;
+
+  if (-1 == fstat (t->fd, buf))
+    {
+      ca_set_error ("fstat failed on '%s'", t->path);
+
+      return -1;
+    }
+
+  return 0;
+}
+
+static int
+CA_wo_utime (void *handle, const struct timeval tv[2])
+{
+  struct CA_wo *t = handle;
+
+  if (-1 == futimes (t->fd, tv))
+    {
+      ca_set_error ("futimes failed on '%s'", t->path);
+
+      return -1;
+    }
+
+  return 0;
 }
 
 static int

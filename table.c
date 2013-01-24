@@ -53,6 +53,18 @@ ca_table_open (const char *backend_name,
 }
 
 int
+ca_table_stat (struct ca_table *table, struct stat *buf)
+{
+  return table->backend->stat (table->handle, buf);
+}
+
+int
+ca_table_utime (struct ca_table *table, const struct timeval tv[2])
+{
+  return table->backend->utime (table->handle, tv);
+}
+
+int
 ca_table_sync (struct ca_table *table)
 {
   return table->backend->sync (table->handle);

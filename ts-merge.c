@@ -3,6 +3,7 @@
 #endif
 
 #include <assert.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,6 +32,7 @@ static enum aggregate_function aggregate_function = aggregate_abort;
 static int do_debug;
 static int do_ignore_missing;
 static int do_no_fsync;
+static int do_update;
 static int print_version;
 static int print_help;
 
@@ -40,6 +42,7 @@ static struct option long_options[] =
     { "debug",          no_argument,       &do_debug,          1 },
     { "ignore-missing", no_argument,       &do_ignore_missing, 1 },
     { "no-fsync",       no_argument,       &do_no_fsync,       1 },
+    { "update",         no_argument,       &do_update,         1 },
     { "version",        no_argument,       &print_version,     1 },
     { "help",           no_argument,       &print_help,        1 },
     { NULL, 0, NULL, 0 }
@@ -474,6 +477,7 @@ columns_parse (char *columns)
 int
 main (int argc, char **argv)
 {
+  struct stat st;
   int i, result = EXIT_FAILURE;
 
   while ((i = getopt_long (argc, argv, "", long_options, 0)) != -1)
@@ -517,6 +521,8 @@ main (int argc, char **argv)
              "      --ignore-missing       ignore missing input files\n"
              "      --no-relative          do not store relative timestamps\n"
              "      --no-fsync             do not use fsync on new tables\n"
+             "      --update               only run if any source file is newer than the\n"
+             "                             target file\n"
              "      --help     display this help and exit\n"
              "      --version  display version information\n"
              "\n"
@@ -573,14 +579,22 @@ main (int argc, char **argv)
           goto done;
         }
 
+      if (-1 == ca_table_stat (inputs[i], &st))
+        goto done;
+
+      if (st.st_mtime > newest_input)
+        newest_input = st.st_mtime;
+
       if (!ca_table_is_sorted (inputs[i]))
         {
           struct ca_table *sort_tmp;
+          struct timeval times[2];
 
           if (do_debug)
             fprintf (stderr, "Sorting '%s'...\n", input_paths[i]);
 
-          sort_tmp = ca_table_open ("write-once", input_paths[i], O_CREAT | O_TRUNC | O_RDWR, 0666);
+          if (!(sort_tmp = ca_table_open ("write-once", input_paths[i], O_CREAT | O_TRUNC | O_RDWR, 0666)))
+            goto done;
 
           if (do_no_fsync)
             ca_table_set_flag (sort_tmp, CA_TABLE_NO_FSYNC);
@@ -596,7 +610,14 @@ main (int argc, char **argv)
 
           ca_table_close (inputs[i]);
 
+          memset (times, 0, sizeof (times));
+          times[0].tv_sec = st.st_atime;
+          times[1].tv_sec = st.st_mtime;
+          ca_table_utime (sort_tmp, times);
+
           inputs[i] = sort_tmp;
+
+          input_is_dirty = 1;
         }
 
       ++i;
@@ -604,6 +625,30 @@ main (int argc, char **argv)
 
   if (!input_count)
     errx (EX_NOINPUT, "No input files");
+
+  if (do_update && !input_is_dirty)
+    {
+      if (-1 != stat (output_path, &st))
+        {
+          if (st.st_mtime > newest_input)
+            {
+              if (do_debug)
+                fprintf (stderr, "Output is more recent than input\n");
+
+              result = EXIT_SUCCESS;
+
+              goto done;
+            }
+        }
+
+      if (errno != ENOENT)
+        {
+          ca_set_error ("stat failed on '%s': %s",
+                        output_path, strerror (errno));
+
+          goto done;
+        }
+    }
 
   if (!(output = ca_table_open ("write-once", output_path, O_CREAT | O_TRUNC | O_WRONLY, 0666)))
     goto done;

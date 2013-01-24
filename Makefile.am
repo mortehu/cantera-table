@@ -33,7 +33,8 @@ libca_table_la_SOURCES = \
   sort.c \
   table-backend-writeonce.c \
   table-write.c \
-  table.c
+  table.c \
+  type.c
 libca_table_la_LDFLAGS = `llvm-config --ldflags --libs core jit native all`
 
 ca_shell_SOURCES = ca-shell.c query-parser.y query-lexer.l

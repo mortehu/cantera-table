@@ -16,6 +16,14 @@ extern "C" {
 
 #define CA_NAMEDATALEN 64
 
+#ifdef __GNUC__
+#  define ca_likely(x)       __builtin_expect((x),1)
+#  define ca_unlikely(x)     __builtin_expect((x),0)
+#else
+#  define ca_likely(x)       (x)
+#  define ca_unlikely(x)     (x)
+#endif
+
 /*****************************************************************************/
 
 const char *
@@ -40,6 +48,11 @@ enum ca_type
   CA_NUMERIC = 4,
   CA_TIME = 5
 };
+
+enum ca_type
+ca_type_from_string (const char *string);
+
+/*****************************************************************************/
 
 enum ca_field_flag
 {

@@ -29,7 +29,7 @@ ca_set_error (const char *format, ...);
 
 /*****************************************************************************/
 
-enum ca_value_type
+enum ca_type
 {
   CA_TEXT = 0,
   CA_TIME_SERIES = 1,
@@ -51,7 +51,7 @@ struct ca_field
   uint32_t flags;
   uint16_t pad0;
   uint8_t pad1;
-  uint8_t type; /* enum ca_value_type */
+  uint8_t type; /* enum ca_type */
 };
 
 struct ca_table_declaration
@@ -63,7 +63,7 @@ struct ca_table_declaration
 
 struct ca_data
 {
-  enum ca_value_type type;
+  enum ca_type type;
 
   union
     {

@@ -81,7 +81,7 @@ struct column_definition
 
 struct expression_value
 {
-  enum ca_value_type type;
+  enum ca_type type;
   union
     {
       int64_t integer;

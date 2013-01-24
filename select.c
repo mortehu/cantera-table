@@ -86,7 +86,7 @@ expr_primary_key_filter (struct expression *expr)
 }
 
 static void
-format_output (enum ca_value_type type,
+format_output (enum ca_type type,
                const uint8_t *begin, const uint8_t *end)
 {
   size_t i;

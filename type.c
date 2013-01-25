@@ -47,3 +47,17 @@ ca_type_from_string (const char *string)
 
   return CA_INVALID;
 }
+
+const char *
+ca_type_to_string (enum ca_type type)
+{
+  size_t i;
+
+  for (i = 0; i < sizeof (CA_types) / sizeof (CA_types[0]); ++i)
+    {
+      if (CA_types[i].type == type)
+        return CA_types[i].name;
+    }
+
+  return NULL;
+}

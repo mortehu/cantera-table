@@ -52,6 +52,9 @@ enum ca_type
 enum ca_type
 ca_type_from_string (const char *string);
 
+const char *
+ca_type_to_string (enum ca_type type);
+
 /*****************************************************************************/
 
 enum ca_field_flag

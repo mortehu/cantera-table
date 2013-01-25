@@ -10,12 +10,12 @@ static struct
   enum ca_type type;
 } CA_types[] =
 {
-    { "integer",           CA_INT64 },
-    { "numeric",           CA_NUMERIC },
-    { "table_declaration", CA_TABLE_DECLARATION },
-    { "text",              CA_TEXT },
-    { "time",              CA_TIME },
-    { "time_float4",       CA_TIME_SERIES }
+    { "INTEGER",           CA_INT64 },
+    { "NUMERIC",           CA_NUMERIC },
+    { "TABLE_DECLARATION", CA_TABLE_DECLARATION },
+    { "TEXT",              CA_TEXT },
+    { "TIME",              CA_TIME },
+    { "TIME_FLOAT4",       CA_TIME_SERIES }
 };
 
 enum ca_type

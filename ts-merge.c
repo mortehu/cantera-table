@@ -56,102 +56,105 @@ static size_t column_alloc, column_count;
 enum sample_type
 {
   SAMPLE_TIME_FLOAT4,
+  SAMPLE_SORTED_UINT,
   SAMPLE_DATA
 };
 
-struct sample
+struct time_float4_sample
 {
-  enum sample_type type;
-
-  union
-    {
-      struct
-        {
-          uint64_t time;
-          float value;
-        } time_float4;
-      struct iovec data;
-    } v;
+  uint64_t time;
+  float value;
 };
 
-static char *prev_key;
-static struct sample *samples;
+static enum sample_type sample_type;
+
+static struct time_float4_sample *time_float4_samples;
+static uint64_t *sorted_uint_samples;
+static struct iovec *data_samples;
+
 static size_t sample_alloc, sample_count;
 
+static char *prev_key;
+
 static int
-samplecmp (const void *vlhs, const void *vrhs)
+sample_float4_cmp (const void *vlhs, const void *vrhs)
 {
-  const struct sample *lhs = vlhs;
-  const struct sample *rhs = vrhs;
+  const struct time_float4_sample *lhs = vlhs;
+  const struct time_float4_sample *rhs = vrhs;
 
-  if (lhs->type != rhs->type)
-    return (lhs->type < rhs->type) ? -1 : 1;
+  if (lhs->time != rhs->time)
+    return (lhs->time < rhs->time) ? -1 : 1;
 
-  switch (lhs->type)
+  return 0;
+}
+
+static int
+sample_sorted_uint_cmp (const void *vlhs, const void *vrhs)
+{
+  const uint64_t *lhs = vlhs;
+  const uint64_t *rhs = vrhs;
+
+  if (*lhs != *rhs)
+    return (*lhs < *rhs) ? -1 : 1;
+
+  return 0;
+}
+
+static int
+sample_data_cmp (const void *vlhs, const void *vrhs)
+{
+  const struct iovec *lhs = vlhs;
+  const struct iovec *rhs = vrhs;
+
+  size_t i;
+  const uint8_t *begin_lhs, *end_lhs;
+  const uint8_t *begin_rhs, *end_rhs;
+
+  begin_lhs = lhs->iov_base;
+  end_lhs = begin_lhs + lhs->iov_len;
+  begin_rhs = rhs->iov_base;
+  end_rhs = begin_rhs + rhs->iov_len;
+
+  for (i = 0; i < column_count; ++i)
     {
-    case SAMPLE_TIME_FLOAT4:
-
-      if (lhs->v.time_float4.time != rhs->v.time_float4.time)
-        return (lhs->v.time_float4.time < rhs->v.time_float4.time) ? -1 : 1;
-
-      break;
-
-    case SAMPLE_DATA:
-
+      switch (column_types[i])
         {
-          size_t i;
-          const uint8_t *begin_lhs, *end_lhs;
-          const uint8_t *begin_rhs, *end_rhs;
+        case CA_TEXT:
 
-          begin_lhs = lhs->v.data.iov_base;
-          end_lhs = begin_lhs + lhs->v.data.iov_len;
-          begin_rhs = rhs->v.data.iov_base;
-          end_rhs = begin_rhs + rhs->v.data.iov_len;
+          assert (!end_lhs[-1]);
+          assert (!end_rhs[-1]);
 
-          for (i = 0; i < column_count; ++i)
+          return strcmp ((const char *) begin_lhs, (const char *) begin_rhs);
+
+        case CA_TIME:
+        case CA_INT64:
+
             {
-              switch (column_types[i])
-                {
-                case CA_TEXT:
+              int64_t int_lhs, int_rhs;
 
-                  assert (!end_lhs[-1]);
-                  assert (!end_rhs[-1]);
+              assert (begin_lhs + sizeof (int64_t) <= end_lhs);
+              assert (begin_rhs + sizeof (int64_t) <= end_rhs);
 
-                  return strcmp ((const char *) begin_lhs, (const char *) begin_rhs);
+              memcpy (&int_lhs, begin_lhs, sizeof (int64_t)); begin_lhs += sizeof (int64_t);
+              memcpy (&int_rhs, begin_rhs, sizeof (int64_t)); begin_rhs += sizeof (int64_t);
 
-                case CA_TIME:
-                case CA_INT64:
-
-                    {
-                      int64_t int_lhs, int_rhs;
-
-                      assert (begin_lhs + sizeof (int64_t) <= end_lhs);
-                      assert (begin_rhs + sizeof (int64_t) <= end_rhs);
-
-                      memcpy (&int_lhs, begin_lhs, sizeof (int64_t)); begin_lhs += sizeof (int64_t);
-                      memcpy (&int_rhs, begin_rhs, sizeof (int64_t)); begin_rhs += sizeof (int64_t);
-
-                      if (int_lhs != int_rhs)
-                        return (int_lhs < int_rhs) ? -1 : 1;
-                    }
-
-                  break;
-
-                default:
-
-                  errx (EXIT_FAILURE, "Don't know how to compare type %d", column_types[i]);
-                }
-
-              assert (begin_lhs <= end_lhs);
-              assert (begin_rhs <= end_rhs);
+              if (int_lhs != int_rhs)
+                return (int_lhs < int_rhs) ? -1 : 1;
             }
 
-          assert (begin_lhs == end_lhs);
-          assert (begin_rhs == end_rhs);
+          break;
+
+        default:
+
+          errx (EXIT_FAILURE, "Don't know how to compare type %d", column_types[i]);
         }
 
-      break;
+      assert (begin_lhs <= end_lhs);
+      assert (begin_rhs <= end_rhs);
     }
+
+  assert (begin_lhs == end_lhs);
+  assert (begin_rhs == end_rhs);
 
   return 0;
 }
@@ -160,7 +163,7 @@ static int
 data_flush (const char *key) CA_USE_RESULT;
 
 static int
-sample_aggregate (struct sample *samples, size_t count)
+sample_aggregate_time_float4 (struct time_float4_sample *samples, size_t count)
 {
   size_t i;
 
@@ -171,116 +174,111 @@ sample_aggregate (struct sample *samples, size_t count)
       return -1;
     }
 
-  switch (samples[0].type)
+  double tmp = samples[0].value;
+
+  switch (aggregate_function)
     {
-    case SAMPLE_TIME_FLOAT4:
+    case aggregate_avg:
 
+      for (i = 1; i < count; ++i)
+        tmp += samples[count].value;
+
+      tmp /= i;
+
+      break;
+
+    case aggregate_sum:
+
+      for (i = 1; i < count; ++i)
+        tmp += samples[count].value;
+
+      break;
+
+    case aggregate_min:
+
+      for (i = 1; i < count; ++i)
         {
-          double tmp = samples[0].v.time_float4.value;
+          if (tmp > samples[i].value)
+            tmp = samples[i].value;
+        }
 
-          switch (aggregate_function)
+      break;
+
+    case aggregate_max:
+
+      for (i = 1; i < count; ++i)
+        {
+          if (tmp < samples[i].value)
+            tmp = samples[i].value;
+        }
+
+      break;
+
+    case aggregate_equal:
+
+      for (i = 1; i < count; ++i)
+        {
+          if (tmp != samples[i].value)
             {
-            case aggregate_avg:
-
-              for (i = 1; i < count; ++i)
-                tmp += samples[count].v.time_float4.value;
-
-              tmp /= i;
-
-              break;
-
-            case aggregate_sum:
-
-              for (i = 1; i < count; ++i)
-                tmp += samples[count].v.time_float4.value;
-
-              break;
-
-            case aggregate_min:
-
-              for (i = 1; i < count; ++i)
-                {
-                  if (tmp > samples[i].v.time_float4.value)
-                    tmp = samples[i].v.time_float4.value;
-                }
-
-              break;
-
-            case aggregate_max:
-
-              for (i = 1; i < count; ++i)
-                {
-                  if (tmp < samples[i].v.time_float4.value)
-                    tmp = samples[i].v.time_float4.value;
-                }
-
-              break;
-
-            case aggregate_equal:
-
-              for (i = 1; i < count; ++i)
-                {
-                  if (tmp != samples[i].v.time_float4.value)
-                    {
-                      for (i = 0; i < count; ++i)
-                        fprintf (stderr, " %.4g", samples[i].v.time_float4.value);
-                      fprintf (stderr, "\n");
-                      ca_set_error ("Aggregate \"equal\" used, but not all samples are equal");
-
-                      return -1;
-                    }
-                }
-
-              break;
-
-            default:
-
-              ca_set_error ("Unsupported aggregate function for time_float4");
+              for (i = 0; i < count; ++i)
+                fprintf (stderr, " %.4g", samples[i].value);
+              fprintf (stderr, "\n");
+              ca_set_error ("Aggregate \"equal\" used, but not all samples are equal");
 
               return -1;
             }
-
-          samples[0].v.time_float4.value = tmp;
         }
 
-      return 0;
+      break;
 
     default:
 
-      switch (aggregate_function)
+      ca_set_error ("Unsupported aggregate function for time_float4");
+
+      return -1;
+    }
+
+  samples[0].value = tmp;
+
+  return 0;
+}
+
+static int
+sample_aggregate_iovec (struct iovec *samples, size_t count)
+{
+  switch (aggregate_function)
+    {
+    case aggregate_min:
+
+      /* Smallest element already in position 0 */
+
+      break;
+
+    case aggregate_max:
+
+      samples[0] = samples[count - 1];
+
+      break;
+
+    case aggregate_equal:
+
+      if (0 != sample_data_cmp (&samples[0], &samples[count - 1]))
         {
-        case aggregate_min:
-
-          /* Smallest element already in position 0 */
-
-          break;
-
-        case aggregate_max:
-
-          samples[0] = samples[count - 1];
-
-          break;
-
-        case aggregate_equal:
-
-          if (0 != samplecmp (&samples[0], &samples[count - 1]))
-            {
-              ca_set_error ("Aggregate \"equal\" used, but not all values are equal");
-
-              return -1;
-            }
-
-          break;
-
-        default:
-
-          ca_set_error ("Unsupported aggregate function for data");
+          ca_set_error ("Aggregate \"equal\" used, but not all values are equal");
 
           return -1;
         }
 
-      return 0;
+      break;
+
+    default:
+
+      ca_set_error ("Unsupported aggregate function for data");
+
+      return -1;
     }
+
+  return 0;
 }
 
 static int
@@ -289,31 +287,31 @@ data_flush (const char *key)
   size_t i, next;
   int result = -1;
 
-  qsort (samples, sample_count, sizeof (*samples), samplecmp);
-
   /* XXX: Should be able to perform these two loops as one */
 
   /* Combine samples with duplicate time values */
 
-  switch (samples[0].type)
+  switch (sample_type)
     {
     case SAMPLE_TIME_FLOAT4:
 
         {
+          qsort (time_float4_samples, sample_count, sizeof (*time_float4_samples), sample_float4_cmp);
+
           for (i = 0; i < sample_count; ++i)
             {
               next = i + 1;
 
-              if (next == sample_count || 0 != samplecmp (&samples[next], &samples[i]))
+              if (next == sample_count || 0 != sample_float4_cmp (&time_float4_samples[next], &time_float4_samples[i]))
                 continue;
 
               do
                 {
                   ++next;
                 }
-              while (next < sample_count && 0 == samplecmp (&samples[next], &samples[i]));
+              while (next < sample_count && 0 == sample_float4_cmp (&time_float4_samples[next], &time_float4_samples[i]));
 
-              if (-1 == sample_aggregate (&samples[i], next - i))
+              if (-1 == sample_aggregate_time_float4 (&time_float4_samples[i], next - i))
                 {
                   ca_set_error ("Error merging '%s': %s", key, ca_last_error ());
                   return -1;
@@ -321,9 +319,9 @@ data_flush (const char *key)
 
               sample_count -= (next - i - 1);
 
-              memmove (samples + i + 1,
-                       samples + next,
-                       sizeof (*samples) * (sample_count - i - 1));
+              memmove (time_float4_samples + i + 1,
+                       time_float4_samples + next,
+                       sizeof (*time_float4_samples) * (sample_count - i - 1));
             }
 
           float *series_values = NULL;
@@ -338,14 +336,14 @@ data_flush (const char *key)
               uint64_t start_time;
               uint32_t interval = 0;
 
-              start_time = samples[i].v.time_float4.time;
+              start_time = time_float4_samples[i].time;
 
-              series_values[0] = samples[i].v.time_float4.value;
+              series_values[0] = time_float4_samples[i].value;
               series_count = 1;
 
               if (++i < sample_count)
                 {
-                  interval = samples[i].v.time_float4.time - start_time;
+                  interval = time_float4_samples[i].time - start_time;
 
                   do
                     {
@@ -356,9 +354,9 @@ data_flush (const char *key)
                           goto done;
                         }
 
-                      series_values[series_count++] = samples[i++].v.time_float4.value;
+                      series_values[series_count++] = time_float4_samples[i++].value;
                     }
-                  while (i != sample_count && samples[i].v.time_float4.time - samples[i - 1].v.time_float4.time == interval);
+                  while (i != sample_count && time_float4_samples[i].time - time_float4_samples[i - 1].time == interval);
                 }
 
               if (-1 == ca_table_write_time_float4 (output, key, start_time, interval, series_values, series_count))
@@ -373,13 +371,24 @@ data_flush (const char *key)
 
       break;
 
-    case SAMPLE_DATA:
+    case SAMPLE_SORTED_UINT:
 
-      if (sample_count > 1
-          && -1 == sample_aggregate (samples, sample_count))
+      qsort (sorted_uint_samples, sample_count, sizeof (*sorted_uint_samples), sample_sorted_uint_cmp);
+
+      if (-1 == ca_table_write_sorted_uint (output, key, sorted_uint_samples, sample_count))
         goto done;
 
-      if (-1 == ca_table_insert_row (output, key, &samples[0].v.data, 1))
+      break;
+
+    case SAMPLE_DATA:
+
+      qsort (data_samples, sample_count, sizeof (*data_samples), sample_data_cmp);
+
+      if (sample_count > 1
+          && -1 == sample_aggregate_iovec (data_samples, sample_count))
+        goto done;
+
+      if (-1 == ca_table_insert_row (output, key, &data_samples[0], 1))
         goto done;
 
       break;
@@ -414,6 +423,8 @@ data_callback (const char *key, const struct iovec *value, void *opaque)
 
   if (column_count == 1 && column_types[0] == CA_TIME_SERIES)
     {
+      sample_type = SAMPLE_TIME_FLOAT4;
+
       while (begin != end)
         {
           uint64_t start_time;
@@ -427,25 +438,49 @@ data_callback (const char *key, const struct iovec *value, void *opaque)
           for (i = 0; i < count; ++i)
             {
               if (sample_count == sample_alloc
-                  && -1 == ARRAY_GROW (&samples, &sample_alloc))
+                  && -1 == ARRAY_GROW (&time_float4_samples, &sample_alloc))
                 return -1;
 
-              samples[sample_count].type = SAMPLE_TIME_FLOAT4;
-              samples[sample_count].v.time_float4.time = start_time + i * interval;
-              samples[sample_count].v.time_float4.value = sample_values[i];
+              time_float4_samples[sample_count].time = start_time + i * interval;
+              time_float4_samples[sample_count].value = sample_values[i];
               ++sample_count;
             }
         }
     }
+  else if (column_count == 1 && column_types[0] == CA_SORTED_UINT)
+    {
+      sample_type = SAMPLE_SORTED_UINT;
+
+      while (begin != end)
+        {
+          uint32_t i, count;
+          uint64_t *sample_values;
+
+          if (-1 == ca_data_parse_sorted_uint (&begin, &sample_values, &count))
+            return -1;
+
+          for (i = 0; i < count; ++i)
+            {
+              if (sample_count == sample_alloc
+                  && -1 == ARRAY_GROW (&sorted_uint_samples, &sample_alloc))
+                return -1;
+
+              sorted_uint_samples[sample_count] = sample_values[i];
+              ++sample_count;
+            }
+
+          free (sample_values);
+        }
+    }
   else
     {
+      sample_type = SAMPLE_DATA;
+
       if (sample_count == sample_alloc
-          && -1 == ARRAY_GROW (&samples, &sample_alloc))
+          && -1 == ARRAY_GROW (&data_samples, &sample_alloc))
         return -1;
 
-      samples[sample_count].type = SAMPLE_DATA;
-      samples[sample_count].v.data = *value;
-      ++sample_count;
+      data_samples[sample_count++] = *value;
     }
 
   return 0;

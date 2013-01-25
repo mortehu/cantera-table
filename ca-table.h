@@ -269,6 +269,10 @@ ca_data_parse_time_float4 (const uint8_t **input,
                            uint64_t *start_time, uint32_t *interval,
                            const float **sample_values, uint32_t *count);
 
+void
+ca_data_parse_table_declaration (const uint8_t **input,
+                                 struct ca_table_declaration *declaration);
+
 /*****************************************************************************/
 
 int

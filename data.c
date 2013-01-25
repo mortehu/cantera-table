@@ -60,3 +60,23 @@ ca_data_parse_time_float4 (const uint8_t **input,
 
   *input = p;
 }
+
+void
+ca_data_parse_table_declaration (const uint8_t **input,
+                                 struct ca_table_declaration *declaration)
+{
+  const uint8_t *p;
+
+  p = *input;
+
+  declaration->field_count = ca_data_parse_integer (&p);
+  declaration->path = (char *) p;
+
+  p = (const uint8_t *) strchr (declaration->path, 0) + 1;
+
+  declaration->fields = (struct ca_field *) p;
+
+  p += sizeof (struct ca_field) * declaration->field_count;
+
+  *input = p;
+}

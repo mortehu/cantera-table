@@ -77,19 +77,19 @@ bom : UTF8BOM
     ;
 
 statements
-    : statements statement
-    | statement
+    : statements statement ';'
+    | statement ';'
     ;
 
 statement
-    : ';'
+    :
     | SHOW TABLES
       {
         #if 0
         ca_schema_show_tables ();
         #endif
       }
-    | CREATE TABLE Identifier '(' createTableArgs ')' PATH StringLiteral ';'
+    | CREATE TABLE Identifier '(' createTableArgs ')' PATH StringLiteral
       {
         struct ca_table_declaration declaration;
         struct create_table_arg *arg;

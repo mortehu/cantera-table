@@ -13,9 +13,9 @@ bin_PROGRAMS = \
   ts-merge
 
 ACLOCAL_AMFLAGS = -I m4
-AM_CPPFLAGS = -D_GNU_SOURCE -I/usr/lib/llvm-3.2/include -I.
+AM_CPPFLAGS = -I.
 AM_CFLAGS = -Wall -Werror -g
-AM_CXXFLAGS = -std=c++0x -Wall -Werror -g
+AM_CXXFLAGS = -Wall -Werror -g
 
 libca_table_la_SOURCES = \
   arena.c arena.h \
@@ -36,7 +36,7 @@ libca_table_la_SOURCES = \
   table-write.c \
   table.c \
   type.c
-libca_table_la_LDFLAGS = `llvm-config --ldflags --libs core jit native all`
+libca_table_la_LDFLAGS = $(LLVM_LDFLAGS) $(LLVM_LIBS)
 
 ca_shell_SOURCES = ca-shell.c query-parser.y query-lexer.l
 ca_shell_LDFLAGS = -lreadline

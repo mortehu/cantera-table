@@ -68,7 +68,7 @@ enum expression_type
   EXPR_SELECT,
   EXPR_SUB,
 
-  EXPR_VARIABLE
+  EXPR_FIELD
 };
 
 struct column_definition
@@ -90,7 +90,11 @@ struct expression_value
       char *identifier;
       struct column_type *type;
       struct select_statement *select;
-      struct select_variable *variable;
+      struct
+        {
+          uint32_t index;
+          uint8_t type;
+        } field;
     } d;
 };
 
@@ -126,8 +130,8 @@ struct select_statement
 struct select_variable
 {
   const char *name;
-  struct ca_field *field;
-  struct expression_value value;
+  uint32_t field_index;
+  enum ca_type type;
 
   struct select_variable *next;
 };

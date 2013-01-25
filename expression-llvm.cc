@@ -176,10 +176,17 @@ ca_expression_compile (struct expression *expr)
       return NULL;
     }
 
+#if (LLVM_VERSION_MAJOR > 3) || (LLVM_VERSION_MINOR >= 2)
+  std::vector<llvm::Type *> argument_types;
+
+  auto function_type = llvm::FunctionType::get (llvm::Type::getInt32Ty (llvm::getGlobalContext ()),
+                                                argument_types, false);
+#else
   std::vector<const llvm::Type *> argument_types;
 
   auto function_type = llvm::FunctionType::get ((const llvm::Type *) llvm::Type::getInt32Ty (llvm::getGlobalContext ()),
                                                 argument_types, false);
+#endif
 
   auto function = llvm::Function::Create (function_type, llvm::Function::InternalLinkage, "my_function", module);
 

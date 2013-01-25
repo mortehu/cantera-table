@@ -19,14 +19,13 @@
 #include <unistd.h>
 
 #include "ca-table.h"
-#include "crc32.h"
 #include "io.h"
 #include "memory.h"
 #include "smalltable-internal.h"
 
 #define MAGIC 0x6c6261742e692e70ULL
 #define MAJOR_VERSION 1
-#define MINOR_VERSION 0
+#define MINOR_VERSION 1
 
 #define TMP_SUFFIX ".tmp.XXXXXX"
 #define BUFFER_SIZE (1024 * 1024)
@@ -107,7 +106,7 @@ struct CA_wo_header
   uint8_t major_version;
   uint8_t minor_version;
   uint16_t flags;
-  uint32_t data_crc32;
+  uint32_t data_crc32c;
   uint64_t index_offset;
 };
 
@@ -125,7 +124,7 @@ struct CA_wo
   uint64_t write_offset;
   char *prev_key;
 
-  uint32_t crc32;
+  uint32_t crc32c;
   uint16_t flags;
 
   struct CA_wo_header *header;
@@ -327,7 +326,7 @@ CA_wo_sync (void *handle)
     return -1;
 
   header.flags = t->flags;
-  header.data_crc32 = t->crc32;
+  header.data_crc32c = t->crc32c;
 
   if (-1 == lseek (t->fd, 0, SEEK_SET))
     {
@@ -635,7 +634,7 @@ CA_wo_flush (struct CA_wo *t)
 
   t->write_offset += t->buffer_fill;
 
-  t->crc32 = crc32 (t->crc32, t->buffer, t->buffer_fill);
+  t->crc32c = ca_crc32c (t->crc32c, t->buffer, t->buffer_fill);
 
   t->buffer_fill = 0;
 

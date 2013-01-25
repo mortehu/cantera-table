@@ -310,6 +310,11 @@ ca_table_merge (struct ca_table **tables, size_t table_count,
 
 /*****************************************************************************/
 
+uint32_t
+ca_crc32c (uint32_t input_crc32, const void *input_buffer, size_t length);
+
+/*****************************************************************************/
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

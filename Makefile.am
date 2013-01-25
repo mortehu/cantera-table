@@ -19,7 +19,7 @@ AM_CXXFLAGS = -Wall -Werror -g
 
 libca_table_la_SOURCES = \
   arena.c arena.h \
-  crc32.c crc32.h \
+  crc32c.c crc32c.h \
   data.c \
   error.c error.h \
   expression-llvm.cc \
@@ -54,8 +54,8 @@ ts_load_LDADD = libca-table.la
 ts_merge_SOURCES = ts-merge.c
 ts_merge_LDADD = libca-table.la
 
-TESTS = tests/fifo-00
-check_PROGRAMS = tests/fifo-00
+TESTS = tests/fifo-00 tests/crc32c-00
+check_PROGRAMS = tests/fifo-00 tests/crc32c-00
 
-tests_fifo_00_SOURCES = tests/fifo-00.c
 tests_fifo_00_LDADD = libca-table.la
+tests_crc32c_00_LDADD = libca-table.la

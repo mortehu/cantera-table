@@ -460,27 +460,51 @@ static int
 CA_wo_seek (void *handle, off_t offset, int whence)
 {
   struct CA_wo *t = handle;
+  off_t new_offset;
 
   switch (whence)
     {
     case SEEK_SET:
 
-      t->offset = offset;
+      new_offset = offset;
 
       break;
 
     case SEEK_CUR:
 
-      t->offset += offset;
+      new_offset = t->offset + offset;
 
       break;
 
     case SEEK_END:
 
-      t->offset = t->entry_count + offset;
+      new_offset = t->entry_count + offset;
 
       break;
+
+    default:
+
+      assert (!"Invalid 'whence' value");
+      errno = EINVAL;
+
+      return -1;
     }
+
+  if (new_offset < 0)
+    {
+      ca_set_error ("Attempt to seek before start of table");
+
+      return -1;
+    }
+
+  if (new_offset > t->entry_count)
+    {
+      ca_set_error ("Attempt to seek past end of table");
+
+      return -1;
+    }
+
+  t->offset = new_offset;
 
   return 0;
 }

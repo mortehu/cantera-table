@@ -117,7 +117,9 @@ statement
               declaration.fields[i].flags |= CA_FIELD_NOT_NULL;
 
             if (arg->u.column->primary_key)
-              declaration.fields[i].flags |= CA_FIELD_PRIMARY_KEY;
+              declaration.fields[i].flags |= (CA_FIELD_PRIMARY_KEY | CA_FIELD_NOT_NULL);
+
+            declaration.fields[i].type = arg->u.column->type;
 
             ++i;
           }

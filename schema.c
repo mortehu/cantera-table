@@ -38,6 +38,13 @@ ca_schema_load (const char *path)
   struct ca_table *schema_table;
   size_t i;
 
+  if (path[0] != '/')
+    {
+      ca_set_error ("Schema path must be absolute");
+
+      return NULL;
+    }
+
   if (!(result = safe_malloc (sizeof (*result))))
     return NULL;
 
@@ -48,6 +55,25 @@ ca_schema_load (const char *path)
     {
       if (errno != ENOENT)
         goto fail;
+
+      if (result->table_count == result->table_alloc
+          && -1 == ARRAY_GROW (&result->tables, &result->table_alloc))
+        goto fail;
+
+      result->tables[0].name = safe_strdup ("ca_catalog.ca_tables");
+      result->tables[0].declaration.path = safe_strdup (path);
+      result->tables[0].declaration.field_count = 2;
+      result->tables[0].declaration.fields = safe_malloc (2 * sizeof (struct ca_field));
+
+      strcpy (result->tables[0].declaration.fields[0].name, "table_name");
+      result->tables[0].declaration.fields[0].flags = CA_FIELD_PRIMARY_KEY | CA_FIELD_NOT_NULL;
+      result->tables[0].declaration.fields[0].type = CA_TEXT;
+
+      strcpy (result->tables[0].declaration.fields[1].name, "table_declaration");
+      result->tables[0].declaration.fields[1].flags = CA_FIELD_NOT_NULL;
+      result->tables[0].declaration.fields[1].type = CA_TABLE_DECLARATION;
+
+      result->table_count = 1;
 
       return result;
     }
@@ -246,7 +272,7 @@ ca_schema_table (struct ca_schema *schema, const char *table_name,
       return schema->tables[i].handle;
     }
 
-  ca_set_error ("Table does not exist");
+  ca_set_error ("Table '%s' does not exist", table_name);
 
   return NULL;
 }

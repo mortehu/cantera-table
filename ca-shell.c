@@ -99,6 +99,14 @@ main (int argc, char **argv)
 
   if (isatty (STDIN_FILENO))
     {
+      char *home, *history_path = NULL;
+
+      if (NULL != (home = getenv ("HOME")))
+        {
+          if (-1 != asprintf (&history_path, "%s/.ca-shell_history", home))
+            read_history (history_path);
+        }
+
       for (;;)
         {
           const char *prompt = "\033[32;1mca\033[00m$ ";
@@ -158,6 +166,9 @@ main (int argc, char **argv)
 
           free (line);
         }
+
+      if (history_path)
+        write_history (history_path);
 
       printf ("\n");
     }

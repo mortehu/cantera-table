@@ -127,6 +127,30 @@ format_output (enum ca_type type,
 
       break;
 
+    case CA_TABLE_DECLARATION:
+
+        {
+          struct ca_table_declaration decl;
+
+          ca_data_parse_table_declaration (&begin, &decl);
+
+          putchar ('(');
+
+          for (i = 0; i < decl.field_count; ++i)
+            {
+              if (i)
+                printf (", ");
+
+              printf ("%s %s", decl.fields[i].name, ca_type_to_string (decl.fields[i].type));
+            }
+
+          putchar (')');
+
+          printf (" WITH (PATH = '%s')", decl.path);
+        }
+
+      break;
+
     default:
 
       assert (!"unhandled data type");
@@ -264,7 +288,7 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
           goto done;
         }
 
-      format_output (CA_TIME_SERIES,
+      format_output (declaration->fields[0].type,
                      value.iov_base,
                      (const uint8_t *) value.iov_base + value.iov_len);
     }
@@ -275,8 +299,13 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
 
       while (1 == (ret = ca_table_read_row (table, &key, &value)))
         {
-          /* XXX: ... */
+          printf ("%s\t", key);
 
+          format_output (declaration->fields[1].type,
+                         value.iov_base,
+                         (const uint8_t *) value.iov_base + value.iov_len);
+
+          printf ("\n");
         }
 
       if (ret == -1)

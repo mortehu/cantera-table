@@ -288,7 +288,7 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
           goto done;
         }
 
-      format_output (declaration->fields[0].type,
+      format_output (declaration->fields[1].type,
                      value.iov_base,
                      (const uint8_t *) value.iov_base + value.iov_len);
     }

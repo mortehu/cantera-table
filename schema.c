@@ -31,6 +31,9 @@ struct ca_schema
   size_t table_alloc, table_count;
 };
 
+static int
+CA_schema_save (struct ca_schema *schema);
+
 struct ca_schema *
 ca_schema_load (const char *path)
 {
@@ -60,10 +63,17 @@ ca_schema_load (const char *path)
           && -1 == ARRAY_GROW (&result->tables, &result->table_alloc))
         goto fail;
 
-      result->tables[0].name = safe_strdup ("ca_catalog.ca_tables");
-      result->tables[0].declaration.path = safe_strdup (path);
+      result->table_count = 1;
+
+      if (!(result->tables[0].name = safe_strdup ("ca_catalog.ca_tables")))
+        goto fail;
+
+      if (!(result->tables[0].declaration.path = safe_strdup (path)))
+        goto fail;
+
       result->tables[0].declaration.field_count = 2;
-      result->tables[0].declaration.fields = safe_malloc (2 * sizeof (struct ca_field));
+      if (!(result->tables[0].declaration.fields = safe_malloc (2 * sizeof (struct ca_field))))
+        goto fail;
 
       strcpy (result->tables[0].declaration.fields[0].name, "table_name");
       result->tables[0].declaration.fields[0].flags = CA_FIELD_PRIMARY_KEY | CA_FIELD_NOT_NULL;
@@ -73,7 +83,8 @@ ca_schema_load (const char *path)
       result->tables[0].declaration.fields[1].flags = CA_FIELD_NOT_NULL;
       result->tables[0].declaration.fields[1].type = CA_TABLE_DECLARATION;
 
-      result->table_count = 1;
+      if (-1 == CA_schema_save (result))
+        goto fail;
 
       return result;
     }

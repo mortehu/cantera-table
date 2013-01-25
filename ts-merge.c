@@ -643,8 +643,7 @@ main (int argc, char **argv)
               goto done;
             }
         }
-
-      if (errno != ENOENT)
+      else if (errno != ENOENT)
         {
           ca_set_error ("stat failed on '%s': %s",
                         output_path, strerror (errno));

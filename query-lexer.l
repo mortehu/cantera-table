@@ -67,20 +67,24 @@ Z [zZ]
 {A}{N}{D}                         { character += yyleng; return AND; }
 {C}{R}{E}{A}{T}{E}                { character += yyleng; return CREATE; }
 {F}{R}{O}{M}                      { character += yyleng; return FROM; }
+{I}{N}{D}{E}{X}                   { character += yyleng; return INDEX; }
+{K}{E}{Y}                         { character += yyleng; return KEY; }
 {N}{O}{T}                         { character += yyleng; return NOT; }
 {N}{U}{L}{L}                      { character += yyleng; return _NULL; }
-{K}{E}{Y}                         { character += yyleng; return KEY; }
 {O}{R}                            { character += yyleng; return OR; }
 {P}{A}{T}{H}                      { character += yyleng; return PATH; }
 {P}{R}{I}{M}{A}{R}{Y}             { character += yyleng; return PRIMARY; }
+{Q}{U}{E}{R}{Y}                   { character += yyleng; return QUERY; }
 {S}{E}{L}{E}{C}{T}                { character += yyleng; return SELECT; }
 {S}{H}{O}{W}                      { character += yyleng; return SHOW; }
+{S}{U}{M}{M}{A}{R}{Y}             { character += yyleng; return SUMMARY; }
 {T}{A}{B}{L}{E}                   { character += yyleng; return TABLE; }
 {T}{A}{B}{L}{E}{S}                { character += yyleng; return TABLES; }
 {T}{E}{X}{T}                      { character += yyleng; return TEXT; }
 {S}{O}{R}{T}{E}{D}_{U}{I}{N}{T}   { character += yyleng; return SORTED_UINT; }
 {T}{I}{M}{E}_{F}{L}{O}{A}{T}4     { character += yyleng; return TIME_FLOAT4; }
 {W}{H}{E}{R}{E}                   { character += yyleng; return WHERE; }
+{W}{I}{T}{H}                      { character += yyleng; return WITH; }
 
 0x[A-Fa-f0-9]*      { yylval->l = strtol (yytext + 2, 0, 16); character += yyleng; return Integer; }
 [0-9]+              { yylval->l = strtol (yytext, 0, 0); character += yyleng; return Integer; }

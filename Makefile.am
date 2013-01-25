@@ -28,6 +28,7 @@ libca_table_la_SOURCES = \
   hashmap.c hashmap.h \
   merge.c \
   memory.c memory.h \
+  query.c \
   schema.c schema.h \
   select.c \
   sort.c \

@@ -40,6 +40,10 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token TIME_FLOAT4 UTF8BOM WHERE _NULL
 %token PRIMARY
 %token KEY
+%token INDEX
+%token QUERY
+%token SUMMARY
+%token WITH
 %token SORTED_UINT
 
 %token Identifier
@@ -120,6 +124,11 @@ statement
 
         if (-1 == ca_schema_create_table (context->schema, $3, &declaration))
           context->error = 1;
+      }
+    | QUERY StringLiteral WITH '(' INDEX '=' Identifier ',' SUMMARY '=' Identifier ')'
+      {
+        if (-1 == ca_schema_query (context->schema, $2, $7, $11))
+          fprintf (stderr, "Error: %s\n", ca_last_error ());
       }
     | SELECT selectList FROM Identifier whereClause
       {

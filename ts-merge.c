@@ -12,6 +12,8 @@
 #include <err.h>
 #include <getopt.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sysexits.h>
 #include <unistd.h>
 

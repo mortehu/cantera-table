@@ -2,11 +2,16 @@
 #  include "config.h"
 #endif
 
+#ifdef __SSE4_2__
+#  include <smmintrin.h>
+#endif
+
 #include "ca-table.h"
 
 uint32_t
 ca_crc32c (uint32_t input_crc32c, const void *input_buffer, size_t length)
 {
+#ifndef __SSE4_2__
   static const uint32_t crc32c_lut[256] =
     {
       0x00000000, 0xf26b8303, 0xe13b70f7, 0x1350f3f4, 0xc79a971f, 0x35f1141c,
@@ -53,6 +58,7 @@ ca_crc32c (uint32_t input_crc32c, const void *input_buffer, size_t length)
       0xd5cf889d, 0x27a40b9e, 0x79b737ba, 0x8bdcb4b9, 0x988c474d, 0x6ae7c44e,
       0xbe2da0a5, 0x4c4623a6, 0x5f16d052, 0xad7d5351
     };
+#endif
 
   uint32_t result;
   const uint8_t *ptr, *end;
@@ -62,8 +68,13 @@ ca_crc32c (uint32_t input_crc32c, const void *input_buffer, size_t length)
   ptr = input_buffer;
   end = ptr + length;
 
+#ifdef __SSE4_2__
+  while (ptr != end)
+    result = __builtin_ia32_crc32qi (result, *ptr++);
+#else
   while (ptr != end)
     result = (result >> 8) ^ crc32c_lut[(result ^ *ptr++) & 0xff];
+#endif
 
   return ~result;
 }

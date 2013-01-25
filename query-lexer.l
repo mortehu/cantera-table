@@ -69,6 +69,7 @@ Z [zZ]
 {F}{R}{O}{M}                      { character += yyleng; return FROM; }
 {I}{N}{D}{E}{X}                   { character += yyleng; return INDEX; }
 {K}{E}{Y}                         { character += yyleng; return KEY; }
+{L}{I}{M}{I}{T}                   { character += yyleng; return LIMIT; }
 {N}{O}{T}                         { character += yyleng; return NOT; }
 {N}{U}{L}{L}                      { character += yyleng; return _NULL; }
 {O}{R}                            { character += yyleng; return OR; }

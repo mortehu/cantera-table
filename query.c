@@ -3,7 +3,8 @@
 int
 ca_schema_query (struct ca_schema *schema, const char *query,
                  const char *index_table_name,
-                 const char *summary_table_name)
+                 const char *summary_table_name,
+                 ssize_t limit)
 {
   struct ca_table *index_table;
   struct ca_table_declaration *index_declaration;
@@ -92,6 +93,9 @@ ca_schema_query (struct ca_schema *schema, const char *query,
     goto done;
 
   putchar ('[');
+
+  if (limit >= 0 && offset_count > limit)
+    offset_count = limit;
 
   for (i = 0; i < offset_count; ++i)
     {

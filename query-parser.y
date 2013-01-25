@@ -89,14 +89,14 @@ statement
         ca_schema_show_tables ();
         #endif
       }
-    | CREATE TABLE Identifier '(' createTableArgs ')' PATH StringLiteral
+    | CREATE TABLE Identifier '(' createTableArgs ')' WITH '(' PATH '=' StringLiteral ')'
       {
         struct ca_table_declaration declaration;
         struct create_table_arg *arg;
         size_t i = 0;
 
         memset (&declaration, 0, sizeof (declaration));
-        declaration.path = $8;
+        declaration.path = $11;
 
         for (arg = $5; arg; arg = arg->next)
           {

@@ -8,6 +8,7 @@
 #include <sysexits.h>
 
 #include "ca-table.h"
+#include "memory.h"
 
 uint64_t
 ca_data_parse_integer (const uint8_t **input)
@@ -79,4 +80,47 @@ ca_data_parse_table_declaration (const uint8_t **input,
   p += sizeof (struct ca_field) * declaration->field_count;
 
   *input = p;
+}
+
+int
+ca_data_parse_sorted_uint (const uint8_t **input,
+                           uint64_t **sample_values, uint32_t *count)
+{
+  enum ca_sorted_uint_type type;
+  uint_fast32_t i;
+  const uint8_t *p;
+  uint64_t prev = 0;
+
+  p = *input;
+
+  type = *p++;
+  *count = ca_data_parse_integer (&p);
+
+  if (!(*sample_values = safe_malloc (sizeof (*sample_values) * *count)))
+    return -1;
+
+  switch (type)
+    {
+    case CA_SORTED_UINT_VARWIDTH_DELTA:
+
+      for (i = 0; i < *count; ++i)
+        {
+          (*sample_values)[i] = prev + ca_data_parse_integer (&p);
+          prev = (*sample_values)[i];
+        }
+
+      break;
+
+    default:
+
+      ca_set_error ("Unknown sorted uint array encoding %d", (int) type);
+
+      free (*sample_values);
+
+      return -1;
+    }
+
+  *input = p;
+
+  return 0;
 }

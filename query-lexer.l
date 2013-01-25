@@ -78,6 +78,7 @@ Z [zZ]
 {T}{A}{B}{L}{E}                   { character += yyleng; return TABLE; }
 {T}{A}{B}{L}{E}{S}                { character += yyleng; return TABLES; }
 {T}{E}{X}{T}                      { character += yyleng; return TEXT; }
+{S}{O}{R}{T}{E}{D}_{U}{I}{N}{T}   { character += yyleng; return SORTED_UINT; }
 {T}{I}{M}{E}_{F}{L}{O}{A}{T}4     { character += yyleng; return TIME_FLOAT4; }
 {W}{H}{E}{R}{E}                   { character += yyleng; return WHERE; }
 

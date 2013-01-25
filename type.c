@@ -12,6 +12,7 @@ static struct
 {
     { "INTEGER",           CA_INT64 },
     { "NUMERIC",           CA_NUMERIC },
+    { "SORTED_UINT",       CA_SORTED_UINT },
     { "TABLE_DECLARATION", CA_TABLE_DECLARATION },
     { "TEXT",              CA_TEXT },
     { "TIME",              CA_TIME },

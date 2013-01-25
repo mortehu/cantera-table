@@ -40,6 +40,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token TIME_FLOAT4 UTF8BOM WHERE _NULL
 %token PRIMARY
 %token KEY
+%token SORTED_UINT
 
 %token Identifier
 %token Integer
@@ -150,6 +151,7 @@ createTableArgs
 columnType
     : TEXT        { $$ = CA_TEXT; }
     | TIME_FLOAT4 { $$ = CA_TIME_SERIES; }
+    | SORTED_UINT { $$ = CA_SORTED_UINT; }
     ;
 
 notNull

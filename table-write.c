@@ -75,3 +75,52 @@ ca_table_write_table_declaration (struct ca_table *table,
   return ca_table_insert_row (table, table_name,
                               value, sizeof (value) / sizeof (value[0]));
 }
+
+int
+ca_table_write_sorted_uint (struct ca_table *table, const char *key,
+                            const uint64_t *values, size_t count)
+{
+  struct iovec iov;
+
+  uint8_t *target = NULL, *o;
+  size_t i, target_alloc = 0, target_size = 0;
+  uint64_t prev = 0;
+
+  int result = -1;
+
+  if (-1 == ARRAY_GROW (&target, &target_alloc))
+    goto done;
+
+  o = target;
+
+  CA_put_integer (&o, CA_SORTED_UINT_VARWIDTH_DELTA);
+  CA_put_integer (&o, count);
+
+  for (i = 0; i < count; ++i)
+    {
+      target_size = o - target;
+
+      if (target_size + 16 > target_alloc)
+        {
+          if (-1 == ARRAY_GROW (&target, &target_alloc))
+            goto done;
+
+          o = target + target_size;
+        }
+
+      CA_put_integer (&o, values[i] - prev);
+
+      prev = values[i];
+    }
+
+  iov.iov_base = target;
+  iov.iov_len = o - target;
+
+  result = ca_table_insert_row (table, key, &iov, 1);
+
+done:
+
+  free (target);
+
+  return result;
+}

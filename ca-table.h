@@ -46,7 +46,8 @@ enum ca_type
   CA_TABLE_DECLARATION = 2,
   CA_INT64 = 3,
   CA_NUMERIC = 4,
-  CA_TIME = 5
+  CA_TIME = 5,
+  CA_SORTED_UINT = 6
 };
 
 enum ca_type
@@ -54,6 +55,16 @@ ca_type_from_string (const char *string);
 
 const char *
 ca_type_to_string (enum ca_type type);
+
+/*****************************************************************************/
+
+/* Compression schemes for sorted unsigned integers */
+enum ca_sorted_uint_type
+{
+  /* Difference to previous value encoded using groups of 7 bit values, using
+   * the byte MSB to indicate continuation */
+  CA_SORTED_UINT_VARWIDTH_DELTA = 0
+};
 
 /*****************************************************************************/
 
@@ -256,6 +267,10 @@ ca_table_write_table_declaration (struct ca_table *table,
                                   const char *table_name,
                                   const struct ca_table_declaration *decl) CA_USE_RESULT;
 
+int
+ca_table_write_sorted_uint (struct ca_table *table, const char *key,
+                            const uint64_t *values, size_t count);
+
 /*****************************************************************************/
 
 uint64_t
@@ -272,6 +287,10 @@ ca_data_parse_time_float4 (const uint8_t **input,
 void
 ca_data_parse_table_declaration (const uint8_t **input,
                                  struct ca_table_declaration *declaration);
+
+int
+ca_data_parse_sorted_uint (const uint8_t **input,
+                           uint64_t **sample_values, uint32_t *count) CA_USE_RESULT;
 
 /*****************************************************************************/
 

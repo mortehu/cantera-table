@@ -3,23 +3,11 @@
 #include <string.h>
 
 #include "hashmap.h"
+#include "memory.h"
 
 #define HASHMAP_REBUILD_NOM 4
 #define HASHMAP_REBUILD_DEN 3
 #define HASHMAP_GROWTH_FUNCTION(n)  (((n) + 1) * 2 - 1)
-
-struct ca_hashmap_data
-{
-  char *key;
-  void *value;
-};
-
-struct ca_hashmap
-{
-  struct ca_hashmap_data *nodes;
-  size_t size;
-  size_t capacity;
-};
 
 static size_t
 hash (const char *key)
@@ -77,8 +65,8 @@ ca_hashmap_free (struct ca_hashmap *map)
   free (map);
 }
 
-int
-ca_hashmap_insert (struct ca_hashmap *map, const char *key, void *value)
+static struct ca_hashmap_data *
+CA_hashmap_insert_helper (struct ca_hashmap *map, const char *key)
 {
   size_t i, n;
 
@@ -96,7 +84,7 @@ ca_hashmap_insert (struct ca_hashmap *map, const char *key, void *value)
       new_nodes = calloc (new_capacity, sizeof (*new_nodes));
 
       if (!new_nodes)
-        return -1;
+        return NULL;
 
       for (i = 0; i < map->capacity; ++i)
         {
@@ -121,18 +109,55 @@ ca_hashmap_insert (struct ca_hashmap *map, const char *key, void *value)
   while (map->nodes[n].key)
     {
       if (!strcmp (map->nodes[n].key, key))
-        {
-          errno = EEXIST;
-
-          return -1;
-        }
+        return &map->nodes[n];
 
       n = (n + 1) % map->capacity;
     }
 
-  map->nodes[n].key = strdup (key);
-  map->nodes[n].value = value;
+  return &map->nodes[n];
+}
+
+int
+ca_hashmap_insert (struct ca_hashmap *map, const char *key, void *value)
+{
+  struct ca_hashmap_data *node;
+
+  if (!(node = CA_hashmap_insert_helper (map, key)))
+    return -1;
+
+  if (node->key)
+    {
+      errno = EEXIST;
+
+      return -1;
+    }
+
+  if (!(node->key = safe_strdup (key)))
+    return -1;
+
+  node->value.pointer = value;
   ++map->size;
+
+  return 0;
+}
+
+int64_t
+ca_hashmap_insert_int (struct ca_hashmap *map, const char *key, int64_t value)
+{
+  struct ca_hashmap_data *node;
+
+  if (!(node = CA_hashmap_insert_helper (map, key)))
+    return -1;
+
+  if (!node->key)
+    {
+      if (!(node->key = safe_strdup (key)))
+        return -1;
+
+      ++map->size;
+    }
+
+  node->value.integer = value;
 
   return 0;
 }
@@ -147,10 +172,28 @@ ca_hashmap_get (const struct ca_hashmap *h, const char *key)
   while (h->nodes[n].key)
     {
       if (!strcmp (h->nodes[n].key, key))
-        return h->nodes[n].value;
+        return h->nodes[n].value.pointer;
 
       n = (n + 1) % h->capacity;
     }
 
   return 0;
+}
+
+int64_t *
+ca_hashmap_get_int (const struct ca_hashmap *h, const char *key)
+{
+  size_t n;
+
+  n = hash (key) % h->capacity;
+
+  while (h->nodes[n].key)
+    {
+      if (!strcmp (h->nodes[n].key, key))
+        return &h->nodes[n].value.integer;
+
+      n = (n + 1) % h->capacity;
+    }
+
+  return NULL;
 }

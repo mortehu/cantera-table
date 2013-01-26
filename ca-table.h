@@ -22,10 +22,12 @@ extern "C" {
 #  define ca_likely(x)       __builtin_expect((x),1)
 #  define ca_unlikely(x)     __builtin_expect((x),0)
 #  define CA_USE_RESULT      __attribute__((warn_unused_result))
+#  define CA_PACKED          __attribute__((packed))
 #else
 #  define ca_likely(x)       (x)
 #  define ca_unlikely(x)     (x)
 #  define CA_USE_RESULT
+#  define CA_PACKED
 #endif
 
 /*****************************************************************************/
@@ -51,7 +53,7 @@ enum ca_type
   CA_INT64 = 3,
   CA_NUMERIC = 4,
   CA_TIME = 5,
-  CA_SORTED_UINT = 6
+  CA_OFFSET_SCORE = 6
 };
 
 enum ca_type
@@ -62,12 +64,13 @@ ca_type_to_string (enum ca_type type);
 
 /*****************************************************************************/
 
-/* Compression schemes for sorted unsigned integers */
-enum ca_sorted_uint_type
+/* Compression schemes for sorted offset/score pairs */
+enum ca_offset_score_type
 {
   /* Difference to previous value encoded using groups of 7 bit values, using
-   * the byte MSB to indicate continuation */
-  CA_SORTED_UINT_VARWIDTH_DELTA = 0
+   * the byte MSB to indicate continuation.  Scores stored as fixed number of
+   * bytes */
+  CA_OFFSET_SCORE_VARBYTE_FIXED = 0
 };
 
 /*****************************************************************************/
@@ -93,6 +96,12 @@ struct ca_table_declaration
   uint32_t field_count;
   struct ca_field *fields;
 };
+
+struct ca_offset_score
+{
+  uint64_t offset;
+  uint32_t score;
+} CA_PACKED;
 
 struct ca_data
 {
@@ -278,8 +287,9 @@ ca_table_write_table_declaration (struct ca_table *table,
                                   const struct ca_table_declaration *decl) CA_USE_RESULT;
 
 int
-ca_table_write_sorted_uint (struct ca_table *table, const char *key,
-                            const uint64_t *values, size_t count);
+ca_table_write_offset_score (struct ca_table *table, const char *key,
+                             const struct ca_offset_score *values,
+                             size_t count);
 
 /*****************************************************************************/
 
@@ -299,8 +309,9 @@ ca_data_parse_table_declaration (const uint8_t **input,
                                  struct ca_table_declaration *declaration);
 
 int
-ca_data_parse_sorted_uint (const uint8_t **input,
-                           uint64_t **sample_values, uint32_t *count) CA_USE_RESULT;
+ca_data_parse_offset_score (const uint8_t **input,
+                            struct ca_offset_score **sample_values,
+                            uint32_t *count) CA_USE_RESULT;
 
 /*****************************************************************************/
 

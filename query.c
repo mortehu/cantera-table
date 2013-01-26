@@ -15,7 +15,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
   struct iovec data_iov;
   const uint8_t *data;
 
-  uint64_t *offsets = NULL;
+  struct ca_offset_score *offsets = NULL;
   uint32_t i, offset_count;
 
   ssize_t ret;
@@ -50,9 +50,9 @@ ca_schema_query (struct ca_schema *schema, const char *query,
       goto done;
     }
 
-  if (index_declaration->fields[1].type != CA_SORTED_UINT)
+  if (index_declaration->fields[1].type != CA_OFFSET_SCORE)
     {
-      ca_set_error ("Second field in index table must be SORTED_UINT, is %s", ca_type_to_string (index_declaration->fields[1].type));
+      ca_set_error ("Second field in index table must be OFFSET_SCORE, is %s", ca_type_to_string (index_declaration->fields[1].type));
 
       goto done;
     }
@@ -89,20 +89,17 @@ ca_schema_query (struct ca_schema *schema, const char *query,
 
   data = data_iov.iov_base;
 
-  if (-1 == ca_data_parse_sorted_uint (&data, &offsets, &offset_count))
+  if (-1 == ca_data_parse_offset_score (&data, &offsets, &offset_count))
     goto done;
 
   putchar ('[');
-
-  if (limit >= 0 && offset_count > limit)
-    offset_count = limit;
 
   for (i = 0; i < offset_count; ++i)
     {
       if (i)
         printf (",\n");
 
-      if (-1 == ca_table_seek (summary_table, offsets[i], SEEK_SET))
+      if (-1 == ca_table_seek (summary_table, offsets[i].offset, SEEK_SET))
         goto done;
 
       if (1 != (ret = ca_table_read_row (summary_table, NULL, &data_iov)))

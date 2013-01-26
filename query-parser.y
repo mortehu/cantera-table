@@ -44,7 +44,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token QUERY
 %token SUMMARY
 %token WITH
-%token SORTED_UINT
+%token OFFSET_SCORE
 %token TIMESTAMP
 %token TIME
 %token ZONE
@@ -168,7 +168,7 @@ columnType
     : TEXT                     { $$ = CA_TEXT; }
     | TIMESTAMP WITH TIME ZONE { $$ = CA_TIME; }
     | TIME_FLOAT4              { $$ = CA_TIME_SERIES; }
-    | SORTED_UINT              { $$ = CA_SORTED_UINT; }
+    | OFFSET_SCORE             { $$ = CA_OFFSET_SCORE; }
     ;
 
 notNull

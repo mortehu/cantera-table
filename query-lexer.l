@@ -78,7 +78,7 @@ Z [zZ]
 {Q}{U}{E}{R}{Y}                   { character += yyleng; return QUERY; }
 {S}{E}{L}{E}{C}{T}                { character += yyleng; return SELECT; }
 {S}{H}{O}{W}                      { character += yyleng; return SHOW; }
-{S}{O}{R}{T}{E}{D}_{U}{I}{N}{T}   { character += yyleng; return SORTED_UINT; }
+{O}{F}{F}{S}{E}{T}_{S}{C}{O}{R}{E} { character += yyleng; return OFFSET_SCORE; }
 {S}{U}{M}{M}{A}{R}{Y}             { character += yyleng; return SUMMARY; }
 {T}{A}{B}{L}{E}                   { character += yyleng; return TABLE; }
 {T}{A}{B}{L}{E}{S}                { character += yyleng; return TABLES; }

@@ -15,16 +15,17 @@
 extern "C" {
 #endif
 
-#define CA_USE_RESULT __attribute__((warn_unused_result))
 
 #define CA_NAMEDATALEN 64
 
 #ifdef __GNUC__
 #  define ca_likely(x)       __builtin_expect((x),1)
 #  define ca_unlikely(x)     __builtin_expect((x),0)
+#  define CA_USE_RESULT      __attribute__((warn_unused_result))
 #else
 #  define ca_likely(x)       (x)
 #  define ca_unlikely(x)     (x)
+#  define CA_USE_RESULT
 #endif
 
 /*****************************************************************************/

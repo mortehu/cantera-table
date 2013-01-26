@@ -83,30 +83,63 @@ ca_data_parse_table_declaration (const uint8_t **input,
 }
 
 int
-ca_data_parse_sorted_uint (const uint8_t **input,
-                           uint64_t **sample_values, uint32_t *count)
+ca_data_parse_offset_score (const uint8_t **input,
+                            struct ca_offset_score **sample_values,
+                            uint32_t *count)
 {
-  enum ca_sorted_uint_type type;
+  enum ca_offset_score_type type;
   uint_fast32_t i;
   const uint8_t *p;
-  uint64_t prev = 0;
+  uint64_t offset = 0;
 
   p = *input;
 
   type = *p++;
   *count = ca_data_parse_integer (&p);
 
-  if (!(*sample_values = safe_malloc (sizeof (*sample_values) * *count)))
+  if (!(*sample_values = safe_malloc (sizeof (**sample_values) * *count)))
     return -1;
 
   switch (type)
     {
-    case CA_SORTED_UINT_VARWIDTH_DELTA:
+    case CA_OFFSET_SCORE_VARBYTE_FIXED:
 
-      for (i = 0; i < *count; ++i)
         {
-          (*sample_values)[i] = prev + ca_data_parse_integer (&p);
-          prev = (*sample_values)[i];
+          uint32_t min_score;
+          uint8_t bytes_per_score;
+
+          min_score = ca_data_parse_integer (&p);
+          bytes_per_score = *p++;
+
+          if (bytes_per_score > 4)
+            {
+              ca_set_error ("Invalid number of bytes per score (%u)", bytes_per_score);
+
+              free (*sample_values);
+
+              return -1;
+            }
+
+          for (i = 0; i < *count; ++i)
+            {
+              uint32_t score;
+
+              offset += ca_data_parse_integer (&p);
+              (*sample_values)[i].offset = offset;
+
+              score = min_score;
+
+              switch (bytes_per_score)
+                {
+                case 4: score += p[3] << 24;
+                case 3: score += p[2] << 16;
+                case 2: score += p[1] << 8;
+                case 1: score += p[0];
+                }
+
+              p += bytes_per_score;
+              (*sample_values)[i].score = score;
+            }
         }
 
       break;

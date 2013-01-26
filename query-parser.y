@@ -44,7 +44,11 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token QUERY
 %token SUMMARY
 %token WITH
-%token SORTED_UINT
+%token OFFSET_SCORE
+%token TIMESTAMP
+%token TIME
+%token ZONE
+%token LIMIT
 
 %token Identifier
 %token Integer
@@ -64,6 +68,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %type<l> notNull
 %type<l> primaryKey
 %type<l> columnType
+%type<l> limitClause
 
 %left '=' '<' '>' '+' '-' '*' '/' LIKE AND OR UMINUS
 
@@ -127,9 +132,9 @@ statement
         if (-1 == ca_schema_create_table (context->schema, $3, &declaration))
           context->error = 1;
       }
-    | QUERY StringLiteral WITH '(' INDEX '=' Identifier ',' SUMMARY '=' Identifier ')'
+    | QUERY StringLiteral WITH '(' INDEX '=' Identifier ',' SUMMARY '=' Identifier ')' limitClause
       {
-        if (-1 == ca_schema_query (context->schema, $2, $7, $11))
+        if (-1 == ca_schema_query (context->schema, $2, $7, $11, $13))
           fprintf (stderr, "Error: %s\n", ca_last_error ());
       }
     | SELECT selectList FROM Identifier whereClause
@@ -160,9 +165,10 @@ createTableArgs
     ;
 
 columnType
-    : TEXT        { $$ = CA_TEXT; }
-    | TIME_FLOAT4 { $$ = CA_TIME_SERIES; }
-    | SORTED_UINT { $$ = CA_SORTED_UINT; }
+    : TEXT                     { $$ = CA_TEXT; }
+    | TIMESTAMP WITH TIME ZONE { $$ = CA_TIME; }
+    | TIME_FLOAT4              { $$ = CA_TIME_SERIES; }
+    | OFFSET_SCORE             { $$ = CA_OFFSET_SCORE; }
     ;
 
 notNull
@@ -284,6 +290,11 @@ expression
 whereClause
     :                  { $$ = 0; }
     | WHERE expression { $$ = $2; }
+    ;
+
+limitClause
+    :               { $$ = -1; }
+    | LIMIT Integer { $$ = $2; }
     ;
 %%
 #include <stdio.h>

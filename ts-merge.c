@@ -58,7 +58,7 @@ static size_t column_alloc, column_count;
 enum sample_type
 {
   SAMPLE_TIME_FLOAT4,
-  SAMPLE_SORTED_UINT,
+  SAMPLE_OFFSET_SCORE,
   SAMPLE_DATA
 };
 
@@ -71,7 +71,7 @@ struct time_float4_sample
 static enum sample_type sample_type;
 
 static struct time_float4_sample *time_float4_samples;
-static uint64_t *sorted_uint_samples;
+static struct ca_offset_score *offset_score_samples;
 static struct iovec *data_samples;
 
 static size_t sample_alloc, sample_count;
@@ -91,13 +91,13 @@ sample_float4_cmp (const void *vlhs, const void *vrhs)
 }
 
 static int
-sample_sorted_uint_cmp (const void *vlhs, const void *vrhs)
+sample_offset_score_cmp (const void *vlhs, const void *vrhs)
 {
-  const uint64_t *lhs = vlhs;
-  const uint64_t *rhs = vrhs;
+  const struct ca_offset_score *lhs = vlhs;
+  const struct ca_offset_score *rhs = vrhs;
 
-  if (*lhs != *rhs)
-    return (*lhs < *rhs) ? -1 : 1;
+  if (lhs->offset != rhs->offset)
+    return (lhs->offset < rhs->offset) ? -1 : 1;
 
   return 0;
 }
@@ -373,11 +373,11 @@ data_flush (const char *key)
 
       break;
 
-    case SAMPLE_SORTED_UINT:
+    case SAMPLE_OFFSET_SCORE:
 
-      qsort (sorted_uint_samples, sample_count, sizeof (*sorted_uint_samples), sample_sorted_uint_cmp);
+      qsort (offset_score_samples, sample_count, sizeof (*offset_score_samples), sample_offset_score_cmp);
 
-      if (-1 == ca_table_write_sorted_uint (output, key, sorted_uint_samples, sample_count))
+      if (-1 == ca_table_write_offset_score (output, key, offset_score_samples, sample_count))
         goto done;
 
       break;
@@ -449,25 +449,26 @@ data_callback (const char *key, const struct iovec *value, void *opaque)
             }
         }
     }
-  else if (column_count == 1 && column_types[0] == CA_SORTED_UINT)
+  else if (column_count == 1 && column_types[0] == CA_OFFSET_SCORE)
     {
-      sample_type = SAMPLE_SORTED_UINT;
+      sample_type = SAMPLE_OFFSET_SCORE;
 
       while (begin != end)
         {
           uint32_t i, count;
-          uint64_t *sample_values;
+          struct ca_offset_score *sample_values;
 
-          if (-1 == ca_data_parse_sorted_uint (&begin, &sample_values, &count))
+          if (-1 == ca_data_parse_offset_score (&begin, &sample_values, &count))
             return -1;
 
+          /* XXX: This loop can be a lot simpler for this data type */
           for (i = 0; i < count; ++i)
             {
               if (sample_count == sample_alloc
-                  && -1 == ARRAY_GROW (&sorted_uint_samples, &sample_alloc))
+                  && -1 == ARRAY_GROW (&offset_score_samples, &sample_alloc))
                 return -1;
 
-              sorted_uint_samples[sample_count] = sample_values[i];
+              offset_score_samples[sample_count] = sample_values[i];
               ++sample_count;
             }
 

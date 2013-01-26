@@ -80,9 +80,19 @@ statement
     :
     | SHOW TABLES
       {
-        #if 0
-        ca_schema_show_tables ();
-        #endif
+        struct select_statement *stmt;
+        struct select_item *list;
+
+        ALLOC(list);
+        ALLOC(list->expression);
+        list->expression->type = EXPR_ASTERISK;
+
+        ALLOC(stmt);
+        stmt->list = list;
+        stmt->from = "ca_catalog.ca_tables";
+
+        if (-1 == CA_select (context->schema, stmt))
+          fprintf (stderr, "Error: %s\n", ca_last_error ());
       }
     | CREATE TABLE Identifier '(' createTableArgs ')' WITH '(' PATH '=' StringLiteral ')'
       {

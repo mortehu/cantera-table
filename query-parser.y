@@ -38,7 +38,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 
 %token AND CREATE FROM INDEX KEY LIMIT NOT OFFSET_SCORE OR PATH PRIMARY QUERY
 %token SELECT SHOW SUMMARY TABLE TABLES TEXT TIME TIMESTAMP TIME_FLOAT4 UTF8BOM
-%token %WHERE WITH ZONE _NULL
+%token WHERE WITH ZONE _NULL
 
 %token Identifier
 %token Integer

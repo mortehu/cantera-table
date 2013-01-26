@@ -57,16 +57,17 @@ ca_fifo_put (struct ca_fifo *fifo, const void *data, size_t size)
 {
   uint_fast32_t tail_space, remaining;
 
-  assert (size <= fifo->fill + fifo->space);
-
   pthread_mutex_lock (&fifo->state_lock);
+
+  assert (size <= fifo->fill + fifo->space);
 
   while (fifo->space < size)
     pthread_cond_wait (&fifo->space_available, &fifo->state_lock);
 
+  tail_space = fifo->fill + fifo->space - fifo->write_offset;
+
   pthread_mutex_unlock (&fifo->state_lock);
 
-  tail_space = fifo->fill + fifo->space - fifo->write_offset;
   remaining = size;
 
   if (tail_space <= remaining)
@@ -97,16 +98,17 @@ ca_fifo_get (struct ca_fifo *fifo, void *data, size_t size)
 {
   uint_fast32_t tail_fill, remaining;
 
-  assert (size <= fifo->fill + fifo->space);
-
   pthread_mutex_lock (&fifo->state_lock);
+
+  assert (size <= fifo->fill + fifo->space);
 
   while (fifo->fill < size)
     pthread_cond_wait (&fifo->fill_available, &fifo->state_lock);
 
+  tail_fill = fifo->fill + fifo->space - fifo->read_offset;
+
   pthread_mutex_unlock (&fifo->state_lock);
 
-  tail_fill = fifo->fill + fifo->space - fifo->read_offset;
   remaining = size;
 
   if (tail_fill <= remaining)

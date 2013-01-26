@@ -41,6 +41,7 @@ extern int read_history ();
 #include "memory.h"
 #include "query.h"
 
+static const char *schema_path = "/data/tables/schema.ca";
 static int print_version;
 static int print_help;
 
@@ -94,7 +95,7 @@ main (int argc, char **argv)
   if (optind != argc)
     errx (EX_USAGE, "Usage: %s [OPTION]...", argv[0]);
 
-  if (!(schema = ca_schema_load ("/data/tables/schema.ca")))
+  if (!(schema = ca_schema_load (schema_path)))
     errx (EXIT_FAILURE, "Failed to load schema: %s", ca_last_error ());
 
   if (isatty (STDIN_FILENO))
@@ -109,9 +110,12 @@ main (int argc, char **argv)
 
       for (;;)
         {
-          const char *prompt = "\033[32;1mca\033[00m$ ";
+          char *prompt;
           FILE *file;
           char *line = NULL;
+
+          if (-1 == asprintf (&prompt, "%s$ ", schema_path))
+            err (EXIT_FAILURE, "asprintf failed");
 
 #if HAVE_LIBREADLINE
           if (!(line = readline (prompt)))
@@ -149,6 +153,8 @@ main (int argc, char **argv)
 
           line[line_length] = 0;
 #endif
+
+          free (prompt);
 
 #if HAVE_READLINE_HISTORY
           add_history (line);

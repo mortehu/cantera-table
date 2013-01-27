@@ -54,9 +54,10 @@ ts_load_LDADD = libca-table.la
 ts_merge_SOURCES = ts-merge.c
 ts_merge_LDADD = libca-table.la
 
-TESTS = tests/arena-00 tests/crc32c-00 tests/fifo-00
-check_PROGRAMS = tests/arena-00 tests/crc32c-00 tests/fifo-00
+TESTS = tests/arena-00 tests/crc32c-00 tests/fifo-00 tests/hashmap-00
+check_PROGRAMS = tests/arena-00 tests/crc32c-00 tests/fifo-00 tests/hashmap-00
 
 tests_arena_00_LDADD = libca-table.la
 tests_crc32c_00_LDADD = libca-table.la
 tests_fifo_00_LDADD = libca-table.la
+tests_hashmap_00_LDADD = libca-table.la

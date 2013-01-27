@@ -24,6 +24,8 @@ main(int argc, char **argv)
       assert (*ret == i);
     }
 
+  assert (!ca_hashmap_get_int (hashmap, "Not in the dictionary"));
+
   ca_hashmap_free (hashmap);
 
   return 0;

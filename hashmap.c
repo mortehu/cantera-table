@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "hashmap.h"
+#include "ca-table.h"
 #include "memory.h"
 
 #define HASHMAP_REBUILD_NOM 4

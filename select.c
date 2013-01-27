@@ -9,7 +9,6 @@
 #include <time.h>
 
 #include "ca-table.h"
-#include "hashmap.h"
 #include "query.h"
 
 static const char *

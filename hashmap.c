@@ -12,10 +12,10 @@
 static size_t
 hash (const char *key)
 {
-  size_t v = *key++;
+  size_t v = *key;
 
-  while (*key)
-    v = v * 31 + *key++;
+  while (*key++)
+    v = v * 31 + *key;
 
   return v;
 }

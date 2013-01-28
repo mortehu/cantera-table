@@ -131,13 +131,12 @@ ca_data_parse_offset_score (const uint8_t **input,
 
               switch (bytes_per_score)
                 {
-                case 4: score += p[3] << 24;
-                case 3: score += p[2] << 16;
-                case 2: score += p[1] << 8;
-                case 1: score += p[0];
+                case 4: score += *p++ << 24;
+                case 3: score += *p++ << 16;
+                case 2: score += *p++ << 8;
+                case 1: score += *p++;
                 }
 
-              p += bytes_per_score;
               (*sample_values)[i].score = score;
             }
         }

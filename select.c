@@ -9,11 +9,10 @@
 #include <time.h>
 
 #include "ca-table.h"
-#include "hashmap.h"
 #include "query.h"
 
 static const char *
-expr_primary_key_filter (struct expression *expr)
+expr_primary_key_filter (struct expression *expr, unsigned int primary_key_field)
 {
   if (!expr)
     return NULL;
@@ -22,16 +21,16 @@ expr_primary_key_filter (struct expression *expr)
     {
     case EXPR_EQUAL:
 
-      if (expr->lhs->type == EXPR_VARIABLE
-          && (expr->lhs->value.d.variable->field->flags & CA_FIELD_PRIMARY_KEY)
+      if (expr->lhs->type == EXPR_FIELD
+          && expr->lhs->value.d.field.index == primary_key_field
           && expr->rhs->type == EXPR_CONSTANT
           && expr->rhs->value.type == CA_TEXT)
         {
           return expr->rhs->value.d.string_literal;
         }
 
-      if (expr->rhs->type == EXPR_VARIABLE
-          && (expr->rhs->value.d.variable->field->flags & CA_FIELD_PRIMARY_KEY)
+      if (expr->rhs->type == EXPR_FIELD
+          && expr->rhs->value.d.field.index == primary_key_field
           && expr->lhs->type == EXPR_CONSTANT
           && expr->lhs->value.type == CA_TEXT)
         {
@@ -45,8 +44,8 @@ expr_primary_key_filter (struct expression *expr)
         {
           const char *lhs, *rhs;
 
-          lhs = expr_primary_key_filter (expr->lhs);
-          rhs = expr_primary_key_filter (expr->rhs);
+          lhs = expr_primary_key_filter (expr->lhs, primary_key_field);
+          rhs = expr_primary_key_filter (expr->rhs, primary_key_field);
 
           if (lhs)
             {
@@ -64,8 +63,8 @@ expr_primary_key_filter (struct expression *expr)
         {
           const char *lhs, *rhs;
 
-          lhs = expr_primary_key_filter (expr->lhs);
-          rhs = expr_primary_key_filter (expr->rhs);
+          lhs = expr_primary_key_filter (expr->lhs, primary_key_field);
+          rhs = expr_primary_key_filter (expr->rhs, primary_key_field);
 
           if (lhs && rhs && !strcmp (lhs, rhs))
             return lhs;
@@ -77,7 +76,7 @@ expr_primary_key_filter (struct expression *expr)
 
     case EXPR_PARENTHESIS:
 
-      return expr_primary_key_filter (expr->lhs);
+      return expr_primary_key_filter (expr->lhs, primary_key_field);
 
     default:
 
@@ -176,8 +175,9 @@ CA_query_resolve_variables (struct expression *expression,
               return -1;
             }
 
-          expression->type = EXPR_VARIABLE;
-          expression->value.d.variable = variable;
+          expression->type = EXPR_FIELD;
+          expression->value.d.field.index = variable->field_index;
+          expression->value.d.field.type = variable->type;
 
           return 0;
 
@@ -237,6 +237,9 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
   size_t i;
   int ret, result = -1;
 
+  unsigned int primary_key_index;
+  int has_unique_primary_key = -1;
+
   ca_clear_error ();
 
   if (!(table = ca_schema_table (schema, stmt->from, &declaration)))
@@ -252,8 +255,19 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
 
       new_variable = calloc (1, sizeof (*new_variable));
       new_variable->name = declaration->fields[i].name;
-      new_variable->field = &declaration->fields[i];
-      new_variable->value.type = declaration->fields[i].type;
+      new_variable->field_index = i;
+      new_variable->type = declaration->fields[i].type;
+
+      if (declaration->fields[i].flags & CA_FIELD_PRIMARY_KEY)
+        {
+          if (has_unique_primary_key == -1)
+            {
+              has_unique_primary_key = 1;
+              primary_key_index = i;
+            }
+          else
+            has_unique_primary_key = 0;
+        }
 
       if (-1 == ca_hashmap_insert (variables, declaration->fields[i].name, new_variable))
         goto done;
@@ -270,7 +284,8 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
 
   const char *primary_key_filter;
 
-  if (NULL != (primary_key_filter = expr_primary_key_filter (stmt->where)))
+  if (1 == has_unique_primary_key
+      && NULL != (primary_key_filter = expr_primary_key_filter (stmt->where, primary_key_index)))
     {
       struct iovec value;
 
@@ -291,6 +306,10 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
       format_output (declaration->fields[1].type,
                      value.iov_base,
                      (const uint8_t *) value.iov_base + value.iov_len);
+
+      printf ("\n");
+
+      result = 0;
     }
   else
     {

@@ -12,7 +12,6 @@
 
 #include "ca-table.h"
 #include "memory.h"
-#include "smalltable-internal.h"
 
 struct schema_table
 {

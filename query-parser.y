@@ -36,19 +36,9 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 #define scanner context->scanner
 %}
 
-%token AND CREATE FROM NOT OR PATH SELECT SHOW TABLE TABLES TEXT
-%token TIME_FLOAT4 UTF8BOM WHERE _NULL
-%token PRIMARY
-%token KEY
-%token INDEX
-%token QUERY
-%token SUMMARY
-%token WITH
-%token OFFSET_SCORE
-%token TIMESTAMP
-%token TIME
-%token ZONE
-%token LIMIT
+%token AND CREATE FROM INDEX KEY LIMIT NOT OFFSET_SCORE OR PATH PRIMARY QUERY
+%token SELECT SHOW SUMMARY TABLE TABLES TEXT TIME TIMESTAMP TIME_FLOAT4 UTF8BOM
+%token WHERE WITH ZONE _NULL
 
 %token Identifier
 %token Integer
@@ -90,9 +80,19 @@ statement
     :
     | SHOW TABLES
       {
-        #if 0
-        ca_schema_show_tables ();
-        #endif
+        struct select_statement *stmt;
+        struct select_item *list;
+
+        ALLOC(list);
+        ALLOC(list->expression);
+        list->expression->type = EXPR_ASTERISK;
+
+        ALLOC(stmt);
+        stmt->list = list;
+        stmt->from = "ca_catalog.ca_tables";
+
+        if (-1 == CA_select (context->schema, stmt))
+          fprintf (stderr, "Error: %s\n", ca_last_error ());
       }
     | CREATE TABLE Identifier '(' createTableArgs ')' WITH '(' PATH '=' StringLiteral ')'
       {

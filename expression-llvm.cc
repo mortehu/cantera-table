@@ -81,14 +81,14 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module, struct 
           return NULL;
         }
 
-    case EXPR_VARIABLE:
+    case EXPR_FIELD:
 
         {
-          switch (expr->value.d.variable->value.type)
+          switch (expr->value.d.field.type)
             {
             default:
 
-              ca_set_error ("Fields of type %d not supported yet", expr->value.d.variable->value.type);
+              ca_set_error ("Fields of type %d not supported yet", expr->value.d.field.type);
 
               return NULL;
             }

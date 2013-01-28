@@ -35,8 +35,10 @@
 /query-parser.c
 /query-parser.h
 /stamp-h1
+/tests/arena-00
 /tests/crc32c-00
 /tests/fifo-00
+/tests/hashmap-00
 /ts-correlate
 /ts-extract
 /ts-load

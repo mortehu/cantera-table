@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "hashmap.h"
+#include "ca-table.h"
 #include "memory.h"
 
 #define HASHMAP_REBUILD_NOM 4
@@ -12,10 +12,10 @@
 static size_t
 hash (const char *key)
 {
-  size_t v = *key++;
+  size_t v = *key;
 
-  while (*key)
-    v = v * 31 + *key++;
+  while (*key++)
+    v = v * 31 + *key;
 
   return v;
 }

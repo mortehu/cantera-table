@@ -21,7 +21,6 @@
 #include "ca-table.h"
 #include "io.h"
 #include "memory.h"
-#include "smalltable-internal.h"
 
 #define MAGIC 0x6c6261742e692e70ULL
 #define MAJOR_VERSION 1

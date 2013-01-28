@@ -237,7 +237,7 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
   size_t i;
   int ret, result = -1;
 
-  unsigned int primary_key_index;
+  unsigned int primary_key_index = 0;
   int has_unique_primary_key = -1;
 
   ca_clear_error ();

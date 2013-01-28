@@ -571,9 +571,17 @@ CA_wo_seek_to_key (void *handle, const char *key)
     }
   else
     {
-      ca_set_error ("Cannot seek to key in unsorted table");
+      off_t offset;
 
-      return -1;
+      for (offset = 0; offset < t->entry_count; ++offset)
+        {
+          if (!strcmp (t->buffer + t->entries[offset], key))
+            {
+              t->offset = offset;
+
+              return 1;
+            }
+        }
     }
 
   return 0;

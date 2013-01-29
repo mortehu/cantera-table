@@ -3,7 +3,7 @@ BUILT_SOURCES = query-lexer.c query-parser.c
 AM_YFLAGS = -d
 
 lib_LTLIBRARIES = libca-table.la
-include_HEADERS = ca-table.h
+include_HEADERS = ca-table.h ca-functions.h
 
 bin_PROGRAMS = \
   ca-shell \
@@ -24,6 +24,7 @@ libca_table_la_SOURCES = \
   error.c error.h \
   expression-llvm.cc \
   fifo.c \
+  functions.c \
   io.c io.h \
   hashmap.c hashmap.h \
   merge.c \
@@ -54,10 +55,12 @@ ts_load_LDADD = libca-table.la
 ts_merge_SOURCES = ts-merge.c
 ts_merge_LDADD = libca-table.la
 
-TESTS = tests/arena-00 tests/crc32c-00 tests/fifo-00 tests/hashmap-00
-check_PROGRAMS = tests/arena-00 tests/crc32c-00 tests/fifo-00 tests/hashmap-00
+TESTS = tests/arena-00 tests/correlation-00 tests/crc32c-00 tests/fifo-00 tests/hashmap-00 tests/rank-correlation-00
+check_PROGRAMS = tests/arena-00 tests/correlation-00 tests/crc32c-00 tests/fifo-00 tests/hashmap-00 tests/rank-correlation-00
 
 tests_arena_00_LDADD = libca-table.la
+tests_correlation_00_LDADD = libca-table.la
 tests_crc32c_00_LDADD = libca-table.la
 tests_fifo_00_LDADD = libca-table.la
 tests_hashmap_00_LDADD = libca-table.la
+tests_rank_correlation_00_LDADD = libca-table.la

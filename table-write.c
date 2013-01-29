@@ -30,6 +30,14 @@ CA_put_integer (uint8_t **output, uint64_t value)
   *output += 10 - ptr;
 }
 
+static void
+CA_put_float (uint8_t **output, float value)
+{
+  memcpy (*output, &value, sizeof (value));
+
+  *output += sizeof (value);
+}
+
 int
 ca_table_write_time_float4 (struct ca_table *table, const char *key,
                             uint64_t start_time, uint32_t interval,
@@ -87,9 +95,6 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
   size_t i, target_alloc, target_size = 0;
   uint64_t prev_offset = 0;
 
-  uint32_t min_score, max_score;
-  uint8_t bytes_per_score;
-
   int result = -1;
 
   target_alloc = 32;
@@ -99,40 +104,11 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 
   o = target;
 
-  CA_put_integer (&o, CA_OFFSET_SCORE_VARBYTE_FIXED);
+  CA_put_integer (&o, CA_OFFSET_SCORE_VARBYTE_FLOAT);
   CA_put_integer (&o, count);
-
-  min_score = values[0].score;
-  max_score = values[0].score;
-
-  for (i = 1; i < count; ++i)
-    {
-      if (values[i].score < min_score)
-        min_score = values[i].score;
-      else if (values[i].score > max_score)
-        max_score = values[i].score;
-    }
-
-  CA_put_integer (&o, min_score);
-  max_score -= min_score;
-
-  if (!max_score)
-    bytes_per_score = 0;
-  else if (!(max_score & ~0xff))
-    bytes_per_score = 1;
-  else if (!(max_score & ~0xffff))
-    bytes_per_score = 2;
-  else if (!(max_score & ~0xffffff))
-    bytes_per_score = 3;
-  else
-    bytes_per_score = 4;
-
-  *o++ = bytes_per_score;
 
   for (i = 0; i < count; ++i)
     {
-      uint32_t score;
-
       target_size = o - target;
 
       if (target_size + 16 > target_alloc)
@@ -146,15 +122,7 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
       CA_put_integer (&o, values[i].offset - prev_offset);
       prev_offset = values[i].offset;
 
-      score = values[i].score - min_score;
-
-      switch (bytes_per_score)
-        {
-        case 4: *o++ = score >> 24;
-        case 3: *o++ = score >> 16;
-        case 2: *o++ = score >> 8;
-        case 1: *o++ = score;
-        }
+      CA_put_float (&o, values[i].score);
     }
 
   iov.iov_base = target;

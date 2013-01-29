@@ -68,9 +68,8 @@ ca_type_to_string (enum ca_type type);
 enum ca_offset_score_type
 {
   /* Difference to previous value encoded using groups of 7 bit values, using
-   * the byte MSB to indicate continuation.  Scores stored as fixed number of
-   * bytes */
-  CA_OFFSET_SCORE_VARBYTE_FIXED = 0
+   * the byte MSB to indicate continuation.  Scores stored as float4. */
+  CA_OFFSET_SCORE_VARBYTE_FLOAT = 1
 };
 
 /*****************************************************************************/
@@ -100,7 +99,7 @@ struct ca_table_declaration
 struct ca_offset_score
 {
   uint64_t offset;
-  uint32_t score;
+  float score;
 } CA_PACKED;
 
 struct ca_data
@@ -295,6 +294,9 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 
 uint64_t
 ca_data_parse_integer (const uint8_t **input);
+
+float
+ca_data_parse_float (const uint8_t **input);
 
 const char *
 ca_data_parse_string (const uint8_t **input);

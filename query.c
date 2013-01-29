@@ -234,7 +234,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
       if (invert_rank)
         {
           for (i = 0; i < token_offset_count; ++i)
-            token_offsets[i].score ^= 0xffffffff;
+            token_offsets[i].score = -token_offsets[i].score;
         }
 
       if (!offsets)

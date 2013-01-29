@@ -31,6 +31,17 @@ ca_data_parse_integer (const uint8_t **input)
   return result;
 }
 
+float
+ca_data_parse_float (const uint8_t **input)
+{
+  float result;
+
+  memcpy (&result, *input, sizeof (result));
+  *input += sizeof (result);
+
+  return result;
+}
+
 const char *
 ca_data_parse_string (const uint8_t **input)
 {
@@ -102,50 +113,20 @@ ca_data_parse_offset_score (const uint8_t **input,
 
   switch (type)
     {
-    case CA_OFFSET_SCORE_VARBYTE_FIXED:
+    case CA_OFFSET_SCORE_VARBYTE_FLOAT:
 
+      for (i = 0; i < *count; ++i)
         {
-          uint32_t min_score;
-          uint8_t bytes_per_score;
-
-          min_score = ca_data_parse_integer (&p);
-          bytes_per_score = *p++;
-
-          if (bytes_per_score > 4)
-            {
-              ca_set_error ("Invalid number of bytes per score (%u)", bytes_per_score);
-
-              free (*sample_values);
-
-              return -1;
-            }
-
-          for (i = 0; i < *count; ++i)
-            {
-              uint32_t score;
-
-              offset += ca_data_parse_integer (&p);
-              (*sample_values)[i].offset = offset;
-
-              score = min_score;
-
-              switch (bytes_per_score)
-                {
-                case 4: score += *p++ << 24;
-                case 3: score += *p++ << 16;
-                case 2: score += *p++ << 8;
-                case 1: score += *p++;
-                }
-
-              (*sample_values)[i].score = score;
-            }
+          offset += ca_data_parse_integer (&p);
+          (*sample_values)[i].offset = offset;
+          (*sample_values)[i].score = ca_data_parse_float (&p);
         }
 
       break;
 
     default:
 
-      ca_set_error ("Unknown sorted uint array encoding %d", (int) type);
+      ca_set_error ("Unknown (offset, score) array encoding %d", (int) type);
 
       free (*sample_values);
 

@@ -336,6 +336,9 @@ CA_wo_sync (void *handle)
   if (-1 == CA_wo_write_all (t->fd, &header, sizeof (header)))
     return -1;
 
+  /* XXX: I think we need to sync all ancestor directories in order to be
+   * completely safe */
+
   if (!t->no_fsync && -1 == fsync (t->fd))
     {
       ca_set_error ("Failed to fsync '%s': %s",

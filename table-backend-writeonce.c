@@ -53,8 +53,7 @@ static int
 CA_wo_is_sorted (void *handle);
 
 static int
-CA_wo_insert_row (void *handle, const char *key,
-                  const struct iovec *value, size_t value_count);
+CA_wo_insert_row (void *handle, const struct iovec *value, size_t value_count);
 
 static int
 CA_wo_seek (void *handle, off_t offset, int whence);
@@ -66,8 +65,7 @@ static off_t
 CA_wo_offset (void *handle);
 
 static ssize_t
-CA_wo_read_row (void *handle, const char **key,
-                struct iovec *value);
+CA_wo_read_row (void *handle, struct iovec *value, size_t value_count);
 
 static int
 CA_wo_delete_row (void *handle);
@@ -413,16 +411,19 @@ CA_wo_is_sorted (void *handle)
 }
 
 static int
-CA_wo_insert_row (void *handle, const char *key,
+CA_wo_insert_row (void *handle,
                   const struct iovec *value, size_t value_count)
 {
   struct CA_wo *t = handle;
+  const char *key;
   size_t i;
   int cmp = 1;
 
   if (t->entry_alloc == t->entry_count
       && -1 == ARRAY_GROW (&t->entries, &t->entry_alloc))
     return -1;
+
+  key = value[0].iov_base;
 
   if (t->prev_key)
     {
@@ -438,9 +439,6 @@ CA_wo_insert_row (void *handle, const char *key,
   t->prev_key = safe_strdup (key);
 
   t->entries[t->entry_count++] = t->write_offset + t->buffer_fill;
-
-  if (-1 == CA_wo_write (t, key, strlen (key) + 1))
-    return -1;
 
   for (i = 0; i < value_count; ++i)
     {
@@ -593,12 +591,11 @@ CA_wo_offset (void *handle)
 }
 
 static ssize_t
-CA_wo_read_row (void *handle, const char **out_key,
-                struct iovec *value)
+CA_wo_read_row (void *handle, struct iovec *value, size_t value_count)
 {
   struct CA_wo *t = handle;
   const char *key;
-  size_t key_length;
+  size_t key_length, o = 0;
 
   if (t->offset < 0)
     {
@@ -610,21 +607,28 @@ CA_wo_read_row (void *handle, const char **out_key,
   if (t->offset >= t->entry_count)
     return 0;
 
+  /* XXX: We really only need one struct iovec */
+
   key = t->buffer + t->entries[t->offset];
   key_length = strlen (key) + 1;
 
-  if (out_key)
-    *out_key = key;
-
-  if (value)
+  if (o < value_count)
     {
-      value->iov_base = (void *) (key + key_length);
-      value->iov_len = t->entries[t->offset + 1] - t->entries[t->offset] - key_length;
+      value[o].iov_base = (void *) key;
+      value[o].iov_len = key_length;
+      ++o;
+    }
+
+  if (o < value_count)
+    {
+      value[o].iov_base = (void *) (key + key_length);
+      value[o].iov_len = t->entries[t->offset + 1] - t->entries[t->offset] - key_length;
+      ++o;
     }
 
   ++t->offset;
 
-  return 1;
+  return o;
 }
 
 static int

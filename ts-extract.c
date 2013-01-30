@@ -73,11 +73,11 @@ main (int argc, char **argv)
 
   if (optind == argc)
     {
-      const char *key;
+      struct iovec value;
       ssize_t ret;
 
-      while (1 == (ret = ca_table_read_row (table, &key, NULL)))
-        printf ("%s\n", key);
+      while (1 == (ret = ca_table_read_row (table, &value, 1)))
+        printf ("%s\n", (const char *) value.iov_base);
 
       if (ret == -1)
         {
@@ -89,7 +89,7 @@ main (int argc, char **argv)
   else
     {
       const char *key = argv[optind++];
-      struct iovec value;
+      struct iovec value[2];
       const uint8_t *begin, *end;
       ssize_t ret;
 
@@ -103,19 +103,19 @@ main (int argc, char **argv)
           return EXIT_FAILURE;
         }
 
-
-      if (1 != (ret = ca_table_read_row (table, NULL, &value)))
+      if (2 != (ret = ca_table_read_row (table, value, 2)))
         {
           if (ret < 0)
             fprintf (stderr, "Error: %s\n", ca_last_error ());
           else if (!ret) /* Key both exists and does not exist? */
-            fprintf (stderr, "Error: ca_table_read_row unexpectedly returned 0\n");
+            fprintf (stderr, "Error: ca_table_read_row unexpectedly returned %d\n",
+                     (int) ret);
 
           return EXIT_FAILURE;
         }
 
-      begin = value.iov_base;
-      end = begin + value.iov_len;
+      begin = value[1].iov_base;
+      end = begin + value[1].iov_len;
 
       while (begin != end)
         {

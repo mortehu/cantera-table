@@ -286,6 +286,7 @@ sample_aggregate_iovec (struct iovec *samples, size_t count)
 static int
 data_flush (const char *key)
 {
+  struct iovec value[2];
   size_t i, next;
   int result = -1;
 
@@ -390,7 +391,11 @@ data_flush (const char *key)
           && -1 == sample_aggregate_iovec (data_samples, sample_count))
         goto done;
 
-      if (-1 == ca_table_insert_row (output, key, &data_samples[0], 1))
+      value[0].iov_base = (void *) key;
+      value[0].iov_len = strlen (key) + 1;
+      value[1] = data_samples[0];
+
+      if (-1 == ca_table_insert_row (output, value, 2))
         goto done;
 
       break;

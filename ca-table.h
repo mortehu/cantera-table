@@ -135,8 +135,7 @@ struct ca_table_backend
   (*is_sorted) (void *handle);
 
   int
-  (*insert_row) (void *handle, const char *key,
-                 const struct iovec *value, size_t value_count);
+  (*insert_row) (void *handle, const struct iovec *value, size_t value_count);
 
   int
   (*seek) (void *handle, off_t offset, int whence);
@@ -148,8 +147,7 @@ struct ca_table_backend
   (*offset) (void *handle);
 
   ssize_t
-  (*read_row) (void *handle, const char **key,
-               struct iovec *value);
+  (*read_row) (void *handle, struct iovec *value, size_t value_count);
 
   int
   (*delete_row) (void *handle);
@@ -189,7 +187,7 @@ int
 ca_table_is_sorted (struct ca_table *table) CA_USE_RESULT;
 
 int
-ca_table_insert_row (struct ca_table *table, const char *key,
+ca_table_insert_row (struct ca_table *table,
                      const struct iovec *value, size_t value_count) CA_USE_RESULT;
 
 int
@@ -207,8 +205,8 @@ off_t
 ca_table_offset (struct ca_table *table) CA_USE_RESULT;
 
 ssize_t
-ca_table_read_row (struct ca_table *table, const char **key,
-                   struct iovec *value) CA_USE_RESULT;
+ca_table_read_row (struct ca_table *table, struct iovec *value,
+                   size_t value_count) CA_USE_RESULT;
 
 int
 ca_table_delete_row (struct ca_table *table) CA_USE_RESULT;

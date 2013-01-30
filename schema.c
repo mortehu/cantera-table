@@ -168,14 +168,17 @@ ca_schema_load (const char *path)
   for (;;)
     {
       struct schema_table *table;
-      const char *key, *tmp;
-      struct iovec value;
+      const char *tmp;
+      struct iovec value[2];
       ssize_t ret;
 
-      if (1 != (ret = ca_table_read_row (ca_tables, &key, &value)))
+      if (2 != (ret = ca_table_read_row (ca_tables, value, 2)))
         {
           if (ret == 0)
             break;
+
+          if (ret == 1)
+            ca_set_error ("Got only one iovec from ca_table_read_row, but not supported in code yet");
 
           goto fail;
         }
@@ -187,10 +190,10 @@ ca_schema_load (const char *path)
       table = &result->tables[result->table_count++];
       memset (table, 0, sizeof (*table));
 
-      if (!(table->name = safe_strdup (key)))
+      if (!(table->name = safe_strdup (value[0].iov_base)))
         goto fail;
 
-      tmp = value.iov_base;
+      tmp = value[1].iov_base;
 
       if (!(table->declaration.path = safe_strdup (tmp)))
         goto fail;
@@ -202,7 +205,7 @@ ca_schema_load (const char *path)
 
       tmp = strchr (tmp, 0) + 1;
 
-      assert (tmp == (const char *) value.iov_base + value.iov_len);
+      assert (tmp == (const char *) value[1].iov_base + value[1].iov_len);
 
       if (1 != (ret = ca_table_seek_to_key (ca_columns, table->name)))
         {
@@ -223,15 +226,18 @@ ca_schema_load (const char *path)
           struct ca_field *new_fields, *field;
           int64_t type;
 
-          if (1 != (ret = ca_table_read_row (ca_columns, &key, &value)))
+          if (2 != (ret = ca_table_read_row (ca_columns, value, 2)))
             {
               if (ret == 0)
                 break;
 
+              if (ret == 1)
+                ca_set_error ("Got only one iovec from ca_table_read_row, but not supported in code yet");
+
               goto fail;
             }
 
-          if (strcmp (key, table->name))
+          if (strcmp (value[0].iov_base, table->name))
             break;
 
           if (!(new_fields = realloc (table->declaration.fields, sizeof (*table->declaration.fields) * ++table->declaration.field_count)))
@@ -240,7 +246,7 @@ ca_schema_load (const char *path)
           table->declaration.fields = new_fields;
           field = &table->declaration.fields[table->declaration.field_count - 1];
 
-          tmp = value.iov_base;
+          tmp = value[1].iov_base;
 
           assert (strlen (tmp) + 1 < sizeof (field->name));
 
@@ -257,7 +263,7 @@ ca_schema_load (const char *path)
           if (*tmp++)
             field->flags |= CA_FIELD_PRIMARY_KEY;
 
-          assert (tmp == (const char *) value.iov_base + value.iov_len);
+          assert (tmp == (const char *) value[1].iov_base + value[1].iov_len);
 
           field->type = type;
         }
@@ -307,6 +313,13 @@ ca_schema_close (struct ca_schema *schema)
   free (schema);
 }
 
+static void
+iov_from_string (struct iovec *target, const char *string)
+{
+  target->iov_base = (void *) string;
+  target->iov_len = strlen (string) + 1;
+}
+
 static int
 CA_schema_save (struct ca_schema *schema)
 {
@@ -332,14 +345,11 @@ CA_schema_save (struct ca_schema *schema)
 
       decl = &schema->tables[i].declaration;
 
-      iov[0].iov_base = decl->path;
-      iov[0].iov_len = strlen (decl->path) + 1;
+      iov_from_string (&iov[0], schema->tables[i].name);
+      iov_from_string (&iov[1], decl->path);
+      iov_from_string (&iov[2], schema->tables[i].backend);
 
-      iov[1].iov_base = schema->tables[i].backend;
-      iov[1].iov_len = strlen (schema->tables[i].backend) + 1;
-
-      if (-1 == ca_table_insert_row (ca_tables, schema->tables[i].name,
-                                     iov, 2))
+      if (-1 == ca_table_insert_row (ca_tables, iov, 3))
         goto done;
 
       for (j = 0; j < decl->field_count; ++j)
@@ -351,20 +361,19 @@ CA_schema_save (struct ca_schema *schema)
           flag_null = 0 != (decl->fields[j].flags & CA_FIELD_NOT_NULL);
           flag_primary_key = 0 != (decl->fields[j].flags & CA_FIELD_PRIMARY_KEY);
 
-          iov[0].iov_base = decl->fields[j].name;
-          iov[0].iov_len  = strlen (decl->fields[j].name) + 1;
+          iov_from_string (&iov[0], schema->tables[i].name);
+          iov_from_string (&iov[1], decl->fields[j].name);
 
-          iov[1].iov_base = &type;
-          iov[1].iov_len  = sizeof (type);
+          iov[2].iov_base = &type;
+          iov[2].iov_len  = sizeof (type);
 
-          iov[2].iov_base = &flag_null;
-          iov[2].iov_len  = sizeof (flag_null);
+          iov[3].iov_base = &flag_null;
+          iov[3].iov_len  = sizeof (flag_null);
 
-          iov[3].iov_base = &flag_primary_key;
-          iov[3].iov_len  = sizeof (flag_primary_key);
+          iov[4].iov_base = &flag_primary_key;
+          iov[4].iov_len  = sizeof (flag_primary_key);
 
-          if (-1 == ca_table_insert_row (ca_columns, schema->tables[i].name,
-                                         iov, 4))
+          if (-1 == ca_table_insert_row (ca_columns, iov, 5))
             goto done;
         }
     }

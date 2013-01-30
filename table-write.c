@@ -43,7 +43,7 @@ ca_table_write_time_float4 (struct ca_table *table, const char *key,
                             uint64_t start_time, uint32_t interval,
                             const float *sample_values, size_t sample_count)
 {
-  struct iovec value[2];
+  struct iovec value[3];
   uint8_t header[MAX_HEADER_SIZE], *o;
 
   o = header;
@@ -52,12 +52,14 @@ ca_table_write_time_float4 (struct ca_table *table, const char *key,
   CA_put_integer (&o, interval);
   CA_put_integer (&o, sample_count);
 
-  value[0].iov_base = header;
-  value[0].iov_len = o - header;
-  value[1].iov_base = (void *) sample_values;
-  value[1].iov_len = sizeof (*sample_values) * sample_count;
+  value[0].iov_base = (void *) key;
+  value[0].iov_len = strlen (key) + 1;
+  value[1].iov_base = header;
+  value[1].iov_len = o - header;
+  value[2].iov_base = (void *) sample_values;
+  value[2].iov_len = sizeof (*sample_values) * sample_count;
 
-  return ca_table_insert_row (table, key,
+  return ca_table_insert_row (table,
                               value, sizeof (value) / sizeof (value[0]));
 }
 
@@ -66,7 +68,7 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
                              const struct ca_offset_score *values,
                              size_t count)
 {
-  struct iovec iov;
+  struct iovec iov[2];
 
   uint8_t *target, *o;
   size_t i, target_alloc, target_size = 0;
@@ -102,10 +104,13 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
       CA_put_float (&o, values[i].score);
     }
 
-  iov.iov_base = target;
-  iov.iov_len = o - target;
+  iov[0].iov_base = (void *) key;
+  iov[0].iov_len = strlen (key) + 1;
 
-  result = ca_table_insert_row (table, key, &iov, 1);
+  iov[1].iov_base = target;
+  iov[1].iov_len = o - target;
+
+  result = ca_table_insert_row (table, iov, sizeof (iov) / sizeof (iov[0]));
 
 done:
 

@@ -228,7 +228,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
 
       data = data_iov.iov_base;
 
-      if (-1 == ca_data_parse_offset_score (&data, &token_offsets, &token_offset_count))
+      if (-1 == ca_parse_offset_score (&data, &token_offsets, &token_offset_count))
         goto done;
 
       if (invert_rank)

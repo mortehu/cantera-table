@@ -433,9 +433,9 @@ data_callback (const char *key, const struct iovec *value, void *opaque)
           uint32_t i, interval, count;
           const float *sample_values;
 
-          ca_data_parse_time_float4 (&begin,
-                                     &start_time, &interval,
-                                     &sample_values, &count);
+          ca_parse_time_float4 (&begin,
+                                &start_time, &interval,
+                                &sample_values, &count);
 
           for (i = 0; i < count; ++i)
             {
@@ -458,7 +458,7 @@ data_callback (const char *key, const struct iovec *value, void *opaque)
           uint32_t i, count;
           struct ca_offset_score *sample_values;
 
-          if (-1 == ca_data_parse_offset_score (&begin, &sample_values, &count))
+          if (-1 == ca_parse_offset_score (&begin, &sample_values, &count))
             return -1;
 
           /* XXX: This loop can be a lot simpler for this data type */

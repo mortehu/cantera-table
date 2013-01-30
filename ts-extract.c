@@ -123,9 +123,9 @@ main (int argc, char **argv)
           uint32_t i, interval, count;
           const float *sample_values;
 
-          ca_data_parse_time_float4 (&begin,
-                                     &start_time, &interval,
-                                     &sample_values, &count);
+          ca_parse_time_float4 (&begin,
+                                &start_time, &interval,
+                                &sample_values, &count);
 
 
           for (i = 0; i < count; ++i)

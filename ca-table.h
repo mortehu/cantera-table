@@ -271,23 +271,23 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 /*****************************************************************************/
 
 uint64_t
-ca_data_parse_integer (const uint8_t **input);
+ca_parse_integer (const uint8_t **input);
 
 float
-ca_data_parse_float (const uint8_t **input);
+ca_parse_float (const uint8_t **input);
 
 const char *
-ca_data_parse_string (const uint8_t **input);
+ca_parse_string (const uint8_t **input);
 
 void
-ca_data_parse_time_float4 (const uint8_t **input,
-                           uint64_t *start_time, uint32_t *interval,
-                           const float **sample_values, uint32_t *count);
+ca_parse_time_float4 (const uint8_t **input,
+                      uint64_t *start_time, uint32_t *interval,
+                      const float **sample_values, uint32_t *count);
 
 int
-ca_data_parse_offset_score (const uint8_t **input,
-                            struct ca_offset_score **sample_values,
-                            uint32_t *count) CA_USE_RESULT;
+ca_parse_offset_score (const uint8_t **input,
+                       struct ca_offset_score **sample_values,
+                       uint32_t *count) CA_USE_RESULT;
 
 /*****************************************************************************/
 

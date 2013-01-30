@@ -20,7 +20,6 @@ AM_CXXFLAGS = -Wall -Werror -g
 libca_table_la_SOURCES = \
   arena.c arena.h \
   crc32c.c crc32c.h \
-  data.c \
   error.c error.h \
   expression-llvm.cc \
   fifo.c \
@@ -29,6 +28,7 @@ libca_table_la_SOURCES = \
   hashmap.c hashmap.h \
   merge.c \
   memory.c memory.h \
+  parse.c \
   query.c \
   schema.c schema.h \
   select.c \

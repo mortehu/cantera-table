@@ -120,9 +120,9 @@ format_output (const struct ca_field *fields, size_t field_count,
               uint32_t interval, sample_count;
               const float *sample_values;
 
-              ca_data_parse_time_float4 (&begin,
-                                         &start_time, &interval,
-                                         &sample_values, &sample_count);
+              ca_parse_time_float4 (&begin,
+                                    &start_time, &interval,
+                                    &sample_values, &sample_count);
 
               for (i = 0; i < sample_count; ++i)
                 {

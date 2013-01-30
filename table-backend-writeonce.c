@@ -534,7 +534,7 @@ CA_wo_seek_to_key (void *handle, const char *key)
 
       if (middle != t->entry_count)
         {
-          t->offset = middle;
+          t->offset = first;
 
           return 1;
         }
@@ -561,7 +561,7 @@ CA_wo_seek_to_key (void *handle, const char *key)
 
       if (middle != t->entry_count)
         {
-          t->offset = middle;
+          t->offset = first;
 
           return 1;
         }

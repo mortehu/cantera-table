@@ -102,24 +102,6 @@ struct ca_offset_score
   float score;
 } CA_PACKED;
 
-struct ca_data
-{
-  enum ca_type type;
-
-  union
-    {
-      struct
-        {
-          uint64_t start_time;
-          uint32_t interval;
-          size_t count;
-          const float *values;
-        } time_series;
-
-      struct ca_table_declaration table_declaration;
-    } v;
-};
-
 /*****************************************************************************/
 
 enum ca_table_flag

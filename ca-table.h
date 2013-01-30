@@ -53,7 +53,8 @@ enum ca_type
   CA_INT64 = 3,
   CA_NUMERIC = 4,
   CA_TIME = 5,
-  CA_OFFSET_SCORE = 6
+  CA_OFFSET_SCORE = 6,
+  CA_BOOLEAN = 7
 };
 
 enum ca_type
@@ -263,11 +264,6 @@ ca_table_write_time_float4 (struct ca_table *table, const char *key,
                             const float *sample_values, size_t sample_count) CA_USE_RESULT;
 
 int
-ca_table_write_table_declaration (struct ca_table *table,
-                                  const char *table_name,
-                                  const struct ca_table_declaration *decl) CA_USE_RESULT;
-
-int
 ca_table_write_offset_score (struct ca_table *table, const char *key,
                              const struct ca_offset_score *values,
                              size_t count);
@@ -287,10 +283,6 @@ void
 ca_data_parse_time_float4 (const uint8_t **input,
                            uint64_t *start_time, uint32_t *interval,
                            const float **sample_values, uint32_t *count);
-
-void
-ca_data_parse_table_declaration (const uint8_t **input,
-                                 struct ca_table_declaration *declaration);
 
 int
 ca_data_parse_offset_score (const uint8_t **input,

@@ -41,7 +41,7 @@ extern int read_history ();
 #include "memory.h"
 #include "query.h"
 
-static const char *schema_path = "/data/tables/schema.ca";
+static const char *schema_path = "/data/tables";
 static int print_version;
 static int print_help;
 

@@ -432,8 +432,6 @@ CA_wo_insert_row (void *handle, const char *key,
         t->flags &= ~CA_WO_FLAG_ASCENDING;
       else if (cmp > 0)
         t->flags &= ~CA_WO_FLAG_DESCENDING;
-      else
-        goto write_value;
     }
 
   free (t->prev_key);
@@ -443,8 +441,6 @@ CA_wo_insert_row (void *handle, const char *key,
 
   if (-1 == CA_wo_write (t, key, strlen (key) + 1))
     return -1;
-
-write_value:
 
   for (i = 0; i < value_count; ++i)
     {
@@ -532,14 +528,15 @@ CA_wo_seek_to_key (void *handle, const char *key)
               first = middle + 1;
               count -= half + 1;
             }
-          else if (ca_likely (cmp > 0))
-            count = half;
           else
-            {
-              t->offset = middle;
+            count = half;
+        }
 
-              return 1;
-            }
+      if (middle != t->entry_count)
+        {
+          t->offset = middle;
+
+          return 1;
         }
     }
   else if (0 != (t->header->flags & CA_WO_FLAG_DESCENDING))
@@ -558,14 +555,15 @@ CA_wo_seek_to_key (void *handle, const char *key)
               first = middle + 1;
               count -= half + 1;
             }
-          else if (ca_likely (cmp < 0))
-            count = half;
           else
-            {
-              t->offset = middle;
+            count = half;
+        }
 
-              return 1;
-            }
+      if (middle != t->entry_count)
+        {
+          t->offset = middle;
+
+          return 1;
         }
     }
   else

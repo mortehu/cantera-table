@@ -41,6 +41,7 @@
 /tests/fifo-00
 /tests/hashmap-00
 /tests/rank-correlation-00
+/tests/wo-sort-00
 /ts-correlate
 /ts-extract
 /ts-load

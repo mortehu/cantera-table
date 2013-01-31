@@ -3,6 +3,7 @@
 #include "ca-table.h"
 #include "memory.h"
 
+extern struct ca_table_backend CA_table_log;
 extern struct ca_table_backend CA_table_writeonce;
 
 struct ca_table
@@ -16,6 +17,9 @@ struct ca_table
 struct ca_table_backend *
 ca_table_backend (const char *name)
 {
+  if (!strcmp (name, "log"))
+    return &CA_table_log;
+
   if (!strcmp (name, "write-once"))
     return &CA_table_writeonce;
 

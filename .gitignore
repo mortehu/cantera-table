@@ -40,6 +40,7 @@
 /tests/crc32c-00
 /tests/fifo-00
 /tests/hashmap-00
+/tests/log-sort-00
 /tests/rank-correlation-00
 /tests/wo-sort-00
 /ts-correlate

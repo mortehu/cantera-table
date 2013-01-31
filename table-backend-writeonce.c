@@ -52,7 +52,7 @@ CA_wo_set_flag (void *handle, enum ca_table_flag flag);
 static int
 CA_wo_is_sorted (void *handle);
 
-static int
+static off_t
 CA_wo_insert_row (void *handle, const struct iovec *value, size_t value_count);
 
 static int
@@ -413,7 +413,7 @@ CA_wo_is_sorted (void *handle)
   return 0 != (t->header->flags & CA_WO_FLAG_ASCENDING);
 }
 
-static int
+static off_t
 CA_wo_insert_row (void *handle,
                   const struct iovec *value, size_t value_count)
 {
@@ -421,6 +421,7 @@ CA_wo_insert_row (void *handle,
   const char *key;
   size_t i;
   int cmp = 1;
+  off_t result = -1;
 
   if (t->entry_alloc == t->entry_count
       && -1 == ARRAY_GROW (&t->entries, &t->entry_alloc))
@@ -441,7 +442,9 @@ CA_wo_insert_row (void *handle,
   free (t->prev_key);
   t->prev_key = safe_strdup (key);
 
-  t->entries[t->entry_count++] = t->write_offset + t->buffer_fill;
+  result = t->entry_count++;
+
+  t->entries[result] = t->write_offset + t->buffer_fill;
 
   for (i = 0; i < value_count; ++i)
     {
@@ -449,7 +452,7 @@ CA_wo_insert_row (void *handle,
         return -1;
     }
 
-  return 0;
+  return result;
 }
 
 static int

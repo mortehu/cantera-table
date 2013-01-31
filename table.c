@@ -93,7 +93,7 @@ ca_table_is_sorted (struct ca_table *table)
   return table->backend->is_sorted (table->handle);
 }
 
-int
+off_t
 ca_table_insert_row (struct ca_table *table,
                      const struct iovec *value, size_t value_count)
 {

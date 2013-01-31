@@ -184,7 +184,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
       goto done;
     }
 
-  if (summary_declaration->fields[1].type != CA_TIME)
+  if (summary_declaration->fields[1].type != CA_TIMESTAMPTZ)
     {
       ca_set_error ("Second field in summary table must be TIMESTAMP WITH TIME ZONE");
 

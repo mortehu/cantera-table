@@ -10,13 +10,26 @@ static struct
   enum ca_type type;
 } CA_types[] =
 {
-    { "INTEGER",           CA_INT64 },
-    { "NUMERIC",           CA_NUMERIC },
-    { "OFFSET_SCORE",      CA_OFFSET_SCORE },
-    { "TABLE_DECLARATION", CA_TABLE_DECLARATION },
-    { "TEXT",              CA_TEXT },
-    { "TIME",              CA_TIME },
-    { "TIME_FLOAT4",       CA_TIME_SERIES }
+    { "BOOLEAN",      CA_BOOLEAN },
+    { "FLOAT",        CA_FLOAT4 },
+    { "FLOAT4",       CA_FLOAT4 },
+    { "FLOAT8",       CA_FLOAT8 },
+    { "INT16",        CA_INT16 },
+    { "INT32",        CA_INT32 },
+    { "INT64",        CA_INT64 },
+    { "INT8",         CA_INT8 },
+    { "INTEGER",      CA_INT64 },
+    { "NUMERIC",      CA_NUMERIC },
+    { "OFFSET_SCORE", CA_OFFSET_SCORE },
+    { "REAL",         CA_FLOAT8 },
+    { "SMALLINT",     CA_INT16 },
+    { "TEXT",         CA_TEXT },
+    { "TIMESTAMPTZ",  CA_TIMESTAMPTZ },
+    { "TIME_FLOAT4",  CA_TIME_FLOAT4 },
+    { "UINT16",       CA_UINT16 },
+    { "UINT32",       CA_UINT32 },
+    { "UINT64",       CA_UINT64 },
+    { "UINT8",        CA_UINT8 }
 };
 
 enum ca_type

@@ -128,7 +128,7 @@ sample_data_cmp (const void *vlhs, const void *vrhs)
 
           return strcmp ((const char *) begin_lhs, (const char *) begin_rhs);
 
-        case CA_TIME:
+        case CA_TIMESTAMPTZ:
         case CA_INT64:
 
             {
@@ -428,7 +428,7 @@ data_callback (const char *key, const struct iovec *value, void *opaque)
   begin = value->iov_base;
   end = begin + value->iov_len;
 
-  if (column_count == 1 && column_types[0] == CA_TIME_SERIES)
+  if (column_count == 1 && column_types[0] == CA_TIME_FLOAT4)
     {
       sample_type = SAMPLE_TIME_FLOAT4;
 

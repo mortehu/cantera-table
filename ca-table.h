@@ -45,16 +45,24 @@ ca_set_error (const char *format, ...);
 
 enum ca_type
 {
-  CA_INVALID = -1,
+  CA_INVALID            = -1,
 
-  CA_TEXT = 0,
-  CA_TIME_SERIES = 1,
-  CA_TABLE_DECLARATION = 2,
-  CA_INT64 = 3,
-  CA_NUMERIC = 4,
-  CA_TIME = 5,
-  CA_OFFSET_SCORE = 6,
-  CA_BOOLEAN = 7
+  CA_TEXT              =  0,
+  CA_TIME_FLOAT4       =  1,
+  CA_UINT64            =  2,
+  CA_INT64             =  3,
+  CA_NUMERIC           =  4,
+  CA_TIMESTAMPTZ       =  5,
+  CA_OFFSET_SCORE      =  6,
+  CA_BOOLEAN           =  7,
+  CA_UINT32            =  8,
+  CA_INT32             =  9,
+  CA_UINT16            = 10,
+  CA_INT16             = 11,
+  CA_UINT8             = 12,
+  CA_INT8              = 13,
+  CA_FLOAT4            = 14,
+  CA_FLOAT8            = 15
 };
 
 enum ca_type

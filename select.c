@@ -115,7 +115,7 @@ format_output (const struct ca_field *fields, size_t field_count,
 
           break;
 
-        case CA_TIME_SERIES:
+        case CA_TIME_FLOAT4:
 
             {
               uint64_t start_time;

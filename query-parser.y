@@ -166,8 +166,8 @@ createTableArgs
 
 columnType
     : TEXT                     { $$ = CA_TEXT; }
-    | TIMESTAMP WITH TIME ZONE { $$ = CA_TIME; }
-    | TIME_FLOAT4              { $$ = CA_TIME_SERIES; }
+    | TIMESTAMP WITH TIME ZONE { $$ = CA_TIMESTAMPTZ; }
+    | TIME_FLOAT4              { $$ = CA_TIME_FLOAT4; }
     | OFFSET_SCORE             { $$ = CA_OFFSET_SCORE; }
     ;
 

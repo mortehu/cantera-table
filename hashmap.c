@@ -127,7 +127,7 @@ ca_hashmap_insert (struct ca_hashmap *map, const char *key, void *value)
 
   if (node->key)
     {
-      errno = EEXIST;
+      ca_set_error ("Attempt to insert duplicate key '%s' into hashmap", key);
 
       return -1;
     }

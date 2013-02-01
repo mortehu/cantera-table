@@ -1,64 +1,41 @@
-Features:
+Table formats:
 
-  * Load scalar time series data.  The data may arrive in any order
+  * The "write-once" table:
 
-  * Cluster time series data.  This rebuilds an "input.data" file in (key,
-    time) order.
+    - First column must be TEXT PRIMARY KEY
+    - First transaction is INSERT only
+    - All subsequent transactions are read-only
+    - No UPDATE or DELETE
+    - Very fast INSERT
+    - Very fast seek to tuple index
+    - Very fast seek to key
+    - Tuple order: ASCENDING, DESCENDING, RANDOM or HASH
+    - Can be atomically replaced by reordered version of self
+      (e.g. RANDOM -> ASCENDING) with no locks, thanks to OS support for
+      rename()
 
-  * Produce an interpolated, gauss-normalized, clustered version of the data
+  * The "flexi" table:
 
-    - Clusters are stored as entries: cluster:0 to cluster:FF
+    - No restrictions
+    - Worst performance
 
-  * Allow nearest neighbor queries
-Data format:
+MVCC:
 
-  Array of:
+  * Schema updates:
 
-    byte[]     key (UTF-8), NUL-terminated
-    integer    format
-                 0x00 = Time series
-                 0x01 = NN search resutls
-    [data in given format]
+    - Uses the same data store as everything else, hence can be rolled back etc.
 
-  Time series:
+  * "write-once":
 
-    integer    array_size
+    - Since the table itself is not visible to anyone until it's commited, and
+      is read-only thereafter, this backend requires no additional support
 
-    Array of:
+Building a keyword index:
 
-      integer  relative timestamp
-      integer  step size
-      integer  count
-      float[]  value
-
-  NN search results:
-
-    integer    count
-    integer[]  relative offset of entry
-    float[]    correlation
-
-  integer:
-
-    Each integer is represented as a sequence of bytes.  7 bits of information
-    are stored for each byte.  If the top bit of a byte is set, more bytes are
-    to come.  The most significant bits are stored in the first byte, to
-    simplify decoding.
-
-Index format:
-
-  uint64[]     offset of entry in data file
-
-Hashmap format:
-
-  Indexed using X31 hash of key:
-
-  uint64[]     offset of entry in data file
-
-File names:
-
-  journal
-  input.data
-  input.index
-  clustered.weekly.data
-  clustered.weekly.index
-  clustered.weekly.hashmap
+  1. CREATE TABLE document_summaries_unsorted (document_id TEXT NOT NULL, ctime TIME NOT NULL, summary TEXT NOT NULL);
+  2. INSERT INTO document_summaries_unsorted (document_id, ctime, summary) VALUES ($0, $1, $2);
+  3. CREATE TABLE document_summaries (document_id TEXT PRIMARY KEY, summary TEXT NOT NULL);
+  4. INSERT INTO document_summaries SELECT DISTINCT ON (document_id) document_id, summary FROM document_summaries_unsorted ORDER BY document_id, ctime DESC;
+  5. CREATE TABLE document_keywords (document_id TEXT NOT NULL, score FLOAT4 NOT NULL DEFAULT 0, keyword TEXT NOT NULL);
+  6. INSERT INTO document_keywords ($0, $1, $2);
+  7. CREATE KEYWORD INDEX document_keyword_index ON document_summaries, document_keywords;

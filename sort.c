@@ -7,8 +7,8 @@
 
 struct CA_sort_entry
 {
-  const char *key;
-  struct iovec value;
+  struct iovec value[2];
+  size_t value_count;
 };
 
 static int
@@ -17,7 +17,7 @@ CA_sort_entrycmp (const void *vlhs, const void *vrhs)
   const struct CA_sort_entry *lhs = vlhs;
   const struct CA_sort_entry *rhs = vrhs;
 
-  return strcmp (lhs->key, rhs->key);
+  return strcmp (lhs->value[0].iov_base, rhs->value[0].iov_base);
 }
 
 int
@@ -30,6 +30,9 @@ ca_table_sort (struct ca_table *output, struct ca_table *input)
 
   int result = -1;
 
+  if (-1 == ca_table_seek (input, 0, SEEK_SET))
+    return -1;
+
   for (;;)
     {
       if (sorted_entry_count == sorted_entry_alloc
@@ -37,8 +40,7 @@ ca_table_sort (struct ca_table *output, struct ca_table *input)
         return -1;
 
       ret = ca_table_read_row (input,
-                               &sorted_entries[sorted_entry_count].key,
-                               &sorted_entries[sorted_entry_count].value);
+                               sorted_entries[sorted_entry_count].value, 2);
 
       if (ret <= 0)
         {
@@ -47,6 +49,8 @@ ca_table_sort (struct ca_table *output, struct ca_table *input)
 
           goto done;
         }
+
+      sorted_entries[sorted_entry_count].value_count = ret;
 
       ++sorted_entry_count;
     }
@@ -57,8 +61,8 @@ ca_table_sort (struct ca_table *output, struct ca_table *input)
   for (i = 0; i < sorted_entry_count; ++i)
     {
       if (-1 == ca_table_insert_row (output,
-                                     sorted_entries[i].key,
-                                     &sorted_entries[i].value, 1))
+                                     sorted_entries[i].value,
+                                     sorted_entries[i].value_count))
         goto done;
     }
 

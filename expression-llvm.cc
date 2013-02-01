@@ -51,20 +51,18 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module, struct 
 
           return builder->CreateGlobalStringPtr (expr->value.d.string_literal);
 
-        case CA_TIME_SERIES:
+        case CA_TIME_FLOAT4:
 
           ca_set_error ("Time series constants not supported yet");
 
           return NULL;
 
-        case CA_TABLE_DECLARATION:
+        case CA_UINT64:
 
-          ca_set_error ("Table declaration constants not supported yet");
-
-          return NULL;
+          return llvm::ConstantInt::get (llvm::getGlobalContext (), llvm::APInt (64, expr->value.d.integer, false /* signed */));
 
         case CA_INT64:
-        case CA_TIME:
+        case CA_TIMESTAMPTZ:
 
           return llvm::ConstantInt::get (llvm::getGlobalContext (), llvm::APInt (64, expr->value.d.integer, true /* signed */));
 

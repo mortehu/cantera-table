@@ -128,7 +128,7 @@ sample_data_cmp (const void *vlhs, const void *vrhs)
 
           return strcmp ((const char *) begin_lhs, (const char *) begin_rhs);
 
-        case CA_TIME:
+        case CA_TIMESTAMPTZ:
         case CA_INT64:
 
             {
@@ -286,6 +286,7 @@ sample_aggregate_iovec (struct iovec *samples, size_t count)
 static int
 data_flush (const char *key)
 {
+  struct iovec value[2];
   size_t i, next;
   int result = -1;
 
@@ -390,7 +391,11 @@ data_flush (const char *key)
           && -1 == sample_aggregate_iovec (data_samples, sample_count))
         goto done;
 
-      if (-1 == ca_table_insert_row (output, key, &data_samples[0], 1))
+      value[0].iov_base = (void *) key;
+      value[0].iov_len = strlen (key) + 1;
+      value[1] = data_samples[0];
+
+      if (-1 == ca_table_insert_row (output, value, 2))
         goto done;
 
       break;
@@ -423,7 +428,7 @@ data_callback (const char *key, const struct iovec *value, void *opaque)
   begin = value->iov_base;
   end = begin + value->iov_len;
 
-  if (column_count == 1 && column_types[0] == CA_TIME_SERIES)
+  if (column_count == 1 && column_types[0] == CA_TIME_FLOAT4)
     {
       sample_type = SAMPLE_TIME_FLOAT4;
 
@@ -433,9 +438,9 @@ data_callback (const char *key, const struct iovec *value, void *opaque)
           uint32_t i, interval, count;
           const float *sample_values;
 
-          ca_data_parse_time_float4 (&begin,
-                                     &start_time, &interval,
-                                     &sample_values, &count);
+          ca_parse_time_float4 (&begin,
+                                &start_time, &interval,
+                                &sample_values, &count);
 
           for (i = 0; i < count; ++i)
             {
@@ -458,7 +463,7 @@ data_callback (const char *key, const struct iovec *value, void *opaque)
           uint32_t i, count;
           struct ca_offset_score *sample_values;
 
-          if (-1 == ca_data_parse_offset_score (&begin, &sample_values, &count))
+          if (-1 == ca_parse_offset_score (&begin, &sample_values, &count))
             return -1;
 
           /* XXX: This loop can be a lot simpler for this data type */

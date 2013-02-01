@@ -11,7 +11,7 @@
 #include "memory.h"
 
 uint64_t
-ca_data_parse_integer (const uint8_t **input)
+ca_parse_integer (const uint8_t **input)
 {
   const uint8_t *i;
   uint64_t result = 0;
@@ -32,7 +32,7 @@ ca_data_parse_integer (const uint8_t **input)
 }
 
 float
-ca_data_parse_float (const uint8_t **input)
+ca_parse_float (const uint8_t **input)
 {
   float result;
 
@@ -43,7 +43,7 @@ ca_data_parse_float (const uint8_t **input)
 }
 
 const char *
-ca_data_parse_string (const uint8_t **input)
+ca_parse_string (const uint8_t **input)
 {
   const char *result;
 
@@ -55,17 +55,17 @@ ca_data_parse_string (const uint8_t **input)
 }
 
 void
-ca_data_parse_time_float4 (const uint8_t **input,
-                           uint64_t *start_time, uint32_t *interval,
-                           const float **sample_values, uint32_t *count)
+ca_parse_time_float4 (const uint8_t **input,
+                      uint64_t *start_time, uint32_t *interval,
+                      const float **sample_values, uint32_t *count)
 {
   const uint8_t *p;
 
   p = *input;
 
-  *start_time = ca_data_parse_integer (&p);
-  *interval = ca_data_parse_integer (&p);
-  *count = ca_data_parse_integer (&p);
+  *start_time = ca_parse_integer (&p);
+  *interval = ca_parse_integer (&p);
+  *count = ca_parse_integer (&p);
   *sample_values = (const float *) p;
 
   p += sizeof (**sample_values) * *count;
@@ -73,28 +73,8 @@ ca_data_parse_time_float4 (const uint8_t **input,
   *input = p;
 }
 
-void
-ca_data_parse_table_declaration (const uint8_t **input,
-                                 struct ca_table_declaration *declaration)
-{
-  const uint8_t *p;
-
-  p = *input;
-
-  declaration->field_count = ca_data_parse_integer (&p);
-  declaration->path = (char *) p;
-
-  p = (const uint8_t *) strchr (declaration->path, 0) + 1;
-
-  declaration->fields = (struct ca_field *) p;
-
-  p += sizeof (struct ca_field) * declaration->field_count;
-
-  *input = p;
-}
-
 int
-ca_data_parse_offset_score (const uint8_t **input,
+ca_parse_offset_score (const uint8_t **input,
                             struct ca_offset_score **sample_values,
                             uint32_t *count)
 {
@@ -106,7 +86,7 @@ ca_data_parse_offset_score (const uint8_t **input,
   p = *input;
 
   type = *p++;
-  *count = ca_data_parse_integer (&p);
+  *count = ca_parse_integer (&p);
 
   if (!(*sample_values = safe_malloc (sizeof (**sample_values) * *count)))
     return -1;
@@ -117,9 +97,9 @@ ca_data_parse_offset_score (const uint8_t **input,
 
       for (i = 0; i < *count; ++i)
         {
-          offset += ca_data_parse_integer (&p);
+          offset += ca_parse_integer (&p);
           (*sample_values)[i].offset = offset;
-          (*sample_values)[i].score = ca_data_parse_float (&p);
+          (*sample_values)[i].score = ca_parse_float (&p);
         }
 
       break;

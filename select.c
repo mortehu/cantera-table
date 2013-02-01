@@ -84,76 +84,96 @@ expr_primary_key_filter (struct expression *expr, unsigned int primary_key_field
     }
 }
 
-static void
-format_output (enum ca_type type,
+static size_t
+format_output (const struct ca_field *fields, size_t field_count,
                const uint8_t *begin, const uint8_t *end)
 {
-  size_t i;
+  size_t i, field_index;
 
-  switch (type)
+  for (field_index = 0; field_index < field_count && begin != end; ++field_index)
     {
-    case CA_TEXT:
+      assert (begin < end);
 
-      fwrite (begin, 1, end - begin, stdout);
+      if (field_index)
+        putchar ('\t');
 
-      break;
-
-    case CA_TIME_SERIES:
-
-      while (begin != end)
+      switch (fields[field_index].type)
         {
-          uint64_t start_time;
-          uint32_t interval, sample_count;
-          const float *sample_values;
+        case CA_TEXT:
 
-          ca_data_parse_time_float4 (&begin,
-                                     &start_time, &interval,
-                                     &sample_values, &sample_count);
-
-          for (i = 0; i < sample_count; ++i)
             {
-              time_t time;
-              char timebuf[32];
+              const char *str_end;
 
-              time = start_time + i * interval;
+              /* XXX: Too many casts */
 
-              strftime (timebuf, sizeof (timebuf), "%Y-%m-%dT%H:%M:%S",
-                        gmtime (&time));
+              str_end = strchr ((const char *) begin, 0);
 
-              printf ("%s\t%.7g\n", timebuf, sample_values[i]);
-            }
-        }
+              fwrite (begin, 1, str_end - (const char *) begin, stdout);
 
-      break;
-
-    case CA_TABLE_DECLARATION:
-
-        {
-          struct ca_table_declaration decl;
-
-          ca_data_parse_table_declaration (&begin, &decl);
-
-          putchar ('(');
-
-          for (i = 0; i < decl.field_count; ++i)
-            {
-              if (i)
-                printf (", ");
-
-              printf ("%s %s", decl.fields[i].name, ca_type_to_string (decl.fields[i].type));
+              begin = (const uint8_t *) str_end + 1;
             }
 
-          putchar (')');
+          break;
 
-          printf (" WITH (PATH = '%s')", decl.path);
+        case CA_TIME_FLOAT4:
+
+            {
+              uint64_t start_time;
+              uint32_t interval, sample_count;
+              const float *sample_values;
+
+              ca_parse_time_float4 (&begin,
+                                    &start_time, &interval,
+                                    &sample_values, &sample_count);
+
+              for (i = 0; i < sample_count; ++i)
+                {
+                  time_t time;
+                  char timebuf[32];
+
+                  time = start_time + i * interval;
+
+                  strftime (timebuf, sizeof (timebuf), "%Y-%m-%dT%H:%M:%S",
+                            gmtime (&time));
+
+                  printf ("%s\t%.7g\n", timebuf, sample_values[i]);
+                }
+            }
+
+          break;
+
+        case CA_INT64:
+
+            {
+              int64_t buffer;
+
+              memcpy (&buffer, begin, sizeof (buffer));
+              begin += sizeof (buffer);
+
+              printf ("%lld", (long long int) buffer);
+            }
+
+          break;
+
+        case CA_BOOLEAN:
+
+          switch (*begin++)
+            {
+            case 0:  printf ("FALSE"); break;
+            default: printf ("TRUE"); break;
+            }
+
+          break;
+
+        default:
+
+          assert (!"unhandled data type");
         }
-
-      break;
-
-    default:
-
-      assert (!"unhandled data type");
     }
+
+  assert (begin == end);
+
+  return field_index;
 }
 
 static int
@@ -240,6 +260,8 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
   unsigned int primary_key_index = 0;
   int has_unique_primary_key = -1;
 
+  struct iovec value[2];
+
   ca_clear_error ();
 
   if (!(table = ca_schema_table (schema, stmt->from, &declaration)))
@@ -283,48 +305,64 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
     }
 
   const char *primary_key_filter;
+  size_t field_index = 0;
 
   if (1 == has_unique_primary_key
       && NULL != (primary_key_filter = expr_primary_key_filter (stmt->where, primary_key_index)))
     {
-      struct iovec value;
-
       if (-1 == (ret = ca_table_seek_to_key (table, primary_key_filter)))
         goto done;
 
       if (!ret)
         return 0; /* Key does not exist in table */
 
-      if (1 != (ret = ca_table_read_row (table, NULL, &value)))
+      if (0 < (ret = ca_table_read_row (table, value, 2)))
         {
-          if (!ret) /* Key both exists and does not exist? */
-            ca_set_error ("ca_table_read_row on '%s' unexpectedly returned 0", stmt->from);
+          if (!ret)
+            ca_set_error ("ca_table_read_row on '%s' unexpectedly returned %d",
+                          stmt->from, (int) ret);
 
           goto done;
         }
 
-      format_output (declaration->fields[1].type,
-                     value.iov_base,
-                     (const uint8_t *) value.iov_base + value.iov_len);
+      for (i = 0; i < ret; ++i)
+        {
+          if (i)
+            putchar ('\t');
 
-      printf ("\n");
+          field_index +=
+            format_output (&declaration->fields[field_index],
+                           declaration->field_count - field_index,
+                           value[i].iov_base,
+                           (const uint8_t *) value[i].iov_base + value[i].iov_len);
+        }
+
+      putchar ('\n');
 
       result = 0;
     }
   else
     {
-      const char *key;
-      struct iovec value;
+      if (-1 == (ret = ca_table_seek (table, 0, SEEK_SET)))
+        goto done;
 
-      while (1 == (ret = ca_table_read_row (table, &key, &value)))
+      while (0 < (ret = ca_table_read_row (table, value, 2)))
         {
-          printf ("%s\t", key);
+          field_index = 0;
 
-          format_output (declaration->fields[1].type,
-                         value.iov_base,
-                         (const uint8_t *) value.iov_base + value.iov_len);
+          for (i = 0; i < ret; ++i)
+            {
+              if (i)
+                putchar ('\t');
 
-          printf ("\n");
+              field_index +=
+                format_output (&declaration->fields[field_index],
+                               declaration->field_count - field_index,
+                               value[i].iov_base,
+                               (const uint8_t *) value[i].iov_base + value[i].iov_len);
+            }
+
+          putchar ('\n');
         }
 
       if (ret == -1)

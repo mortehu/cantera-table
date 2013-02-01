@@ -44,7 +44,7 @@ CA_log_set_flag (void *handle, enum ca_table_flag flag);
 static int
 CA_log_is_sorted (void *handle);
 
-static off_t
+static int
 CA_log_insert_row (void *handle, const struct iovec *value, size_t value_count);
 
 static int
@@ -208,7 +208,7 @@ CA_log_is_sorted (void *handle)
   return 0;
 }
 
-static off_t
+static int
 CA_log_insert_row (void *handle, const struct iovec *value, size_t value_count)
 {
   struct CA_log *t = handle;

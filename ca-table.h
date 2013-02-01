@@ -142,7 +142,7 @@ struct ca_table_backend
   int
   (*is_sorted) (void *handle);
 
-  off_t
+  int
   (*insert_row) (void *handle, const struct iovec *value, size_t value_count);
 
   int
@@ -194,7 +194,7 @@ ca_table_set_flag (struct ca_table *table, enum ca_table_flag flag);
 int
 ca_table_is_sorted (struct ca_table *table) CA_USE_RESULT;
 
-off_t
+int
 ca_table_insert_row (struct ca_table *table,
                      const struct iovec *value, size_t value_count) CA_USE_RESULT;
 

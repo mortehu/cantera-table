@@ -23,6 +23,7 @@ libca_table_la_SOURCES = \
   error.c error.h \
   expression-llvm.cc \
   fifo.c \
+  file-buffer.c \
   functions.c \
   hashmap.c hashmap.h \
   merge.c \

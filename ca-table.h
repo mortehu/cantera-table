@@ -237,6 +237,27 @@ ca_fifo_get (struct ca_fifo *fifo, void *data, size_t size);
 
 /*****************************************************************************/
 
+struct ca_file_buffer;
+
+struct ca_file_buffer *
+ca_file_buffer_alloc (int fd);
+
+void
+ca_file_buffer_free (struct ca_file_buffer *buffer);
+
+int
+ca_file_buffer_write (struct ca_file_buffer *buffer,
+                      const void *buf, size_t count);
+
+int
+ca_file_buffer_writev (struct ca_file_buffer *buffer,
+                       const struct iovec *iov, int count);
+
+int
+ca_file_buffer_flush (struct ca_file_buffer *buffer);
+
+/*****************************************************************************/
+
 struct ca_schema;
 
 struct ca_schema *

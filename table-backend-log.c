@@ -233,11 +233,14 @@ CA_log_insert_row (void *handle, const struct iovec *value, size_t value_count)
   for (i = 0; i < value_count; ++i)
     size += value[i].iov_len;
 
+  size += sizeof (size);
+
   iov[0].iov_base = &size;
   iov[0].iov_len = sizeof (size);
   memcpy (iov + 1, value, value_count * sizeof (*iov));
 
-  if (size + sizeof (size) != (ret = writev (t->fd, iov, value_count + 1)))
+
+  if (size != (ret = writev (t->fd, iov, value_count + 1)))
     {
       if (ret == -1)
         ca_set_error ("writev failed: %s", strerror (errno));
@@ -315,12 +318,14 @@ CA_log_read_row (void *handle, struct iovec *value, size_t value_size)
 
   if (!size || value_size < 1)
     {
-      t->offset += sizeof + sizeof (size);
+      t->offset += size;
 
       memset (value, 0, value_size * sizeof (*value));
 
       return 1;
     }
+
+  size -= sizeof (size);
 
   /* XXX: Leak!  Use statement arena instead */
 

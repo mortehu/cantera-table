@@ -30,6 +30,9 @@ ca_table_sort (struct ca_table *output, struct ca_table *input)
 
   int result = -1;
 
+  if (-1 == ca_table_seek (input, 0, SEEK_SET))
+    return -1;
+
   for (;;)
     {
       if (sorted_entry_count == sorted_entry_alloc

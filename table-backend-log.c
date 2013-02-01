@@ -92,6 +92,9 @@ struct CA_log
 
   struct ca_file_buffer *write_buffer;
 
+  uint8_t *read_map;
+  off_t read_map_size;
+
   off_t offset;
 };
 
@@ -238,6 +241,8 @@ CA_log_insert_row (void *handle, const struct iovec *value, size_t value_count)
   if (-1 == ca_file_buffer_writev (t->write_buffer, iov, value_count + 1))
     goto done;
 
+  t->read_map = MAP_FAILED;
+
   result = 0;
 
 done:
@@ -251,10 +256,53 @@ static int
 CA_log_seek (void *handle, off_t offset, int whence)
 {
   struct CA_log *t = handle;
+  off_t new_offset;
 
   ca_clear_error ();
 
-  return lseek (t->fd, offset, whence);
+  switch (whence)
+    {
+    case SEEK_SET:
+
+      new_offset = offset;
+
+      break;
+
+    case SEEK_CUR:
+
+      new_offset = t->offset + offset;
+
+      break;
+
+    case SEEK_END:
+
+      if (-1 == (new_offset = lseek (t->fd, 0, SEEK_END)))
+        {
+          ca_set_error ("lseek failed: %s", strerror (errno));
+
+          return -1;
+        }
+
+      break;
+
+    default:
+
+      assert (!"Invalid 'whence' value");
+      errno = EINVAL;
+
+      return -1;
+    }
+
+  if (new_offset < 0)
+    {
+      ca_set_error ("Attempt to seek before start of table");
+
+      return -1;
+    }
+
+  t->offset = new_offset;
+
+  return 0;
 }
 
 static int
@@ -279,23 +327,56 @@ CA_log_read_row (void *handle, struct iovec *value, size_t value_size)
   struct CA_log *t = handle;
   uint64_t size;
 
-  ssize_t ret;
-
   if (-1 == ca_file_buffer_flush (t->write_buffer))
     return -1;
 
-  if (sizeof (size) != (ret = pread (t->fd, &size, sizeof (size), t->offset)))
+  if (t->offset >= t->read_map_size)
     {
-      if (ret == 0)
+      void *new_map;
+      off_t new_map_size;
+
+      if (-1 == (new_map_size = lseek (t->fd, 0, SEEK_END)))
+        {
+          ca_set_error ("lseek failed: %s", strerror (errno));
+
+          return -1;
+        }
+
+      if (t->offset >= new_map_size)
         return 0;
 
-      if (ret == -1)
-        ca_set_error ("pread failed: %s", strerror (errno));
+      if (!t->read_map_size)
+        {
+          if (MAP_FAILED == (new_map = mmap (NULL, new_map_size, PROT_READ, MAP_SHARED, t->fd, 0)))
+            {
+              ca_set_error ("mmap failed: %s", strerror (errno));
+
+              return -1;
+            }
+        }
       else
-        ca_set_error ("Short pread while reading row header");
+        {
+          if (MAP_FAILED == (new_map = mremap (t->read_map, t->read_map_size,
+                                               new_map_size, MREMAP_MAYMOVE)))
+            {
+              ca_set_error ("mremap failed: %s", strerror (errno));
+
+              return -1;
+            }
+        }
+
+      t->read_map = new_map;
+      t->read_map_size = new_map_size;
+    }
+
+  if (t->offset + sizeof (size) > t->read_map_size)
+    {
+      ca_set_error ("Record truncated in header");
 
       return -1;
     }
+
+  memcpy (&size, t->read_map + t->offset, sizeof (size));
 
   if (!size || value_size < 1)
     {
@@ -306,26 +387,17 @@ CA_log_read_row (void *handle, struct iovec *value, size_t value_size)
       return 1;
     }
 
-  size -= sizeof (size);
-
-  /* XXX: Leak!  Use statement arena instead */
-
-  if (!(value[0].iov_base = safe_malloc (size)))
-    return -1;
-
-  value[0].iov_len = size;
-
-  if (size != (ret = pread (t->fd, value[0].iov_base, size, t->offset + sizeof (size))))
+  if (t->offset + size > t->read_map_size)
     {
-      if (ret == -1)
-        ca_set_error ("pread failed: %s", strerror (errno));
-      else
-        ca_set_error ("Short pread reading row data");
+      ca_set_error ("Record truncated");
 
       return -1;
     }
 
-  t->offset += size + sizeof (size);
+  value[0].iov_base = t->read_map + t->offset + sizeof (size);
+  value[0].iov_len = size - sizeof (size);
+
+  t->offset += size;
 
   return 1;
 }
@@ -347,6 +419,9 @@ CA_log_free (struct CA_log *t)
 
   if (t->fd != -1)
     close (t->fd);
+
+  if (t->read_map != MAP_FAILED)
+    munmap (t->read_map, t->read_map_size);
 
   free (t->path);
   free (t);

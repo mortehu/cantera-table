@@ -19,7 +19,6 @@
 #include <unistd.h>
 
 #include "ca-table.h"
-#include "io.h"
 #include "memory.h"
 
 #define MAGIC 0x6c6261742e692e70ULL

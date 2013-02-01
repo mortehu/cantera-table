@@ -19,7 +19,6 @@
 #include <unistd.h>
 
 #include "ca-table.h"
-#include "io.h"
 #include "memory.h"
 
 /*****************************************************************************/

@@ -24,7 +24,6 @@ libca_table_la_SOURCES = \
   expression-llvm.cc \
   fifo.c \
   functions.c \
-  io.c io.h \
   hashmap.c hashmap.h \
   merge.c \
   memory.c memory.h \

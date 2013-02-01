@@ -90,9 +90,9 @@ struct CA_log
   int fd;
   int open_flags;
 
-  off_t offset;
+  struct ca_file_buffer *write_buffer;
 
-  int failed;
+  off_t offset;
 };
 
 /*****************************************************************************/
@@ -131,6 +131,9 @@ CA_log_open (const char *path, int flags, mode_t mode)
 
       goto fail;
     }
+
+  if (!(result->write_buffer = ca_file_buffer_alloc (result->fd)))
+    goto fail;
 
   return result;
 
@@ -176,11 +179,12 @@ CA_log_sync (void *handle)
 {
   struct CA_log *t = handle;
 
+  if (-1 == ca_file_buffer_flush (t->write_buffer))
+    return -1;
+
   if (-1 == fdatasync (t->fd))
     {
       ca_set_error ("fdatasync failed: %s", strerror (errno));
-
-      t->failed = 1;
 
       return -1;
     }
@@ -216,16 +220,8 @@ CA_log_insert_row (void *handle, const struct iovec *value, size_t value_count)
 
   struct iovec *iov;
   uint64_t size = 0;
-  ssize_t ret;
 
-  off_t result = -1;
-
-  if (t->failed)
-    {
-      ca_set_error ("Cannot write to log table because a previous write failed");
-
-      return -1;
-    }
+  int result = -1;
 
   if (!(iov = safe_malloc ((value_count + 1) * sizeof (*iov))))
     return -1;
@@ -239,28 +235,10 @@ CA_log_insert_row (void *handle, const struct iovec *value, size_t value_count)
   iov[0].iov_len = sizeof (size);
   memcpy (iov + 1, value, value_count * sizeof (*iov));
 
-
-  if (size != (ret = writev (t->fd, iov, value_count + 1)))
-    {
-      if (ret == -1)
-        ca_set_error ("writev failed: %s", strerror (errno));
-      else
-        ca_set_error ("Short writev; atomicity cannot be guaranteed");
-
-      t->failed = 1;
-
-      goto done;
-    }
-
-  /* Get offset after writev, since we're using O_APPEND and writev may seek
-   * before writing */
-
-  if (-1 == (result = lseek (t->fd, 0, SEEK_CUR)))
+  if (-1 == ca_file_buffer_writev (t->write_buffer, iov, value_count + 1))
     goto done;
 
-  assert (result >= size);
-
-  result -= size;
+  result = 0;
 
 done:
 
@@ -302,6 +280,9 @@ CA_log_read_row (void *handle, struct iovec *value, size_t value_size)
   uint64_t size;
 
   ssize_t ret;
+
+  if (-1 == ca_file_buffer_flush (t->write_buffer))
+    return -1;
 
   if (sizeof (size) != (ret = pread (t->fd, &size, sizeof (size), t->offset)))
     {
@@ -362,6 +343,8 @@ CA_log_delete_row (void *handle)
 static void
 CA_log_free (struct CA_log *t)
 {
+  ca_file_buffer_flush (t->write_buffer);
+
   if (t->fd != -1)
     close (t->fd);
 

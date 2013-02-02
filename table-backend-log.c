@@ -413,7 +413,7 @@ CA_log_delete_row (void *handle)
 static void
 CA_log_free (struct CA_log *t)
 {
-  ca_file_buffer_flush (t->write_buffer);
+  ca_file_buffer_free (t->write_buffer);
 
   if (t->fd != -1)
     close (t->fd);

@@ -43,6 +43,12 @@ ca_set_error (const char *format, ...);
 
 /*****************************************************************************/
 
+#define CA_INVALID_XID ((uint64_t) -1)
+
+extern uint64_t ca_xid; /* The current transaction ID */
+
+/*****************************************************************************/
+
 enum ca_type
 {
   CA_INVALID            = -1,

@@ -3,6 +3,10 @@
 #include "ca-table.h"
 #include "memory.h"
 
+uint64_t ca_xid;
+
+/*****************************************************************************/
+
 extern struct ca_table_backend CA_table_log;
 extern struct ca_table_backend CA_table_writeonce;
 

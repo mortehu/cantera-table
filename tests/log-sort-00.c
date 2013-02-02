@@ -61,6 +61,30 @@ main (int argc, char **argv)
   if (-1 == ca_table_sync (table_A))
     goto fail;
 
+  if (-1 == ca_table_seek (table_A, 0, SEEK_SET))
+    goto fail;
+
+  /* Check that we can read back what we just wrote */
+  for (i = 0; i < WORD_COUNT; ++i)
+    {
+      const char *key;
+
+      if (-1 == (ret = ca_table_read_row (table_A, value, sizeof (value) / sizeof (value[0]))))
+        goto fail;
+
+      assert (ret <= sizeof (value) / sizeof (value[0]));
+      assert (ret == 1); /* ret == 1 is also valid -- learn to deal with it */
+
+      key = value[0].iov_base;
+
+      if (strcmp (key, words[i]))
+        {
+          ca_set_error ("Key at offset %zu is %s, expected %s", i, key, words[i]);
+
+          goto fail;
+        }
+    }
+
   if (!(table_B = ca_table_open ("log", tmp_path_B, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0666)))
     goto fail;
 

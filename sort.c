@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 struct CA_sort_entry
 {
@@ -36,7 +35,7 @@ ca_table_sort (struct ca_table *output, struct ca_table *input)
   for (;;)
     {
       if (sorted_entry_count == sorted_entry_alloc
-          && -1 == ARRAY_GROW (&sorted_entries, &sorted_entry_alloc))
+          && -1 == CA_ARRAY_GROW (&sorted_entries, &sorted_entry_alloc))
         return -1;
 
       ret = ca_table_read_row (input,

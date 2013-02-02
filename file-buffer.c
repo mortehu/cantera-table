@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 #define BUFFER_SIZE (1024 * 1024)
 
@@ -22,7 +21,7 @@ ca_file_buffer_alloc (int fd)
 
   alloc_size = offsetof (struct ca_file_buffer, data) + BUFFER_SIZE;
 
-  if (!(result = safe_malloc (alloc_size)))
+  if (!(result = ca_malloc (alloc_size)))
     return NULL;
 
   result->fill = 0;
@@ -66,7 +65,7 @@ ca_file_buffer_writev (struct ca_file_buffer *buffer,
     {
       ssize_t ret, expected = 0;
 
-      if (!(write_iov = safe_malloc (sizeof (*iov) * (count + 1))))
+      if (!(write_iov = ca_malloc (sizeof (*iov) * (count + 1))))
         return -1;
 
       if (buffer->fill)

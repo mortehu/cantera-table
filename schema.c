@@ -11,7 +11,6 @@
 #include <unistd.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 struct schema_table
 {
@@ -41,22 +40,22 @@ CA_schema_create (struct ca_schema *schema, const char *path)
   int result = -1;
 
   if (schema->table_count == schema->table_alloc
-      && -1 == ARRAY_GROW (&schema->tables, &schema->table_alloc))
+      && -1 == CA_ARRAY_GROW (&schema->tables, &schema->table_alloc))
     goto fail;
 
   schema->table_count = 2;
 
-  if (!(schema->tables[0].name = safe_strdup ("ca_catalog.ca_tables")))
+  if (!(schema->tables[0].name = ca_strdup ("ca_catalog.ca_tables")))
     goto fail;
 
-  if (!(schema->tables[0].backend = safe_strdup ("write-once")))
+  if (!(schema->tables[0].backend = ca_strdup ("write-once")))
     goto fail;
 
   if (-1 == asprintf (&schema->tables[0].declaration.path, "%s/ca_catalog.ca_tables", path))
     goto fail;
 
   schema->tables[0].declaration.field_count = 3;
-  if (!(schema->tables[0].declaration.fields = safe_malloc (3 * sizeof (struct ca_field))))
+  if (!(schema->tables[0].declaration.fields = ca_malloc (3 * sizeof (struct ca_field))))
     goto fail;
 
   strcpy (schema->tables[0].declaration.fields[0].name, "table_name");
@@ -71,17 +70,17 @@ CA_schema_create (struct ca_schema *schema, const char *path)
   schema->tables[0].declaration.fields[2].flags = CA_FIELD_NOT_NULL;
   schema->tables[0].declaration.fields[2].type = CA_TEXT;
 
-  if (!(schema->tables[1].name = safe_strdup ("ca_catalog.ca_columns")))
+  if (!(schema->tables[1].name = ca_strdup ("ca_catalog.ca_columns")))
     goto fail;
 
-  if (!(schema->tables[1].backend = safe_strdup ("write-once")))
+  if (!(schema->tables[1].backend = ca_strdup ("write-once")))
     goto fail;
 
   if (-1 == asprintf (&schema->tables[1].declaration.path, "%s/ca_catalog.ca_columns", path))
     goto fail;
 
   schema->tables[1].declaration.field_count = 5;
-  if (!(schema->tables[1].declaration.fields = safe_malloc (5 * sizeof (struct ca_field))))
+  if (!(schema->tables[1].declaration.fields = ca_malloc (5 * sizeof (struct ca_field))))
     goto fail;
 
   strcpy (schema->tables[1].declaration.fields[0].name, "table_name");
@@ -135,10 +134,10 @@ ca_schema_load (const char *path)
       return NULL;
     }
 
-  if (!(result = safe_malloc (sizeof (*result))))
+  if (!(result = ca_malloc (sizeof (*result))))
     return NULL;
 
-  if (!(result->path = safe_strdup (path)))
+  if (!(result->path = ca_strdup (path)))
     goto fail;
 
   if (-1 == asprintf (&ca_tables_path, "%s/ca_catalog.ca_tables", path))
@@ -184,23 +183,23 @@ ca_schema_load (const char *path)
         }
 
       if (result->table_count == result->table_alloc
-          && -1 == ARRAY_GROW (&result->tables, &result->table_alloc))
+          && -1 == CA_ARRAY_GROW (&result->tables, &result->table_alloc))
         goto fail;
 
       table = &result->tables[result->table_count++];
       memset (table, 0, sizeof (*table));
 
-      if (!(table->name = safe_strdup (value[0].iov_base)))
+      if (!(table->name = ca_strdup (value[0].iov_base)))
         goto fail;
 
       tmp = value[1].iov_base;
 
-      if (!(table->declaration.path = safe_strdup (tmp)))
+      if (!(table->declaration.path = ca_strdup (tmp)))
         goto fail;
 
       tmp = strchr (tmp, 0) + 1;
 
-      if (!(table->backend = safe_strdup (tmp)))
+      if (!(table->backend = ca_strdup (tmp)))
         goto fail;
 
       tmp = strchr (tmp, 0) + 1;
@@ -411,25 +410,25 @@ ca_schema_create_table (struct ca_schema *schema, const char *name,
     }
 
   if (schema->table_count == schema->table_alloc
-      && -1 == ARRAY_GROW (&schema->tables, &schema->table_alloc))
+      && -1 == CA_ARRAY_GROW (&schema->tables, &schema->table_alloc))
     return -1;
 
   table = &schema->tables[schema->table_count];
 
   memset (table, 0, sizeof (*table));
 
-  if (!(table->name = safe_strdup (name)))
+  if (!(table->name = ca_strdup (name)))
     goto fail;
 
-  if (!(table->declaration.path = safe_strdup (declaration->path)))
+  if (!(table->declaration.path = ca_strdup (declaration->path)))
     goto fail;
 
-  if (!(table->backend = safe_strdup ("write-once")))
+  if (!(table->backend = ca_strdup ("write-once")))
     goto fail;
 
   table->declaration.field_count = declaration->field_count;
 
-  if (!(table->declaration.fields = safe_memdup (declaration->fields, sizeof (struct ca_field) * declaration->field_count)))
+  if (!(table->declaration.fields = ca_memdup (declaration->fields, sizeof (struct ca_field) * declaration->field_count)))
     goto fail;
 
   ++schema->table_count;

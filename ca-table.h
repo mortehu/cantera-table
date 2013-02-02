@@ -227,6 +227,23 @@ ca_table_delete_row (struct ca_table *table) CA_USE_RESULT;
 
 /*****************************************************************************/
 
+void *
+ca_malloc (size_t size) CA_USE_RESULT;
+
+void *
+ca_memdup (const void *data, size_t size) CA_USE_RESULT;
+
+char *
+ca_strdup (const char *string) CA_USE_RESULT;
+
+int
+ca_array_grow (void **array, size_t *alloc, size_t element_size) CA_USE_RESULT;
+
+#define CA_ARRAY_GROW(array, alloc) \
+  ca_array_grow ((void **) (array), alloc, sizeof(**(array)))
+
+/*****************************************************************************/
+
 struct ca_fifo;
 
 struct ca_fifo *

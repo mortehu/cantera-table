@@ -8,10 +8,10 @@
 #include <err.h>
 #include <sysexits.h>
 
-#include "memory.h"
+#include "ca-table.h"
 
 void *
-safe_malloc (size_t size)
+ca_malloc (size_t size)
 {
   void *result;
 
@@ -28,7 +28,7 @@ safe_malloc (size_t size)
 }
 
 void *
-safe_memdup (const void *data, size_t size)
+ca_memdup (const void *data, size_t size)
 {
   void *result;
 
@@ -45,13 +45,13 @@ safe_memdup (const void *data, size_t size)
 }
 
 char *
-safe_strdup (const char *string)
+ca_strdup (const char *string)
 {
-  return safe_memdup (string, strlen (string) + 1);
+  return ca_memdup (string, strlen (string) + 1);
 }
 
 int
-array_grow (void **array, size_t *alloc, size_t element_size)
+ca_array_grow (void **array, size_t *alloc, size_t element_size)
 {
   size_t new_alloc;
   void *new_array;

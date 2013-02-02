@@ -1,7 +1,6 @@
 #include <string.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 struct CA_merge_heap
 {
@@ -124,7 +123,7 @@ ca_table_merge (struct ca_table **tables, size_t table_count,
 
   int result = -1;
 
-  if (!(heap = safe_malloc (sizeof (*heap) * table_count)))
+  if (!(heap = ca_malloc (sizeof (*heap) * table_count)))
     goto done;
 
   for (i = 0; i < table_count; ++i)

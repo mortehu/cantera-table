@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 #define HASHMAP_REBUILD_NOM 4
 #define HASHMAP_REBUILD_DEN 3
@@ -132,7 +131,7 @@ ca_hashmap_insert (struct ca_hashmap *map, const char *key, void *value)
       return -1;
     }
 
-  if (!(node->key = safe_strdup (key)))
+  if (!(node->key = ca_strdup (key)))
     return -1;
 
   node->value.pointer = value;
@@ -151,7 +150,7 @@ ca_hashmap_insert_int (struct ca_hashmap *map, const char *key, int64_t value)
 
   if (!node->key)
     {
-      if (!(node->key = safe_strdup (key)))
+      if (!(node->key = ca_strdup (key)))
         return -1;
 
       ++map->size;

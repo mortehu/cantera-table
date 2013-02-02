@@ -19,7 +19,6 @@
 #include <unistd.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 #define MAGIC 0x6c6261742e692e70ULL
 #define MAJOR_VERSION 1
@@ -155,14 +154,14 @@ CA_wo_open (const char *path, int flags, mode_t mode)
 {
   struct CA_wo *result;
 
-  if (!(result = safe_malloc (sizeof (*result))))
+  if (!(result = ca_malloc (sizeof (*result))))
     return NULL;
 
   result->fd = -1;
   result->buffer = MAP_FAILED;
   result->open_flags = flags;
 
-  if (!(result->path = safe_strdup (path)))
+  if (!(result->path = ca_strdup (path)))
     goto fail;
 
   if (flags & O_CREAT)
@@ -302,7 +301,7 @@ CA_wo_sync (void *handle)
 
   /* Add end pointer for convenience when calculating entry sizes later */
   if (t->entry_count == t->entry_alloc
-      && -1 == ARRAY_GROW (&t->entries, &t->entry_alloc))
+      && -1 == CA_ARRAY_GROW (&t->entries, &t->entry_alloc))
     return -1;
 
   t->entries[t->entry_count] = header.index_offset;
@@ -416,7 +415,7 @@ CA_wo_insert_row (void *handle,
   int cmp = 1;
 
   if (t->entry_alloc == t->entry_count
-      && -1 == ARRAY_GROW (&t->entries, &t->entry_alloc))
+      && -1 == CA_ARRAY_GROW (&t->entries, &t->entry_alloc))
     return -1;
 
   key = value[0].iov_base;
@@ -432,7 +431,7 @@ CA_wo_insert_row (void *handle,
     }
 
   free (t->prev_key);
-  t->prev_key = safe_strdup (key);
+  t->prev_key = ca_strdup (key);
 
   t->entries[t->entry_count++] = t->write_offset;
 

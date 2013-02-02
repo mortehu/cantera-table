@@ -2,7 +2,6 @@
 #include <string.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 static size_t
 CA_partition (struct ca_offset_score *data, size_t count, size_t pivot_index)
@@ -145,7 +144,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
 
   ca_clear_error ();
 
-  if (!(query_buf = safe_strdup (query)))
+  if (!(query_buf = ca_strdup (query)))
     goto done;
 
   if (!(index_table = ca_schema_table (schema, index_table_name, &index_declaration)))

@@ -1,7 +1,6 @@
 #include <string.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 uint64_t ca_xid;
 
@@ -44,7 +43,7 @@ ca_table_open (const char *backend_name,
 {
   struct ca_table *result;
 
-  if (!(result = safe_malloc (sizeof (*result))))
+  if (!(result = ca_malloc (sizeof (*result))))
     return NULL;
 
   if (!(result->backend = ca_table_backend (backend_name)))

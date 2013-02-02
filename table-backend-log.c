@@ -19,7 +19,6 @@
 #include <unistd.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 /*****************************************************************************/
 
@@ -119,13 +118,13 @@ CA_log_open (const char *path, int flags, mode_t mode)
       return NULL;
     }
 
-  if (!(result = safe_malloc (sizeof (*result))))
+  if (!(result = ca_malloc (sizeof (*result))))
     return NULL;
 
   result->fd = -1;
   result->open_flags = flags;
 
-  if (!(result->path = safe_strdup (path)))
+  if (!(result->path = ca_strdup (path)))
     goto fail;
 
   if (-1 == (result->fd = open (path, flags, mode)))
@@ -226,7 +225,7 @@ CA_log_insert_row (void *handle, const struct iovec *value, size_t value_count)
 
   int result = -1;
 
-  if (!(iov = safe_malloc ((value_count + 1) * sizeof (*iov))))
+  if (!(iov = ca_malloc ((value_count + 1) * sizeof (*iov))))
     return -1;
 
   for (i = 0; i < value_count; ++i)

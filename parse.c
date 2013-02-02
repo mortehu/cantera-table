@@ -8,7 +8,6 @@
 #include <sysexits.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 uint64_t
 ca_parse_integer (const uint8_t **input)
@@ -88,7 +87,7 @@ ca_parse_offset_score (const uint8_t **input,
   type = *p++;
   *count = ca_parse_integer (&p);
 
-  if (!(*sample_values = safe_malloc (sizeof (**sample_values) * *count)))
+  if (!(*sample_values = ca_malloc (sizeof (**sample_values) * *count)))
     return -1;
 
   switch (type)

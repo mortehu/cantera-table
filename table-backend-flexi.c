@@ -98,6 +98,8 @@ struct CA_flexi
   int fd;
   int open_flags;
 
+  struct ca_file_buffer *write_buffer;
+
   uint8_t *map;
   off_t map_size;
 
@@ -119,6 +121,15 @@ CA_flexi_open (const char *path, int flags, mode_t mode)
 {
   struct CA_flexi *result;
 
+  if (((flags & O_RDWR) == O_RDWR
+       || (flags & O_WRONLY) == O_WRONLY)
+      && ((flags & O_APPEND) != O_APPEND))
+    {
+      ca_set_error ("O_RDWR and O_WRONLY only allowed with O_APPEND");
+
+      return NULL;
+    }
+
   if (!(result = safe_malloc (sizeof (*result))))
     return NULL;
 
@@ -134,6 +145,9 @@ CA_flexi_open (const char *path, int flags, mode_t mode)
 
       goto fail;
     }
+
+  if (!(result->write_buffer = ca_file_buffer_alloc (result->fd)))
+    goto fail;
 
   return result;
 
@@ -179,10 +193,12 @@ CA_flexi_sync (void *handle)
 {
   struct CA_flexi *t = handle;
 
-  if (t->map_size
-      && -1 == msync (t->map, t->map_size, MS_SYNC))
+  if (-1 == ca_file_buffer_flush (t->write_buffer))
+    return -1;
+
+  if (-1 == fdatasync (t->fd))
     {
-      ca_set_error ("msync failed: %s", strerror (errno));
+      ca_set_error ("fdatasync failed: %s", strerror (errno));
 
       return -1;
     }
@@ -215,9 +231,17 @@ CA_flexi_insert_row (void *handle, const struct iovec *value, size_t value_count
 {
   struct CA_flexi *t = handle;
   size_t i;
-  struct CA_flexi_row_header header;
 
-  off_t write_offset, new_map_size;
+  struct CA_flexi_row_header header;
+  char padding[7];
+
+  struct iovec *iov;
+  size_t iov_count;
+
+  int result = -1;
+
+  if (!(iov = safe_malloc ((value_count + 2) * sizeof (*iov))))
+    return -1;
 
   header.insert_xid = ca_xid;
   header.delete_xid = CA_INVALID_XID;
@@ -227,38 +251,30 @@ CA_flexi_insert_row (void *handle, const struct iovec *value, size_t value_count
   for (i = 0; i < value_count; ++i)
     header.size += value[i].iov_len;
 
-  if (-1 == (write_offset = lseek (t->fd, 0, SEEK_END)))
-    {
-      ca_set_error ("lseek failed: %s", strerror (errno));
+  iov[0].iov_base = &header;
+  iov[0].iov_len = sizeof (header);
+  memcpy (iov + 1, value, value_count * sizeof (*iov));
+  iov_count = value_count + 1;
 
-      return -1;
+  if (0 != (header.size & 7))
+    {
+      memset (padding, 0xfe, 7);
+
+      iov[iov_count].iov_base = padding;
+      iov[iov_count].iov_len = 8 - (header.size & 7);
+      ++iov_count;
     }
 
-  /* Align to 8 byte boundary */
-  write_offset = (write_offset + 7) & ~7;
+  if (-1 == ca_file_buffer_writev (t->write_buffer, iov, iov_count))
+    goto done;
 
-  new_map_size = write_offset + sizeof (header) + header.size;
+  result = 0;
 
-  if (-1 == ftruncate (t->fd, new_map_size))
-    {
-      ca_set_error ("ftruncate failed: %s", strerror (errno));
+done:
 
-      return -1;
-    }
+  free (iov);
 
-  if (-1 == CA_flexi_remap (t, new_map_size))
-    return -1;
-
-  memcpy (t->map + write_offset, &header, sizeof (header));
-  write_offset += sizeof (header);
-
-  for (i = 0; i < value_count; ++i)
-    {
-      memcpy (t->map + write_offset, value[i].iov_base, value[i].iov_len);
-      write_offset += value[i].iov_len;
-    }
-
-  return 0;
+  return result;
 }
 
 static int
@@ -336,6 +352,9 @@ CA_flexi_read_row (void *handle, struct iovec *value, size_t value_size)
   struct CA_flexi *t = handle;
   const struct CA_flexi_row_header *header = NULL;
 
+  if (-1 == ca_file_buffer_flush (t->write_buffer))
+    return -1;
+
   /* Loop until we find a record visible in the current transaction */
   for (;;)
     {
@@ -408,6 +427,9 @@ CA_flexi_delete_row (void *handle)
 {
   struct CA_flexi *t = handle;
   struct CA_flexi_row_header *header = NULL;
+
+  if (-1 == ca_file_buffer_flush (t->write_buffer))
+    return -1;
 
   /* Align to 8 byte boundary */
   t->offset = (t->offset + 7) & ~7;
@@ -494,6 +516,8 @@ CA_flexi_remap (struct CA_flexi *t, off_t new_map_size)
 static void
 CA_flexi_free (struct CA_flexi *t)
 {
+  ca_file_buffer_free (t->write_buffer);
+
   if (t->fd != -1)
     close (t->fd);
 

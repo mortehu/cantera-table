@@ -241,8 +241,6 @@ CA_log_insert_row (void *handle, const struct iovec *value, size_t value_count)
   if (-1 == ca_file_buffer_writev (t->write_buffer, iov, value_count + 1))
     goto done;
 
-  t->read_map = MAP_FAILED;
-
   result = 0;
 
 done:
@@ -420,7 +418,7 @@ CA_log_free (struct CA_log *t)
   if (t->fd != -1)
     close (t->fd);
 
-  if (t->read_map != MAP_FAILED)
+  if (t->read_map_size)
     munmap (t->read_map, t->read_map_size);
 
   free (t->path);

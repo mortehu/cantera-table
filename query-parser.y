@@ -92,7 +92,7 @@ statement
         stmt->from = "ca_catalog.ca_tables";
 
         if (-1 == CA_select (context->schema, stmt))
-          fprintf (stderr, "Error: %s\n", ca_last_error ());
+          context->error = 1;
       }
     | CREATE TABLE Identifier '(' createTableArgs ')' WITH '(' PATH '=' StringLiteral ')'
       {
@@ -135,7 +135,7 @@ statement
     | QUERY StringLiteral WITH '(' INDEX '=' Identifier ',' SUMMARY '=' Identifier ')' limitClause
       {
         if (-1 == ca_schema_query (context->schema, $2, $7, $11, $13))
-          fprintf (stderr, "Error: %s\n", ca_last_error ());
+          context->error = 1;
       }
     | SELECT selectList FROM Identifier whereClause
       {
@@ -146,7 +146,7 @@ statement
         stmt->where = $5;
 
         if (-1 == CA_select (context->schema, stmt))
-          fprintf (stderr, "Error: %s\n", ca_last_error ());
+          context->error = 1;
       }
     ;
 

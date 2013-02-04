@@ -24,7 +24,6 @@
 #include <pthread.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 /* Limitations of this implementation:
  *
@@ -52,7 +51,7 @@ ca_fifo_create (size_t size)
 {
   struct ca_fifo *result;
 
-  if (!(result = safe_malloc (offsetof (struct ca_fifo, data) + size)))
+  if (!(result = ca_malloc (offsetof (struct ca_fifo, data) + size)))
     return NULL;
 
   pthread_cond_init (&result->fill_available, NULL);

@@ -1,9 +1,10 @@
 #include <assert.h>
 #include <math.h>
+#include <stdint.h>
 #include <string.h>
 
 #include "ca-functions.h"
-#include "memory.h"
+#include "ca-table.h"
 
 #define POW2(x) ((x) * (x))
 
@@ -93,10 +94,10 @@ ca_stats_rank_correlation (const float *values, size_t count)
 
   float result = -2.0;
 
-  if (!(sorted_values = safe_malloc (sizeof (*sorted_values) * count)))
+  if (!(sorted_values = ca_malloc (sizeof (*sorted_values) * count)))
     goto fail;
 
-  if (!(ranks = safe_malloc (sizeof (*ranks) * count)))
+  if (!(ranks = ca_malloc (sizeof (*ranks) * count)))
     goto fail;
 
   /* XXX: The rank can be stored directly into an array instead of being looked

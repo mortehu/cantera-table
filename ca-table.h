@@ -43,6 +43,12 @@ ca_set_error (const char *format, ...);
 
 /*****************************************************************************/
 
+#define CA_INVALID_XID ((uint64_t) -1)
+
+extern uint64_t ca_xid; /* The current transaction ID */
+
+/*****************************************************************************/
+
 enum ca_type
 {
   CA_INVALID            = -1,
@@ -142,7 +148,7 @@ struct ca_table_backend
   int
   (*is_sorted) (void *handle);
 
-  off_t
+  int
   (*insert_row) (void *handle, const struct iovec *value, size_t value_count);
 
   int
@@ -194,7 +200,7 @@ ca_table_set_flag (struct ca_table *table, enum ca_table_flag flag);
 int
 ca_table_is_sorted (struct ca_table *table) CA_USE_RESULT;
 
-off_t
+int
 ca_table_insert_row (struct ca_table *table,
                      const struct iovec *value, size_t value_count) CA_USE_RESULT;
 
@@ -221,6 +227,23 @@ ca_table_delete_row (struct ca_table *table) CA_USE_RESULT;
 
 /*****************************************************************************/
 
+void *
+ca_malloc (size_t size) CA_USE_RESULT;
+
+void *
+ca_memdup (const void *data, size_t size) CA_USE_RESULT;
+
+char *
+ca_strdup (const char *string) CA_USE_RESULT;
+
+int
+ca_array_grow (void **array, size_t *alloc, size_t element_size) CA_USE_RESULT;
+
+#define CA_ARRAY_GROW(array, alloc) \
+  ca_array_grow ((void **) (array), alloc, sizeof(**(array)))
+
+/*****************************************************************************/
+
 struct ca_fifo;
 
 struct ca_fifo *
@@ -234,6 +257,27 @@ ca_fifo_put (struct ca_fifo *fifo, const void *data, size_t size);
 
 void
 ca_fifo_get (struct ca_fifo *fifo, void *data, size_t size);
+
+/*****************************************************************************/
+
+struct ca_file_buffer;
+
+struct ca_file_buffer *
+ca_file_buffer_alloc (int fd);
+
+void
+ca_file_buffer_free (struct ca_file_buffer *buffer);
+
+int
+ca_file_buffer_write (struct ca_file_buffer *buffer,
+                      const void *buf, size_t count);
+
+int
+ca_file_buffer_writev (struct ca_file_buffer *buffer,
+                       const struct iovec *iov, int count);
+
+int
+ca_file_buffer_flush (struct ca_file_buffer *buffer);
 
 /*****************************************************************************/
 

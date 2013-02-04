@@ -21,7 +21,6 @@
 #include <string.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 static size_t
 CA_partition (struct ca_offset_score *data, size_t count, size_t pivot_index)
@@ -73,14 +72,14 @@ ca_quicksort (struct ca_offset_score *data, size_t count)
 }
 
 static size_t
-CA_subtract_offsets (struct ca_offset_score *output,
-                     const struct ca_offset_score *lhs, size_t lhs_count,
+CA_subtract_offsets (struct ca_offset_score *lhs, size_t lhs_count,
                      const struct ca_offset_score *rhs, size_t rhs_count)
 {
-  struct ca_offset_score *o;
+  struct ca_offset_score *output, *o;
   const struct ca_offset_score *lhs_end, *rhs_end;
 
-  o = output;
+  output = o = lhs;
+
   lhs_end = lhs + lhs_count;
   rhs_end = rhs + rhs_count;
 
@@ -107,14 +106,14 @@ CA_subtract_offsets (struct ca_offset_score *output,
 }
 
 static size_t
-CA_intersect_offsets (struct ca_offset_score *output,
-                      const struct ca_offset_score *lhs, size_t lhs_count,
+CA_intersect_offsets (struct ca_offset_score *lhs, size_t lhs_count,
                       const struct ca_offset_score *rhs, size_t rhs_count)
 {
-  struct ca_offset_score *o;
+  struct ca_offset_score *output, *o;
   const struct ca_offset_score *lhs_end, *rhs_end;
 
-  o = output;
+  output = o = lhs;
+
   lhs_end = lhs + lhs_count;
   rhs_end = rhs + rhs_count;
 
@@ -122,9 +121,7 @@ CA_intersect_offsets (struct ca_offset_score *output,
     {
       if (lhs->offset == rhs->offset)
         {
-          o->offset = lhs->offset;
-          o->score = lhs->score;
-          ++o;
+          *o++ = *lhs;
 
           ++lhs;
           ++rhs;
@@ -166,7 +163,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
 
   ca_clear_error ();
 
-  if (!(query_buf = safe_strdup (query)))
+  if (!(query_buf = ca_strdup (query)))
     goto done;
 
   if (!(index_table = ca_schema_table (schema, index_table_name, &index_declaration)))
@@ -263,36 +260,18 @@ ca_schema_query (struct ca_schema *schema, const char *query,
         }
       else
         {
-          struct ca_offset_score *merged_offsets;
-          size_t merged_offset_count;
-          size_t max_merged_size;
-
-          if (subtract)
-            max_merged_size = offset_count;
-          else
-            max_merged_size = (token_offset_count > offset_count) ? offset_count : token_offset_count;
-
-          if (!(merged_offsets = safe_malloc (sizeof (*merged_offsets) * max_merged_size)))
-            goto done;
-
           if (subtract)
             {
-              merged_offset_count = CA_subtract_offsets (merged_offsets,
-                                                         offsets, offset_count,
-                                                         token_offsets, token_offset_count);
+              offset_count = CA_subtract_offsets (offsets, offset_count,
+                                                  token_offsets, token_offset_count);
             }
           else
             {
-              merged_offset_count = CA_intersect_offsets (merged_offsets,
-                                                          offsets, offset_count,
-                                                          token_offsets, token_offset_count);
+              offset_count = CA_intersect_offsets (offsets, offset_count,
+                                                   token_offsets, token_offset_count);
             }
 
-          free (offsets);
           free (token_offsets);
-
-          offsets = merged_offsets;
-          offset_count = merged_offset_count;
         }
     }
 

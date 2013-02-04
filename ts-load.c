@@ -20,7 +20,6 @@
 #include <unistd.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 static int print_version;
 static int print_help;
@@ -82,7 +81,7 @@ parse_data (const char *begin, const char *end)
         case parse_key:
 
           if (key_length == key_alloc
-              && -1 == ARRAY_GROW (&key, &key_alloc))
+              && -1 == CA_ARRAY_GROW (&key, &key_alloc))
             errx (EXIT_FAILURE, "%s", ca_last_error ());
 
           if (*begin == delimiter)
@@ -105,7 +104,7 @@ parse_data (const char *begin, const char *end)
         case parse_date:
 
           if (date_length == date_alloc
-              && -1 == ARRAY_GROW (&date, &date_alloc))
+              && -1 == CA_ARRAY_GROW (&date, &date_alloc))
             errx (EXIT_FAILURE, "%s", ca_last_error ());
 
           if (*begin == delimiter)
@@ -143,7 +142,7 @@ parse_data (const char *begin, const char *end)
             continue;
 
           if (value_length == value_alloc
-              && -1 == ARRAY_GROW (&value, &value_alloc))
+              && -1 == CA_ARRAY_GROW (&value, &value_alloc))
             errx (EXIT_FAILURE, "%s", ca_last_error ());
 
           if (*begin == '\n')

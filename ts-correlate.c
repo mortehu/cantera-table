@@ -14,7 +14,6 @@
 #include <sysexits.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 static int print_version;
 static int print_help;
@@ -231,7 +230,7 @@ main (int argc, char **argv)
       for (i = 0; i < count; ++i)
         {
           if (sample_count == sample_alloc)
-            ARRAY_GROW (&samples, &sample_alloc);
+            CA_ARRAY_GROW (&samples, &sample_alloc);
 
           samples[sample_count].time = start_time + i * interval;
           samples[sample_count].value = sample_values[i];
@@ -241,8 +240,8 @@ main (int argc, char **argv)
       last_time = start_time;
     }
 
-  samples_lhs = safe_malloc (sizeof (*samples_lhs) * sample_count);
-  samples_rhs = safe_malloc (sizeof (*samples_rhs) * sample_count);
+  samples_lhs = ca_malloc (sizeof (*samples_lhs) * sample_count);
+  samples_rhs = ca_malloc (sizeof (*samples_rhs) * sample_count);
 
   ca_table_iterate (table, data_callback, TABLE_ORDER_PHYSICAL, NULL);
 

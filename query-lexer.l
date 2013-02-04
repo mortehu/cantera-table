@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "arena.h"
-#include "memory.h"
 #include "query-parser.h"
 #include "query.h"
 
@@ -153,7 +152,7 @@ stringliteral(yyscan_t yyscanner)
         }
 
       if (result_size == result_alloc
-          && -1 == ARRAY_GROW (&result, &result_alloc))
+          && -1 == CA_ARRAY_GROW (&result, &result_alloc))
         {
           goto fail;
         }

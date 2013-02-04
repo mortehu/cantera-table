@@ -22,8 +22,8 @@ main (int argc, char **argv)
 
   int result = EXIT_FAILURE;
 
-  sprintf (tmp_path_A, "/tmp/log-sort-00.tmp.XXXXXX");
-  sprintf (tmp_path_B, "/tmp/log-sort-00.tmp.XXXXXX");
+  sprintf (tmp_path_A, "/tmp/flexi-sort-00.tmp.XXXXXX");
+  sprintf (tmp_path_B, "/tmp/flexi-sort-00.tmp.XXXXXX");
 
   if (-1 == (fd = mkstemp (tmp_path_A)))
     {
@@ -43,7 +43,7 @@ main (int argc, char **argv)
 
   close (fd); /* We don't need it */
 
-  if (!(table_A = ca_table_open ("log", tmp_path_A, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0666)))
+  if (!(table_A = ca_table_open ("flexi", tmp_path_A, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0666)))
     goto fail;
 
   for (i = 0; i < WORD_COUNT; ++i)
@@ -69,6 +69,15 @@ main (int argc, char **argv)
     {
       const char *key;
 
+      /* Delete all odd-numbered rows */
+      if (i & 1)
+        {
+          if (-1 == ca_table_delete_row (table_A))
+            goto fail;
+
+          continue;
+        }
+
       if (-1 == (ret = ca_table_read_row (table_A, value, sizeof (value) / sizeof (value[0]))))
         goto fail;
 
@@ -83,9 +92,11 @@ main (int argc, char **argv)
 
           goto fail;
         }
+
+      assert (value[0].iov_len + strlen (key) + 1 + sizeof (size_t));
     }
 
-  if (!(table_B = ca_table_open ("log", tmp_path_B, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0666)))
+  if (!(table_B = ca_table_open ("flexi", tmp_path_B, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0666)))
     goto fail;
 
   if (-1 == ca_table_sort (table_B, table_A))
@@ -120,6 +131,8 @@ main (int argc, char **argv)
 
       assert (end - begin == sizeof (i));
       memcpy (&i, begin, sizeof (i));
+
+      assert (!(i & 1)); /* Odd numbered rows were deleted earlier */
 
       assert (!strcmp (words[i], key));
 

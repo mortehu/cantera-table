@@ -13,7 +13,6 @@
 #include <sysexits.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 static int print_version;
 static int print_help;

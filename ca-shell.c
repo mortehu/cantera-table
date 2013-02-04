@@ -57,7 +57,6 @@ extern int read_history ();
 #endif
 
 #include "ca-table.h"
-#include "memory.h"
 #include "query.h"
 
 static const char *schema_path = "/data/tables";
@@ -154,7 +153,7 @@ main (int argc, char **argv)
               /* Perform this check before the EOL check to make room for
                * terminating NUL */
               if (line_length == line_alloc)
-                ARRAY_GROW (&line, &line_alloc);
+                CA_ARRAY_GROW (&line, &line_alloc);
 
               if (ch == '\n')
                 break;

@@ -24,7 +24,6 @@
 #include <string.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 #define MAX_HEADER_SIZE 64
 
@@ -97,7 +96,7 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 
   target_alloc = 32;
 
-  if (!(target = safe_malloc (target_alloc)))
+  if (!(target = ca_malloc (target_alloc)))
     return -1;
 
   o = target;
@@ -111,7 +110,7 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 
       if (target_size + 16 > target_alloc)
         {
-          if (-1 == ARRAY_GROW (&target, &target_alloc))
+          if (-1 == CA_ARRAY_GROW (&target, &target_alloc))
             goto done;
 
           o = target + target_size;

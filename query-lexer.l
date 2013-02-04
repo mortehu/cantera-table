@@ -90,7 +90,7 @@ Z [zZ]
 [0-9]+\.[0-9]+      { yylval->p = ca_arena_strdup (yyextra, yytext); character += yyleng; return Numeric; }
 
 \' { return stringliteral (yyscanner); }
-\" |
+\" { return stringliteral (yyscanner); }
 
 [A-Za-z_#][A-za-z0-9_.]* { yylval->p = ca_arena_strdup (yyextra, yytext); strtolower (yylval->p); character += yyleng; return Identifier; }
 [ \t\r\026]+             { character += yyleng; }
@@ -167,7 +167,7 @@ stringliteral(yyscan_t yyscanner)
 
   free (result);
 
-  return StringLiteral;
+  return (quote_char == '"') ? Identifier : StringLiteral;
 
 fail:
 

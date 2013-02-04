@@ -220,3 +220,56 @@ ca_arena_strndup(struct ca_arena_info* arena, const char* string, size_t length)
 
   return result;
 }
+
+char *
+ca_arena_sprintf (struct ca_arena_info *arena, const char *format, ...)
+{
+  size_t size = 32;
+  char *result;
+  va_list ap;
+
+  if (!(result = ca_arena_alloc (arena, size)))
+    return NULL;
+
+  for (;;)
+    {
+      int n;
+
+      va_start (ap, format);
+      n = vsnprintf (result, size, format, ap);
+      va_end (ap);
+
+      if (n > -1 && n < size)
+        return result;
+
+      size = (n > -1) ? (n + 1) : (size * 2);
+
+      /* XXX: Pop last allocation of stack? */
+
+      if (!(result = ca_arena_alloc (arena, size)))
+        return NULL;
+    }
+}
+
+
+int
+ca_arena_add_pointer(struct ca_arena_info *arena, void *pointer)
+{
+  struct ca_arena_info *new_info;
+
+  if (!(new_info = ca_malloc (sizeof (*new_info))))
+    return -1;
+
+  new_info->data = pointer;
+  new_info->size = 1;
+  new_info->used = 1;
+
+  if (arena->last)
+    arena->last->next = new_info;
+  else
+    arena->next = new_info;
+
+  arena->last = new_info;
+
+  return 0;
+}

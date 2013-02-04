@@ -82,11 +82,11 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module, struct 
     case EXPR_FIELD:
 
         {
-          switch (expr->value.d.field.type)
+          switch (expr->value.type)
             {
             default:
 
-              ca_set_error ("Fields of type %d not supported yet", expr->value.d.field.type);
+              ca_set_error ("Fields of type %d not supported yet", expr->value.type);
 
               return NULL;
             }

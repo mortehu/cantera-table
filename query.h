@@ -85,16 +85,15 @@ struct expression_value
   union
     {
       int64_t integer;
+      float float4;
+      double float8;
       char *numeric;
       char *string_literal;
       char *identifier;
       struct column_type *type;
       struct select_statement *select;
-      struct
-        {
-          uint32_t index;
-          uint8_t type;
-        } field;
+      struct iovec iov;
+      uint32_t field_index;
     } d;
 };
 

@@ -41,7 +41,7 @@ expr_primary_key_filter (struct expression *expr, unsigned int primary_key_field
     case EXPR_EQUAL:
 
       if (expr->lhs->type == EXPR_FIELD
-          && expr->lhs->value.d.field.index == primary_key_field
+          && expr->lhs->value.d.field_index == primary_key_field
           && expr->rhs->type == EXPR_CONSTANT
           && expr->rhs->value.type == CA_TEXT)
         {
@@ -49,7 +49,7 @@ expr_primary_key_filter (struct expression *expr, unsigned int primary_key_field
         }
 
       if (expr->rhs->type == EXPR_FIELD
-          && expr->rhs->value.d.field.index == primary_key_field
+          && expr->rhs->value.d.field_index == primary_key_field
           && expr->lhs->type == EXPR_CONSTANT
           && expr->lhs->value.type == CA_TEXT)
         {
@@ -104,38 +104,31 @@ expr_primary_key_filter (struct expression *expr, unsigned int primary_key_field
 }
 
 static size_t
-format_output (const struct ca_field *fields, size_t field_count,
-               const uint8_t *begin, const uint8_t *end)
+collect_field_values (struct iovec *output,
+                      const struct ca_field *fields, size_t field_count,
+                      const uint8_t *begin, const uint8_t *end)
 {
-  size_t i, field_index;
+  size_t field_index;
 
   for (field_index = 0; field_index < field_count && begin != end; ++field_index)
     {
       assert (begin < end);
 
-      if (field_index)
-        putchar ('\t');
+      output->iov_base = (void *) begin;
 
       switch (fields[field_index].type)
         {
         case CA_TEXT:
 
-            {
-              const char *str_end;
+          /* XXX: Too many casts */
 
-              /* XXX: Too many casts */
-
-              str_end = strchr ((const char *) begin, 0);
-
-              fwrite (begin, 1, str_end - (const char *) begin, stdout);
-
-              begin = (const uint8_t *) str_end + 1;
-            }
+          begin = (const uint8_t *) strchr ((const char *) begin, 0) + 1;
 
           break;
 
         case CA_TIME_FLOAT4:
 
+          do
             {
               uint64_t start_time;
               uint32_t interval, sample_count;
@@ -144,43 +137,39 @@ format_output (const struct ca_field *fields, size_t field_count,
               ca_parse_time_float4 (&begin,
                                     &start_time, &interval,
                                     &sample_values, &sample_count);
-
-              for (i = 0; i < sample_count; ++i)
-                {
-                  time_t time;
-                  char timebuf[32];
-
-                  time = start_time + i * interval;
-
-                  strftime (timebuf, sizeof (timebuf), "%Y-%m-%dT%H:%M:%S",
-                            gmtime (&time));
-
-                  printf ("%s\t%.7g\n", timebuf, sample_values[i]);
-                }
             }
-
-          break;
-
-        case CA_INT64:
-
-            {
-              int64_t buffer;
-
-              memcpy (&buffer, begin, sizeof (buffer));
-              begin += sizeof (buffer);
-
-              printf ("%lld", (long long int) buffer);
-            }
+          while (begin != end);
 
           break;
 
         case CA_BOOLEAN:
+        case CA_INT8:
+        case CA_UINT8:
 
-          switch (*begin++)
-            {
-            case 0:  printf ("FALSE"); break;
-            default: printf ("TRUE"); break;
-            }
+          ++begin;
+
+          break;
+
+        case CA_INT16:
+        case CA_UINT16:
+
+          begin += 2;
+
+          break;
+
+        case CA_FLOAT4:
+        case CA_INT32:
+        case CA_UINT32:
+
+          begin += 4;
+
+          break;
+
+        case CA_FLOAT8:
+        case CA_INT64:
+        case CA_UINT64:
+
+          begin += 8;
 
           break;
 
@@ -188,6 +177,10 @@ format_output (const struct ca_field *fields, size_t field_count,
 
           assert (!"unhandled data type");
         }
+
+      output->iov_len = begin - (const uint8_t *) output->iov_base;
+
+      ++output;
     }
 
   assert (begin == end);
@@ -215,8 +208,8 @@ CA_query_resolve_variables (struct expression *expression,
             }
 
           expression->type = EXPR_FIELD;
-          expression->value.d.field.index = variable->field_index;
-          expression->value.d.field.type = variable->type;
+          expression->value.type = variable->type;
+          expression->value.d.field_index = variable->field_index;
 
           return 0;
 
@@ -248,17 +241,313 @@ CA_query_resolve_variables (struct expression *expression,
 
           continue;
 
+        case EXPR_ASTERISK:
         case EXPR_CONSTANT:
 
           return 0;
 
         default:
 
-          fprintf (stderr, "Type %d not implemented\n", expression->value.type);
+          fprintf (stderr, "Type %d not implemented\n", expression->type);
 
           assert (!"fix me");
         }
     }
+
+  return 0;
+}
+
+static int
+eval_expression (struct expression_value *result,
+                 const struct iovec *field_values,
+                 const struct expression *expr)
+{
+  const struct iovec *iov;
+
+  switch (expr->type)
+    {
+    case EXPR_FIELD:
+
+      iov = &field_values[expr->value.d.field_index];
+      result->type = expr->value.type;
+
+      switch (expr->value.type)
+        {
+        case CA_TEXT:
+
+          result->d.string_literal = iov->iov_base;
+
+          break;
+
+        case CA_BOOLEAN:
+        case CA_UINT8:
+
+          if (iov->iov_len != 1)
+            {
+              ca_set_error ("Unpexected size %zu of 8 bit field", iov->iov_len);
+
+              return -1;
+            }
+
+          result->d.integer = *(const uint8_t *) iov->iov_base;
+
+          break;
+
+        case CA_INT8:
+
+          if (iov->iov_len != 1)
+            {
+              ca_set_error ("Unpexected size %zu of 8 bit field", iov->iov_len);
+
+              return -1;
+            }
+
+          result->d.integer = *(const int8_t *) iov->iov_base;
+
+          break;
+
+        case CA_UINT64:
+        case CA_INT64:
+
+          if (iov->iov_len != sizeof (int64_t))
+            {
+              ca_set_error ("Unpexected size %zu of 64 bit integer field", iov->iov_len);
+
+              return -1;
+            }
+
+          memcpy (&result->d.integer, iov->iov_base, sizeof (int64_t));
+
+          break;
+
+        case CA_TIME_FLOAT4:
+        case CA_OFFSET_SCORE:
+
+          result->d.iov = *iov;
+
+          break;
+
+        case CA_NUMERIC:
+
+          result->d.numeric = iov->iov_base;
+
+          break;
+
+        default:
+
+          ca_set_error ("eval_expression: Unhandled field type %d", expr->value.type);
+
+          return -1;
+        }
+
+      break;
+
+    case EXPR_PARENTHESIS:
+
+      return eval_expression (result, field_values, expr->lhs);
+
+    default:
+
+      ca_set_error ("eval_expression: Unsupported expression type: %d", expr->type);
+
+      return -1;
+    }
+
+  return 0;
+}
+
+const char *
+ca_cast_to_text (struct ca_arena_info *arena,
+                 const struct expression_value *value)
+{
+  char *result = NULL;
+  size_t result_alloc = 0, result_size = 0;
+
+  switch (value->type)
+    {
+    case CA_BOOLEAN:
+
+      return value->d.integer ? "TRUE" : "FALSE";
+
+    case CA_FLOAT4:
+
+      return ca_arena_sprintf (arena, "%.7g", value->d.float4);
+
+    case CA_FLOAT8:
+
+      return ca_arena_sprintf (arena, "%.7g", value->d.float8);
+
+    case CA_INT8:
+    case CA_INT16:
+    case CA_INT32:
+    case CA_INT64:
+
+      return ca_arena_sprintf (arena, "%lld", (long long) value->d.integer);
+
+    case CA_UINT8:
+    case CA_UINT16:
+    case CA_UINT32:
+    case CA_UINT64:
+
+      return ca_arena_sprintf (arena, "%llu", (long long) value->d.integer);
+
+    case CA_NUMERIC:
+
+      return value->d.numeric;
+
+    case CA_TEXT:
+
+      return value->d.string_literal;
+
+    case CA_TIMESTAMPTZ:
+
+        {
+          time_t t;
+
+          result = ca_arena_alloc (arena, 24);
+
+          t = value->d.integer;
+
+          strftime (result, 24, "%Y-%m-%dT%H:%M:%S", gmtime (&t));
+        }
+
+      break;
+
+    case CA_TIME_FLOAT4:
+
+        {
+          const uint8_t *begin, *end;
+          size_t i;
+          int first = 1;
+
+          begin = value->d.iov.iov_base;
+          end = begin + value->d.iov.iov_len;
+
+          assert (value->d.iov.iov_len > 0);
+
+          while (begin != end)
+            {
+              uint64_t start_time;
+              uint32_t interval, sample_count;
+              const float *sample_values;
+
+              ca_parse_time_float4 (&begin,
+                                    &start_time, &interval,
+                                    &sample_values, &sample_count);
+
+              for (i = 0; i < sample_count; ++i)
+                {
+                  time_t time;
+
+                  if (result_size + 32 >= result_alloc
+                      && -1 == CA_ARRAY_GROW_N (&result, &result_alloc, 32))
+                    return NULL;
+
+                  if (!first)
+                    result[result_size++] = '\n';
+
+                  time = start_time + i * interval;
+
+                  result_size +=
+                    strftime (result + result_size, 32,
+                              "%Y-%m-%dT%H:%M:%S", gmtime (&time));
+
+                  /* XXX: Use snprintf? Check return value? */
+
+                  result_size +=
+                    sprintf (result + result_size, "\t%.7g", sample_values[i]);
+
+                  first = 0;
+                }
+            }
+
+          if (result_size == result_alloc
+              && -1 == CA_ARRAY_GROW_N (&result, &result_alloc, 1))
+            return NULL;
+
+          result[result_size] = 0;
+        }
+
+      break;
+
+    default:
+
+      ca_set_error ("Unsupported type %d", value->type);
+
+      break;
+    }
+
+  return result;
+}
+
+static int
+format_select_list (struct iovec *field_values,
+                    struct select_variable *fields,
+                    struct select_item *si)
+{
+  int first = 1;
+  struct ca_arena_info arena;
+
+  ca_arena_init (&arena);
+
+  for (; si; si = si->next)
+    {
+      struct expression_value value;
+      const char *string;
+
+      if (!first)
+        putchar ('\t');
+
+      if (si->expression->type == EXPR_ASTERISK)
+        {
+          struct select_variable *vi;
+          size_t i = 0;
+
+          for (vi = fields; vi; vi = vi->next, ++i)
+            {
+              struct expression expr;
+
+              expr.type = EXPR_FIELD;
+              expr.value.type = vi->type;
+              expr.value.d.field_index = i;
+
+              if (-1 == eval_expression (&value, field_values, &expr))
+                return -1;
+
+              if (value.type != CA_TEXT)
+                {
+                  if (!(string = ca_cast_to_text (&arena, &value)))
+                    return -1;
+                }
+              else
+                string = value.d.string_literal;
+
+              if (vi != fields)
+                putchar ('\t');
+
+              fwrite (string, 1, strlen (string), stdout);
+            }
+        }
+      else
+        {
+          if (-1 == eval_expression (&value, field_values, si->expression))
+            return -1;
+
+          if (value.type != CA_TEXT)
+            {
+              if (!(string = ca_cast_to_text (&arena, &value)))
+                return -1;
+            }
+          else
+            string = value.d.string_literal;
+
+          fwrite (string, 1, strlen (string), stdout);
+        }
+
+      first = 0;
+    }
+
+  ca_arena_free (&arena);
 
   return 0;
 }
@@ -269,11 +558,15 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
   struct ca_table *table;
   struct ca_table_declaration *declaration;
 
+  struct iovec *field_values = NULL;
+
   struct select_variable *first_variable = NULL;
   struct select_variable **last_variable = &first_variable;
   struct ca_hashmap *variables = NULL;
 
   size_t i;
+  struct select_item *si;
+
   int ret, result = -1;
 
   unsigned int primary_key_index = 0;
@@ -285,6 +578,8 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
 
   if (!(table = ca_schema_table (schema, stmt->from, &declaration)))
     goto done;
+
+  /*** Replace identifiers with pointers to the table field ***/
 
   variables = ca_hashmap_create (63);
 
@@ -323,6 +618,15 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
         goto done;
     }
 
+  for (si = stmt->list; si; si = si->next)
+    {
+      if (-1 == CA_query_resolve_variables (si->expression, variables))
+        goto done;
+    }
+
+  if (!(field_values = ca_malloc (sizeof (*field_values) * declaration->field_count)))
+    goto done;
+
   const char *primary_key_filter;
   size_t field_index = 0;
 
@@ -335,7 +639,7 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
       if (!ret)
         return 0; /* Key does not exist in table */
 
-      if (0 < (ret = ca_table_read_row (table, value, 2)))
+      if (0 >= (ret = ca_table_read_row (table, value, 2)))
         {
           if (!ret)
             ca_set_error ("ca_table_read_row on '%s' unexpectedly returned %d",
@@ -346,19 +650,18 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
 
       for (i = 0; i < ret; ++i)
         {
-          if (i)
-            putchar ('\t');
-
           field_index +=
-            format_output (&declaration->fields[field_index],
-                           declaration->field_count - field_index,
-                           value[i].iov_base,
-                           (const uint8_t *) value[i].iov_base + value[i].iov_len);
+            collect_field_values (field_values + field_index,
+                                  &declaration->fields[field_index],
+                                  declaration->field_count - field_index,
+                                  value[i].iov_base,
+                                  (const uint8_t *) value[i].iov_base + value[i].iov_len);
         }
 
-      putchar ('\n');
+      if (-1 == format_select_list (field_values, first_variable, stmt->list))
+        goto done;
 
-      result = 0;
+      putchar ('\n');
     }
   else
     {
@@ -371,15 +674,16 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
 
           for (i = 0; i < ret; ++i)
             {
-              if (i)
-                putchar ('\t');
-
               field_index +=
-                format_output (&declaration->fields[field_index],
-                               declaration->field_count - field_index,
-                               value[i].iov_base,
-                               (const uint8_t *) value[i].iov_base + value[i].iov_len);
+                collect_field_values (field_values + field_index,
+                                      &declaration->fields[field_index],
+                                      declaration->field_count - field_index,
+                                      value[i].iov_base,
+                                      (const uint8_t *) value[i].iov_base + value[i].iov_len);
             }
+
+          if (-1 == format_select_list (field_values, first_variable, stmt->list))
+            goto done;
 
           putchar ('\n');
         }
@@ -392,6 +696,7 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
 
 done:
 
+  free (field_values);
   ca_hashmap_free (variables);
 
   return result;

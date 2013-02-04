@@ -237,10 +237,14 @@ char *
 ca_strdup (const char *string) CA_USE_RESULT;
 
 int
-ca_array_grow (void **array, size_t *alloc, size_t element_size) CA_USE_RESULT;
+ca_array_grow (void **array, size_t *alloc, size_t element_size,
+               size_t count) CA_USE_RESULT;
 
 #define CA_ARRAY_GROW(array, alloc) \
-  ca_array_grow ((void **) (array), alloc, sizeof(**(array)))
+  ca_array_grow ((void **) (array), alloc, sizeof(**(array)), 16)
+
+#define CA_ARRAY_GROW_N(array, alloc, n) \
+  ca_array_grow ((void **) (array), alloc, sizeof(**(array)), (n))
 
 /*****************************************************************************/
 

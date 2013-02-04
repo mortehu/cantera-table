@@ -70,16 +70,17 @@ ca_strdup (const char *string)
 }
 
 int
-ca_array_grow (void **array, size_t *alloc, size_t element_size)
+ca_array_grow (void **array, size_t *alloc, size_t element_size, size_t count)
 {
   size_t new_alloc;
   void *new_array;
 
-  new_alloc = *alloc * 3 / 2 + 16;
+  new_alloc = *alloc * 3 / 2 + count;
 
   if (!(new_array = realloc (*array, new_alloc * element_size)))
     {
-      ca_set_error ("realloc failed (allocation size %zu)", new_alloc * element_size);
+      ca_set_error ("realloc failed (allocation size %zu)",
+                    new_alloc * element_size);
 
       return -1;
     }

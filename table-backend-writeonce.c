@@ -425,8 +425,7 @@ CA_wo_is_sorted (void *handle)
 }
 
 static int
-CA_wo_insert_row (void *handle,
-                  const struct iovec *value, size_t value_count)
+CA_wo_insert_row (void *handle, const struct iovec *value, size_t value_count)
 {
   struct CA_wo *t = handle;
   const char *key;
@@ -450,7 +449,10 @@ CA_wo_insert_row (void *handle,
     }
 
   free (t->prev_key);
-  t->prev_key = ca_strdup (key);
+  t->prev_key = NULL;
+
+  if (!(t->prev_key = ca_strdup (key)))
+    return -1;
 
   t->entries[t->entry_count++] = t->write_offset;
 
@@ -769,6 +771,7 @@ CA_wo_free (struct CA_wo *t)
       free (t->entries); /* Part of t->buffer otherwise */
     }
 
+  free (t->prev_key);
   free (t->path);
   free (t);
 }

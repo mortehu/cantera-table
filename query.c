@@ -120,6 +120,40 @@ CA_intersect_offsets (struct ca_offset_score *lhs, size_t lhs_count,
   return o - output;
 }
 
+static size_t
+CA_filter_offsets (struct ca_offset_score *offsets, size_t count,
+                   int operator, float operand)
+{
+  size_t i, result = 0;
+
+  for (i = 0; i < count; ++i)
+    {
+      switch (operator)
+        {
+        case '<':
+
+          if (offsets[i].score < operand)
+            offsets[result++] = offsets[i];
+
+          break;
+
+        case '>':
+
+          if (offsets[i].score > operand)
+            offsets[result++] = offsets[i];
+
+          break;
+
+        default:
+
+          fprintf (stderr, "%c\n", operator);
+          assert (!"unknown operator");
+        }
+    }
+
+  return result;
+}
+
 int
 ca_schema_query (struct ca_schema *schema, const char *query,
                  const char *index_table_name,
@@ -138,7 +172,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
   struct ca_offset_score *offsets = NULL;
   uint32_t i, offset_count = 0;
 
-  char *query_buf = NULL, *token;
+  char *query_buf = NULL, *token, *ch;
 
   ssize_t ret;
   int result = -1;
@@ -202,11 +236,22 @@ ca_schema_query (struct ca_schema *schema, const char *query,
       uint32_t token_offset_count;
       int invert_rank = 0, subtract = 0;
 
+      int operator = 0;
+      float operand = 0;
+
       if (*token == '-')
         ++token, subtract = 1;
 
       if (*token == '~')
         ++token, invert_rank = 1;
+
+      if (NULL != (ch = strchr (token, '>'))
+          || NULL != (ch = strchr (token, '<')))
+        {
+          operator = *ch;
+          operand = strtod (ch + 1, NULL);
+          *ch = 0;
+        }
 
       if (1 != (ret = ca_table_seek_to_key (index_table, token)))
         {
@@ -228,6 +273,12 @@ ca_schema_query (struct ca_schema *schema, const char *query,
 
       if (-1 == ca_data_parse_offset_score (&data, &token_offsets, &token_offset_count))
         goto done;
+
+      if (operator)
+        {
+          token_offset_count =
+            CA_filter_offsets (token_offsets, token_offset_count, operator, operand);
+        }
 
       if (invert_rank)
         {

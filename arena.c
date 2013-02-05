@@ -82,38 +82,17 @@ ca_arena_alloc(struct ca_arena_info* arena, size_t size)
 
   if(size > ARENA_BLOCK_SIZE)
     {
-      struct ca_arena_info* new_arena;
+      if (!(result = ca_malloc (size)))
+        return NULL;
 
-      if (!(new_arena = malloc(sizeof(*new_arena))))
+      if (-1 == ca_arena_add_pointer (arena, result))
         {
-          ca_set_error ("Failed to allucate %zu bytes", sizeof (*new_arena));
+          free (result);
 
           return NULL;
         }
 
-      if (!(new_arena->data = malloc(size)))
-        {
-          ca_set_error ("Failed to allocate %zu bytes", size);
-
-          return NULL;
-        }
-
-      new_arena->size = size;
-      new_arena->used = size;
-      new_arena->next = 0;
-
-      if(!arena->last)
-        {
-          arena->next = new_arena;
-          arena->last = new_arena;
-        }
-      else
-        {
-          arena->last->next = new_arena;
-          arena->last = new_arena;
-        }
-
-      return new_arena->data;
+      return result;
     }
 
   if(arena->last)
@@ -255,21 +234,21 @@ ca_arena_sprintf (struct ca_arena_info *arena, const char *format, ...)
 int
 ca_arena_add_pointer(struct ca_arena_info *arena, void *pointer)
 {
-  struct ca_arena_info *new_info;
+  struct ca_arena_info *new_arena;
 
-  if (!(new_info = ca_malloc (sizeof (*new_info))))
+  if (!(new_arena = ca_malloc (sizeof (*new_arena))))
     return -1;
 
-  new_info->data = pointer;
-  new_info->size = 1;
-  new_info->used = 1;
+  new_arena->data = pointer;
+  new_arena->size = 1;
+  new_arena->used = 1;
 
   if (arena->last)
-    arena->last->next = new_info;
+    arena->last->next = new_arena;
   else
-    arena->next = new_info;
+    arena->next = new_arena;
 
-  arena->last = new_info;
+  arena->last = new_arena;
 
   return 0;
 }

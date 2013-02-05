@@ -409,9 +409,14 @@ done:
 }
 
 static int
-data_callback (const char *key, const struct iovec *value, void *opaque)
+data_callback (const struct iovec *value, size_t value_count, void *opaque)
 {
+  const char *key;
   const uint8_t *begin, *end;
+
+  assert (value_count == 2);
+
+  key = value[0].iov_base;
 
   if (!prev_key || strcmp (key, prev_key))
     {
@@ -424,8 +429,8 @@ data_callback (const char *key, const struct iovec *value, void *opaque)
         return -1;
     }
 
-  begin = value->iov_base;
-  end = begin + value->iov_len;
+  begin = value[1].iov_base;
+  end = begin + value[1].iov_len;
 
   if (column_count == 1 && column_types[0] == CA_TIME_FLOAT4)
     {

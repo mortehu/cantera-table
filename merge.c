@@ -24,7 +24,8 @@
 struct CA_merge_heap
 {
   struct iovec value[2];
-  size_t table;
+  uint32_t table;
+  uint8_t value_count;
 };
 
 #define CA_HEAP_KEY(h) ((const char *) (h)->value[0].iov_base)
@@ -166,6 +167,8 @@ ca_table_merge (struct ca_table **tables, size_t table_count,
           goto done;
         }
 
+      e.value_count = ret;
+
       CA_merge_heap_push (heap, heap_size++, &e);
     }
 
@@ -175,7 +178,7 @@ ca_table_merge (struct ca_table **tables, size_t table_count,
 
       e = heap[0];
 
-      if (-1 == callback (CA_HEAP_KEY (&e), &e.value[1], opaque))
+      if (-1 == callback (e.value, e.value_count, opaque))
         goto done;
 
       if (0 >= (ret = ca_table_read_row (tables[e.table], e.value, 2)))
@@ -190,6 +193,8 @@ ca_table_merge (struct ca_table **tables, size_t table_count,
 
           goto done;
         }
+
+      e.value_count = ret;
 
       CA_merge_heap_replace_top (heap, heap_size, &e);
     }

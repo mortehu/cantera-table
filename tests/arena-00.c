@@ -11,7 +11,7 @@ main (int argc, char **argv)
   ca_arena_init (&arena);
 
   for (i = 0; i < 1500; ++i)
-    ca_arena_calloc (&arena, 1500);
+    ca_arena_calloc (&arena, i * 256);
 
   ca_arena_free (&arena);
 

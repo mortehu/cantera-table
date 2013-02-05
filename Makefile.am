@@ -20,19 +20,21 @@ AM_CXXFLAGS = -Wall -Werror -g
 libca_table_la_SOURCES = \
   arena.c arena.h \
   crc32c.c crc32c.h \
-  data.c \
   error.c error.h \
   expression-llvm.cc \
   fifo.c \
+  file-buffer.c \
   functions.c \
-  io.c io.h \
   hashmap.c hashmap.h \
   merge.c \
   memory.c memory.h \
+  parse.c \
   query.c \
   schema.c schema.h \
   select.c \
   sort.c \
+  table-backend-flexi.c \
+  table-backend-log.c \
   table-backend-writeonce.c \
   table-write.c \
   table.c \
@@ -55,12 +57,24 @@ ts_load_LDADD = libca-table.la
 ts_merge_SOURCES = ts-merge.c
 ts_merge_LDADD = libca-table.la
 
-TESTS = tests/arena-00 tests/correlation-00 tests/crc32c-00 tests/fifo-00 tests/hashmap-00 tests/rank-correlation-00
-check_PROGRAMS = tests/arena-00 tests/correlation-00 tests/crc32c-00 tests/fifo-00 tests/hashmap-00 tests/rank-correlation-00
+TESTS = \
+  tests/arena-00 \
+  tests/correlation-00 \
+  tests/crc32c-00 \
+  tests/fifo-00 \
+  tests/flexi-sort-00 \
+  tests/hashmap-00 \
+  tests/log-sort-00 \
+  tests/rank-correlation-00 \
+  tests/wo-sort-00
+check_PROGRAMS = $(TESTS)
 
 tests_arena_00_LDADD = libca-table.la
 tests_correlation_00_LDADD = libca-table.la
 tests_crc32c_00_LDADD = libca-table.la
 tests_fifo_00_LDADD = libca-table.la
+tests_flexi_sort_00_LDADD = libca-table.la
 tests_hashmap_00_LDADD = libca-table.la
+tests_log_sort_00_LDADD = libca-table.la
 tests_rank_correlation_00_LDADD = libca-table.la
+tests_wo_sort_00_LDADD = libca-table.la

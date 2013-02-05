@@ -1,3 +1,21 @@
+/*
+    Thread safe ring buffer implementation
+    Copyright (C) 2013    Morten Hustveit
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -6,7 +24,6 @@
 #include <pthread.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 /* Limitations of this implementation:
  *
@@ -34,7 +51,7 @@ ca_fifo_create (size_t size)
 {
   struct ca_fifo *result;
 
-  if (!(result = safe_malloc (offsetof (struct ca_fifo, data) + size)))
+  if (!(result = ca_malloc (offsetof (struct ca_fifo, data) + size)))
     return NULL;
 
   pthread_cond_init (&result->fill_available, NULL);

@@ -1,8 +1,26 @@
+/*
+    Inverted index query processor
+    Copyright (C) 2013    Morten Hustveit
+    Copyright (C) 2013    eVenture Capital Partners II
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <assert.h>
 #include <string.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 static size_t
 CA_partition (struct ca_offset_score *data, size_t count, size_t pivot_index)
@@ -166,7 +184,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
   struct ca_table *summary_table;
   struct ca_table_declaration *summary_declaration;
 
-  struct iovec data_iov;
+  struct iovec data_iov[2];
   const uint8_t *data;
 
   struct ca_offset_score *offsets = NULL;
@@ -179,7 +197,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
 
   ca_clear_error ();
 
-  if (!(query_buf = safe_strdup (query)))
+  if (!(query_buf = ca_strdup (query)))
     goto done;
 
   if (!(index_table = ca_schema_table (schema, index_table_name, &index_declaration)))
@@ -216,7 +234,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
       goto done;
     }
 
-  if (summary_declaration->fields[1].type != CA_TIME)
+  if (summary_declaration->fields[1].type != CA_TIMESTAMPTZ)
     {
       ca_set_error ("Second field in summary table must be TIMESTAMP WITH TIME ZONE");
 
@@ -261,17 +279,17 @@ ca_schema_query (struct ca_schema *schema, const char *query,
           goto done;
         }
 
-      if (1 != (ret = ca_table_read_row (index_table, NULL, &data_iov)))
+      if (2 != (ret = ca_table_read_row (index_table, data_iov, 2)))
         {
-          if (!ret)
-            ca_set_error ("ca_table_read_row unexpectedly returned 0");
+          if (ret >= 0)
+            ca_set_error ("ca_table_read_row unexpectedly returned %d", (int) ret);
 
           goto done;
         }
 
-      data = data_iov.iov_base;
+      data = data_iov[1].iov_base;
 
-      if (-1 == ca_data_parse_offset_score (&data, &token_offsets, &token_offset_count))
+      if (-1 == ca_parse_offset_score (&data, &token_offsets, &token_offset_count))
         goto done;
 
       if (operator)
@@ -325,15 +343,15 @@ ca_schema_query (struct ca_schema *schema, const char *query,
       if (-1 == ca_table_seek (summary_table, offsets[i].offset, SEEK_SET))
         goto done;
 
-      if (1 != (ret = ca_table_read_row (summary_table, NULL, &data_iov)))
+      if (2 != (ret = ca_table_read_row (summary_table, data_iov, 2)))
         {
-          if (!ret)
-            ca_set_error ("ca_table_read_row unexpectedly returned 0.  Is the index stale?");
+          if (ret >= 0)
+            ca_set_error ("ca_table_read_row unexpectedly returned %d.  Is the index stale?", (int) ret);
 
           goto done;
         }
 
-      printf ("%s", (const char *) data_iov.iov_base + 8);
+      printf ("%s", (const char *) data_iov[1].iov_base + 8);
     }
 
   printf ("]\n");

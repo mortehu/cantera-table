@@ -18,7 +18,6 @@
 #include <unistd.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 enum aggregate_function
 {
@@ -128,7 +127,7 @@ sample_data_cmp (const void *vlhs, const void *vrhs)
 
           return strcmp ((const char *) begin_lhs, (const char *) begin_rhs);
 
-        case CA_TIME:
+        case CA_TIMESTAMPTZ:
         case CA_INT64:
 
             {
@@ -286,6 +285,7 @@ sample_aggregate_iovec (struct iovec *samples, size_t count)
 static int
 data_flush (const char *key)
 {
+  struct iovec value[2];
   size_t i, next;
   int result = -1;
 
@@ -330,7 +330,7 @@ data_flush (const char *key)
           size_t series_alloc = 0, series_count = 0;
 
           /* Make sure there's room for the first element */
-          if (-1 == ARRAY_GROW (&series_values, &series_alloc))
+          if (-1 == CA_ARRAY_GROW (&series_values, &series_alloc))
             goto done;
 
           for (i = 0; i < sample_count; )
@@ -350,7 +350,7 @@ data_flush (const char *key)
                   do
                     {
                       if (series_count == series_alloc
-                          && -1 == ARRAY_GROW (&series_values, &series_alloc))
+                          && -1 == CA_ARRAY_GROW (&series_values, &series_alloc))
                         {
                           free (series_values);
                           goto done;
@@ -390,7 +390,11 @@ data_flush (const char *key)
           && -1 == sample_aggregate_iovec (data_samples, sample_count))
         goto done;
 
-      if (-1 == ca_table_insert_row (output, key, &data_samples[0], 1))
+      value[0].iov_base = (void *) key;
+      value[0].iov_len = strlen (key) + 1;
+      value[1] = data_samples[0];
+
+      if (-1 == ca_table_insert_row (output, value, 2))
         goto done;
 
       break;
@@ -416,14 +420,14 @@ data_callback (const char *key, const struct iovec *value, void *opaque)
 
       free (prev_key);
 
-      if (!(prev_key = safe_strdup (key)))
+      if (!(prev_key = ca_strdup (key)))
         return -1;
     }
 
   begin = value->iov_base;
   end = begin + value->iov_len;
 
-  if (column_count == 1 && column_types[0] == CA_TIME_SERIES)
+  if (column_count == 1 && column_types[0] == CA_TIME_FLOAT4)
     {
       sample_type = SAMPLE_TIME_FLOAT4;
 
@@ -433,14 +437,14 @@ data_callback (const char *key, const struct iovec *value, void *opaque)
           uint32_t i, interval, count;
           const float *sample_values;
 
-          ca_data_parse_time_float4 (&begin,
-                                     &start_time, &interval,
-                                     &sample_values, &count);
+          ca_parse_time_float4 (&begin,
+                                &start_time, &interval,
+                                &sample_values, &count);
 
           for (i = 0; i < count; ++i)
             {
               if (sample_count == sample_alloc
-                  && -1 == ARRAY_GROW (&time_float4_samples, &sample_alloc))
+                  && -1 == CA_ARRAY_GROW (&time_float4_samples, &sample_alloc))
                 return -1;
 
               time_float4_samples[sample_count].time = start_time + i * interval;
@@ -458,14 +462,14 @@ data_callback (const char *key, const struct iovec *value, void *opaque)
           uint32_t i, count;
           struct ca_offset_score *sample_values;
 
-          if (-1 == ca_data_parse_offset_score (&begin, &sample_values, &count))
+          if (-1 == ca_parse_offset_score (&begin, &sample_values, &count))
             return -1;
 
           /* XXX: This loop can be a lot simpler for this data type */
           for (i = 0; i < count; ++i)
             {
               if (sample_count == sample_alloc
-                  && -1 == ARRAY_GROW (&offset_score_samples, &sample_alloc))
+                  && -1 == CA_ARRAY_GROW (&offset_score_samples, &sample_alloc))
                 return -1;
 
               offset_score_samples[sample_count] = sample_values[i];
@@ -480,7 +484,7 @@ data_callback (const char *key, const struct iovec *value, void *opaque)
       sample_type = SAMPLE_DATA;
 
       if (sample_count == sample_alloc
-          && -1 == ARRAY_GROW (&data_samples, &sample_alloc))
+          && -1 == CA_ARRAY_GROW (&data_samples, &sample_alloc))
         return -1;
 
       data_samples[sample_count++] = *value;
@@ -506,7 +510,7 @@ columns_parse (char *columns)
         }
 
       if (column_count == column_alloc
-          && -1 == ARRAY_GROW (&column_types, &column_alloc))
+          && -1 == CA_ARRAY_GROW (&column_types, &column_alloc))
         return -1;
 
       column_types[column_count++] = type;
@@ -598,7 +602,7 @@ main (int argc, char **argv)
   input_paths = argv + optind;
   input_count = argc - optind;
 
-  inputs = safe_malloc (sizeof (*inputs) * input_count);
+  inputs = ca_malloc (sizeof (*inputs) * input_count);
 
   for (i = 0; i < input_count; )
     {

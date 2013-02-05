@@ -1,3 +1,22 @@
+/*
+    Interactive shell for Cantera Table databases
+    Copyright (C) 2013    Morten Hustveit
+    Copyright (C) 2013    eVenture Capital Partners II
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifdef HAVE_CONFIG_H
 #  include "config.h"
 #endif
@@ -38,10 +57,9 @@ extern int read_history ();
 #endif
 
 #include "ca-table.h"
-#include "memory.h"
 #include "query.h"
 
-static const char *schema_path = "/data/tables/schema.ca";
+static const char *schema_path = "/data/tables";
 static int print_version;
 static int print_help;
 
@@ -135,7 +153,7 @@ main (int argc, char **argv)
               /* Perform this check before the EOL check to make room for
                * terminating NUL */
               if (line_length == line_alloc)
-                ARRAY_GROW (&line, &line_alloc);
+                CA_ARRAY_GROW (&line, &line_alloc);
 
               if (ch == '\n')
                 break;

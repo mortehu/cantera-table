@@ -1,8 +1,13 @@
 #include <string.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
+uint64_t ca_xid;
+
+/*****************************************************************************/
+
+extern struct ca_table_backend CA_table_flexi;
+extern struct ca_table_backend CA_table_log;
 extern struct ca_table_backend CA_table_writeonce;
 
 struct ca_table
@@ -16,6 +21,12 @@ struct ca_table
 struct ca_table_backend *
 ca_table_backend (const char *name)
 {
+  if (!strcmp (name, "flexi"))
+    return &CA_table_flexi;
+
+  if (!strcmp (name, "log"))
+    return &CA_table_log;
+
   if (!strcmp (name, "write-once"))
     return &CA_table_writeonce;
 
@@ -32,7 +43,7 @@ ca_table_open (const char *backend_name,
 {
   struct ca_table *result;
 
-  if (!(result = safe_malloc (sizeof (*result))))
+  if (!(result = ca_malloc (sizeof (*result))))
     return NULL;
 
   if (!(result->backend = ca_table_backend (backend_name)))
@@ -94,10 +105,10 @@ ca_table_is_sorted (struct ca_table *table)
 }
 
 int
-ca_table_insert_row (struct ca_table *table, const char *key,
+ca_table_insert_row (struct ca_table *table,
                      const struct iovec *value, size_t value_count)
 {
-  return table->backend->insert_row (table->handle, key, value, value_count);
+  return table->backend->insert_row (table->handle, value, value_count);
 }
 
 int
@@ -119,10 +130,10 @@ ca_table_offset (struct ca_table *table)
 }
 
 ssize_t
-ca_table_read_row (struct ca_table *table, const char **key,
-                   struct iovec *value)
+ca_table_read_row (struct ca_table *table, struct iovec *value,
+                   size_t value_count)
 {
-  return table->backend->read_row (table->handle, key, value);
+  return table->backend->read_row (table->handle, value, value_count);
 }
 
 int

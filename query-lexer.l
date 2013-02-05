@@ -1,13 +1,8 @@
 %{
-#if HAVE_CONFIG_H
-#  include "config.h"
-#endif
-
 #include <ctype.h>
 #include <string.h>
 
 #include "arena.h"
-#include "memory.h"
 #include "query-parser.h"
 #include "query.h"
 
@@ -95,7 +90,7 @@ Z [zZ]
 [0-9]+\.[0-9]+      { yylval->p = ca_arena_strdup (yyextra, yytext); character += yyleng; return Numeric; }
 
 \' { return stringliteral (yyscanner); }
-\" |
+\" { return stringliteral (yyscanner); }
 
 [A-Za-z_#][A-za-z0-9_.]* { yylval->p = ca_arena_strdup (yyextra, yytext); strtolower (yylval->p); character += yyleng; return Identifier; }
 [ \t\r\026]+             { character += yyleng; }
@@ -157,7 +152,7 @@ stringliteral(yyscan_t yyscanner)
         }
 
       if (result_size == result_alloc
-          && -1 == ARRAY_GROW (&result, &result_alloc))
+          && -1 == CA_ARRAY_GROW (&result, &result_alloc))
         {
           goto fail;
         }
@@ -172,7 +167,7 @@ stringliteral(yyscan_t yyscanner)
 
   free (result);
 
-  return StringLiteral;
+  return (quote_char == '"') ? Identifier : StringLiteral;
 
 fail:
 

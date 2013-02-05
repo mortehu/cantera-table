@@ -1,14 +1,33 @@
+/*
+    Heap based merge of sorted tables
+    Copyright (C) 2013    Morten Hustveit
+    Copyright (C) 2013    eVenture Capital Partners II
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <string.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 struct CA_merge_heap
 {
-  const char *key;
-  struct iovec value;
+  struct iovec value[2];
   size_t table;
 };
+
+#define CA_HEAP_KEY(h) ((const char *) (h)->value[0].iov_base)
 
 static void
 CA_merge_heap_push (struct CA_merge_heap *heap, size_t heap_size,
@@ -22,7 +41,7 @@ CA_merge_heap_push (struct CA_merge_heap *heap, size_t heap_size,
     {
       parent = (i - 1) / 2;
 
-      if (strcmp (heap[parent].key, entry->key) <= 0)
+      if (strcmp (CA_HEAP_KEY (&heap[parent]), CA_HEAP_KEY (entry)) <= 0)
         break;
 
       heap[i] = heap[parent];
@@ -48,7 +67,7 @@ CA_merge_heap_replace_top (struct CA_merge_heap *heap, size_t heap_size,
       /* Move the smaller child up the tree */
 
       if(child + 1 <= heap_size
-         && strcmp (heap[child].key, heap[child + 1].key) > 0)
+         && strcmp (CA_HEAP_KEY (&heap[child]), CA_HEAP_KEY (&heap[child + 1])) > 0)
         ++child;
 
       heap[i] = heap[child];
@@ -60,7 +79,7 @@ CA_merge_heap_replace_top (struct CA_merge_heap *heap, size_t heap_size,
     {
       parent = i >> 1;
 
-      if (strcmp (heap[parent].key, entry->key) <= 0)
+      if (strcmp (CA_HEAP_KEY (&heap[parent]), CA_HEAP_KEY (entry)) <= 0)
         break;
 
       heap[i] = heap[parent];
@@ -85,7 +104,7 @@ CA_merge_heap_pop (struct CA_merge_heap *heap, size_t heap_size)
       /* Move the smaller child up the tree */
 
       if(child + 1 <= heap_size
-         && strcmp (heap[child].key, heap[child + 1].key) > 0)
+         && strcmp (CA_HEAP_KEY (&heap[child]), CA_HEAP_KEY (&heap[child + 1])) > 0)
         ++child;
 
       heap[i] = heap[child];
@@ -101,7 +120,7 @@ CA_merge_heap_pop (struct CA_merge_heap *heap, size_t heap_size)
     {
       parent = i >> 1;
 
-      if (strcmp (heap[parent].key, heap[heap_size].key) <= 0)
+      if (strcmp (CA_HEAP_KEY (&heap[parent]), CA_HEAP_KEY (&heap[heap_size])) <= 0)
         break;
 
       heap[i] = heap[parent];
@@ -123,7 +142,7 @@ ca_table_merge (struct ca_table **tables, size_t table_count,
 
   int result = -1;
 
-  if (!(heap = safe_malloc (sizeof (*heap) * table_count)))
+  if (!(heap = ca_malloc (sizeof (*heap) * table_count)))
     goto done;
 
   for (i = 0; i < table_count; ++i)
@@ -139,7 +158,7 @@ ca_table_merge (struct ca_table **tables, size_t table_count,
           goto done;
         }
 
-      if (1 != (ret = ca_table_read_row (tables[i], &e.key, &e.value)))
+      if (0 >= (ret = ca_table_read_row (tables[i], e.value, 2)))
         {
           if (ret == 0)
             continue;
@@ -156,10 +175,10 @@ ca_table_merge (struct ca_table **tables, size_t table_count,
 
       e = heap[0];
 
-      if (-1 == callback (e.key, &e.value, opaque))
+      if (-1 == callback (CA_HEAP_KEY (&e), &e.value[1], opaque))
         goto done;
 
-      if (1 != (ret = ca_table_read_row (tables[e.table], &e.key, &e.value)))
+      if (0 >= (ret = ca_table_read_row (tables[e.table], e.value, 2)))
         {
           if (ret == 0)
             {

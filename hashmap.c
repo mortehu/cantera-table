@@ -1,9 +1,27 @@
+/*
+    Hash map implementation
+    Copyright (C) 2011,2013    Morten Hustveit
+    Copyright (C) 2013         eVenture Capital Partners II
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 #define HASHMAP_REBUILD_NOM 4
 #define HASHMAP_REBUILD_DEN 3
@@ -127,12 +145,12 @@ ca_hashmap_insert (struct ca_hashmap *map, const char *key, void *value)
 
   if (node->key)
     {
-      errno = EEXIST;
+      ca_set_error ("Attempt to insert duplicate key '%s' into hashmap", key);
 
       return -1;
     }
 
-  if (!(node->key = safe_strdup (key)))
+  if (!(node->key = ca_strdup (key)))
     return -1;
 
   node->value.pointer = value;
@@ -151,7 +169,7 @@ ca_hashmap_insert_int (struct ca_hashmap *map, const char *key, int64_t value)
 
   if (!node->key)
     {
-      if (!(node->key = safe_strdup (key)))
+      if (!(node->key = ca_strdup (key)))
         return -1;
 
       ++map->size;

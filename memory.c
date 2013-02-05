@@ -1,3 +1,22 @@
+/*
+    malloc wrappers for Cantera Table
+    Copyright (C) 2013    Morten Hustveit
+    Copyright (C) 2013    eVenture Capital Partners II
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifdef HAVE_CONFIG_H
 #  include "config.h"
 #endif
@@ -8,10 +27,10 @@
 #include <err.h>
 #include <sysexits.h>
 
-#include "memory.h"
+#include "ca-table.h"
 
 void *
-safe_malloc (size_t size)
+ca_malloc (size_t size)
 {
   void *result;
 
@@ -28,7 +47,7 @@ safe_malloc (size_t size)
 }
 
 void *
-safe_memdup (const void *data, size_t size)
+ca_memdup (const void *data, size_t size)
 {
   void *result;
 
@@ -45,22 +64,23 @@ safe_memdup (const void *data, size_t size)
 }
 
 char *
-safe_strdup (const char *string)
+ca_strdup (const char *string)
 {
-  return safe_memdup (string, strlen (string) + 1);
+  return ca_memdup (string, strlen (string) + 1);
 }
 
 int
-array_grow (void **array, size_t *alloc, size_t element_size)
+ca_array_grow (void **array, size_t *alloc, size_t element_size, size_t count)
 {
   size_t new_alloc;
   void *new_array;
 
-  new_alloc = *alloc * 3 / 2 + 16;
+  new_alloc = *alloc * 3 / 2 + count;
 
   if (!(new_array = realloc (*array, new_alloc * element_size)))
     {
-      ca_set_error ("realloc failed (allocation size %zu)", new_alloc * element_size);
+      ca_set_error ("realloc failed (allocation size %zu)",
+                    new_alloc * element_size);
 
       return -1;
     }

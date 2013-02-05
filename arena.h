@@ -40,6 +40,12 @@ ca_arena_strdup(struct ca_arena_info *arena, const char *string) CA_MALLOC;
 char*
 ca_arena_strndup(struct ca_arena_info *arena, const char *string, size_t length) CA_MALLOC;
 
+char*
+ca_arena_sprintf(struct ca_arena_info *arena, const char *format, ...) CA_MALLOC;
+
+int
+ca_arena_add_pointer(struct ca_arena_info *arena, void *pointer);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

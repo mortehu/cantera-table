@@ -1,3 +1,22 @@
+/*
+    Write Once Read Many database table backend
+    Copyright (C) 2013    Morten Hustveit
+    Copyright (C) 2013    eVenture Capital Partners II
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifdef HAVE_CONFIG_H
 #  include "config.h"
 #endif
@@ -19,8 +38,6 @@
 #include <unistd.h>
 
 #include "ca-table.h"
-#include "io.h"
-#include "memory.h"
 
 #define MAGIC 0x6c6261742e692e70ULL
 #define MAJOR_VERSION 1
@@ -53,8 +70,7 @@ static int
 CA_wo_is_sorted (void *handle);
 
 static int
-CA_wo_insert_row (void *handle, const char *key,
-                  const struct iovec *value, size_t value_count);
+CA_wo_insert_row (void *handle, const struct iovec *value, size_t value_count);
 
 static int
 CA_wo_seek (void *handle, off_t offset, int whence);
@@ -66,8 +82,7 @@ static off_t
 CA_wo_offset (void *handle);
 
 static ssize_t
-CA_wo_read_row (void *handle, const char **key,
-                struct iovec *value);
+CA_wo_read_row (void *handle, struct iovec *value, size_t value_count);
 
 static int
 CA_wo_delete_row (void *handle);
@@ -117,10 +132,12 @@ struct CA_wo
   int fd;
   int open_flags;
 
+  struct ca_file_buffer *write_buffer;
+  uint64_t write_offset;
+
   char *buffer;
   size_t buffer_size, buffer_fill;
 
-  uint64_t write_offset;
   char *prev_key;
 
   uint32_t crc32c;
@@ -141,12 +158,6 @@ struct CA_wo
 /*****************************************************************************/
 
 static int
-CA_wo_write (struct CA_wo *t, const void *data, size_t size) CA_USE_RESULT;
-
-static int
-CA_wo_flush (struct CA_wo *t) CA_USE_RESULT;
-
-static int
 CA_wo_write_all (int fd, const void *data, size_t size) CA_USE_RESULT;
 
 static int
@@ -162,17 +173,19 @@ CA_wo_open (const char *path, int flags, mode_t mode)
 {
   struct CA_wo *result;
 
-  if (!(result = safe_malloc (sizeof (*result))))
+  if (!(result = ca_malloc (sizeof (*result))))
     return NULL;
 
   result->fd = -1;
+  result->buffer = MAP_FAILED;
   result->open_flags = flags;
 
-  if (!(result->path = safe_strdup (path)))
+  if (!(result->path = ca_strdup (path)))
     goto fail;
 
   if (flags & O_CREAT)
     {
+      struct CA_wo_header dummy_header;
       mode_t mask;
 
       mask = umask (0);
@@ -210,23 +223,17 @@ CA_wo_open (const char *path, int flags, mode_t mode)
           goto fail;
         }
 
-      /* We use mmap instead of malloc to be more compatible with read code */
+      if (!(result->write_buffer = ca_file_buffer_alloc (result->fd)))
+        goto fail;
 
-      if (MAP_FAILED == (result->buffer = mmap (NULL, /* address */
-                                                BUFFER_SIZE,
-                                                PROT_READ | PROT_WRITE,
-                                                MAP_PRIVATE | MAP_ANONYMOUS,
-                                                0,    /* fd */
-                                                0)))  /* offset */
-        {
-          ca_set_error ("failed to allocate %zu bytes: %s",
-                        result->buffer_size, strerror (errno));
+      memset (&dummy_header, 0, sizeof (dummy_header));
 
-          goto fail;
-        }
+      if (-1 == ca_file_buffer_write (result->write_buffer,
+                                      &dummy_header,
+                                      sizeof (dummy_header)))
+        goto fail;
 
-      result->buffer_size = BUFFER_SIZE;
-      result->buffer_fill = sizeof (struct CA_wo_header);
+      result->write_offset = sizeof (dummy_header);
 
       result->flags = CA_WO_FLAG_ASCENDING | CA_WO_FLAG_DESCENDING;
     }
@@ -309,19 +316,21 @@ CA_wo_sync (void *handle)
   header.magic = MAGIC; /* Will implicitly store endianness */
   header.major_version = MAJOR_VERSION;
   header.minor_version = MINOR_VERSION;
-  header.index_offset = t->write_offset + t->buffer_fill;
+  header.index_offset = t->write_offset;
 
   /* Add end pointer for convenience when calculating entry sizes later */
   if (t->entry_count == t->entry_alloc
-      && -1 == ARRAY_GROW (&t->entries, &t->entry_alloc))
+      && -1 == CA_ARRAY_GROW (&t->entries, &t->entry_alloc))
     return -1;
 
   t->entries[t->entry_count] = header.index_offset;
 
-  if (-1 == CA_wo_write (t, t->entries, sizeof (*t->entries) * (t->entry_count + 1)))
+  if (-1 == ca_file_buffer_write (t->write_buffer,
+                                  t->entries,
+                                  sizeof (*t->entries) * (t->entry_count + 1)))
     return -1;
 
-  if (-1 == CA_wo_flush (t))
+  if (-1 == ca_file_buffer_flush (t->write_buffer))
     return -1;
 
   header.flags = t->flags;
@@ -337,6 +346,9 @@ CA_wo_sync (void *handle)
 
   if (-1 == CA_wo_write_all (t->fd, &header, sizeof (header)))
     return -1;
+
+  /* XXX: I think we need to sync all ancestor directories in order to be
+   * completely safe */
 
   if (!t->no_fsync && -1 == fsync (t->fd))
     {
@@ -360,8 +372,8 @@ CA_wo_sync (void *handle)
   free (t->entries);
   t->entries = NULL;
 
-  munmap (t->buffer, t->buffer_size);
-  t->buffer_size = 0;
+  ca_file_buffer_free (t->write_buffer);
+  t->write_buffer = NULL;
 
   if ((t->open_flags & O_RDWR) == O_RDWR)
     return CA_wo_mmap (t);
@@ -413,16 +425,19 @@ CA_wo_is_sorted (void *handle)
 }
 
 static int
-CA_wo_insert_row (void *handle, const char *key,
+CA_wo_insert_row (void *handle,
                   const struct iovec *value, size_t value_count)
 {
   struct CA_wo *t = handle;
+  const char *key;
   size_t i;
   int cmp = 1;
 
   if (t->entry_alloc == t->entry_count
-      && -1 == ARRAY_GROW (&t->entries, &t->entry_alloc))
+      && -1 == CA_ARRAY_GROW (&t->entries, &t->entry_alloc))
     return -1;
+
+  key = value[0].iov_base;
 
   if (t->prev_key)
     {
@@ -432,25 +447,18 @@ CA_wo_insert_row (void *handle, const char *key,
         t->flags &= ~CA_WO_FLAG_ASCENDING;
       else if (cmp > 0)
         t->flags &= ~CA_WO_FLAG_DESCENDING;
-      else
-        goto write_value;
     }
 
   free (t->prev_key);
-  t->prev_key = safe_strdup (key);
+  t->prev_key = ca_strdup (key);
 
-  t->entries[t->entry_count++] = t->write_offset + t->buffer_fill;
-
-  if (-1 == CA_wo_write (t, key, strlen (key) + 1))
-    return -1;
-
-write_value:
+  t->entries[t->entry_count++] = t->write_offset;
 
   for (i = 0; i < value_count; ++i)
-    {
-      if (-1 == CA_wo_write (t, value[i].iov_base, value[i].iov_len))
-        return -1;
-    }
+    t->write_offset += value[i].iov_len;
+
+  if (-1 == ca_file_buffer_writev (t->write_buffer, value, value_count))
+    return -1;
 
   return 0;
 }
@@ -532,14 +540,15 @@ CA_wo_seek_to_key (void *handle, const char *key)
               first = middle + 1;
               count -= half + 1;
             }
-          else if (ca_likely (cmp > 0))
-            count = half;
           else
-            {
-              t->offset = middle;
+            count = half;
+        }
 
-              return 1;
-            }
+      if (middle != t->entry_count)
+        {
+          t->offset = first;
+
+          return 1;
         }
     }
   else if (0 != (t->header->flags & CA_WO_FLAG_DESCENDING))
@@ -558,14 +567,15 @@ CA_wo_seek_to_key (void *handle, const char *key)
               first = middle + 1;
               count -= half + 1;
             }
-          else if (ca_likely (cmp < 0))
-            count = half;
           else
-            {
-              t->offset = middle;
+            count = half;
+        }
 
-              return 1;
-            }
+      if (middle != t->entry_count)
+        {
+          t->offset = first;
+
+          return 1;
         }
     }
   else
@@ -595,12 +605,11 @@ CA_wo_offset (void *handle)
 }
 
 static ssize_t
-CA_wo_read_row (void *handle, const char **out_key,
-                struct iovec *value)
+CA_wo_read_row (void *handle, struct iovec *value, size_t value_count)
 {
   struct CA_wo *t = handle;
   const char *key;
-  size_t key_length;
+  size_t key_length, o = 0;
 
   if (t->offset < 0)
     {
@@ -612,21 +621,28 @@ CA_wo_read_row (void *handle, const char **out_key,
   if (t->offset >= t->entry_count)
     return 0;
 
+  /* XXX: We really only need one struct iovec */
+
   key = t->buffer + t->entries[t->offset];
   key_length = strlen (key) + 1;
 
-  if (out_key)
-    *out_key = key;
-
-  if (value)
+  if (o < value_count)
     {
-      value->iov_base = (void *) (key + key_length);
-      value->iov_len = t->entries[t->offset + 1] - t->entries[t->offset] - key_length;
+      value[o].iov_base = (void *) key;
+      value[o].iov_len = key_length;
+      ++o;
+    }
+
+  if (o < value_count)
+    {
+      value[o].iov_base = (void *) (key + key_length);
+      value[o].iov_len = t->entries[t->offset + 1] - t->entries[t->offset] - key_length;
+      ++o;
     }
 
   ++t->offset;
 
-  return 1;
+  return o;
 }
 
 static int
@@ -638,39 +654,6 @@ CA_wo_delete_row (void *handle)
 }
 
 /*****************************************************************************/
-
-static int
-CA_wo_write (struct CA_wo *t, const void *data, size_t size)
-{
-  if (t->buffer_fill + size > t->buffer_size)
-    {
-      if (-1 == CA_wo_flush (t))
-        return -1;
-
-      if (size >= t->buffer_size)
-        return CA_wo_write_all (t->fd, data, size);
-    }
-
-  memcpy (t->buffer + t->buffer_fill, data, size);
-  t->buffer_fill += size;
-
-  return 0;
-}
-
-static int
-CA_wo_flush (struct CA_wo *t)
-{
-  if (-1 == CA_wo_write_all (t->fd, t->buffer, t->buffer_fill))
-    return -1;
-
-  t->write_offset += t->buffer_fill;
-
-  t->crc32c = ca_crc32c (t->crc32c, t->buffer, t->buffer_fill);
-
-  t->buffer_fill = 0;
-
-  return 0;
-}
 
 static int
 CA_wo_write_all (int fd, const void *data, size_t size)
@@ -761,7 +744,10 @@ CA_wo_free (struct CA_wo *t)
   if (t->fd != -1)
     close (t->fd);
 
-  if (t->buffer_size)
+  ca_file_buffer_free (t->write_buffer);
+  t->write_buffer = NULL;
+
+  if (t->buffer != MAP_FAILED)
     munmap (t->buffer, t->buffer_size);
 
   if (t->tmp_path)

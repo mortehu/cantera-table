@@ -1,3 +1,22 @@
+/*
+    Low-level data formatter for Cantera Table
+    Copyright (C) 2013    Morten Hustveit
+    Copyright (C) 2013    eVenture Capital Partners II
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifdef HAVE_CONFIG_H
 #  include "config.h"
 #endif
@@ -5,7 +24,6 @@
 #include <string.h>
 
 #include "ca-table.h"
-#include "memory.h"
 
 #define MAX_HEADER_SIZE 64
 
@@ -43,7 +61,7 @@ ca_table_write_time_float4 (struct ca_table *table, const char *key,
                             uint64_t start_time, uint32_t interval,
                             const float *sample_values, size_t sample_count)
 {
-  struct iovec value[2];
+  struct iovec value[3];
   uint8_t header[MAX_HEADER_SIZE], *o;
 
   o = header;
@@ -52,35 +70,14 @@ ca_table_write_time_float4 (struct ca_table *table, const char *key,
   CA_put_integer (&o, interval);
   CA_put_integer (&o, sample_count);
 
-  value[0].iov_base = header;
-  value[0].iov_len = o - header;
-  value[1].iov_base = (void *) sample_values;
-  value[1].iov_len = sizeof (*sample_values) * sample_count;
+  value[0].iov_base = (void *) key;
+  value[0].iov_len = strlen (key) + 1;
+  value[1].iov_base = header;
+  value[1].iov_len = o - header;
+  value[2].iov_base = (void *) sample_values;
+  value[2].iov_len = sizeof (*sample_values) * sample_count;
 
-  return ca_table_insert_row (table, key,
-                              value, sizeof (value) / sizeof (value[0]));
-}
-
-int
-ca_table_write_table_declaration (struct ca_table *table,
-                                  const char *table_name,
-                                  const struct ca_table_declaration *decl)
-{
-  struct iovec value[3];
-  uint8_t header[MAX_HEADER_SIZE], *o;
-
-  o = header;
-
-  CA_put_integer (&o, decl->field_count);
-
-  value[0].iov_base = header;
-  value[0].iov_len = o - header;
-  value[1].iov_base = (void *) decl->path;
-  value[1].iov_len = strlen (decl->path) + 1;
-  value[2].iov_base = (void *) decl->fields;
-  value[2].iov_len = sizeof (*decl->fields) * decl->field_count;
-
-  return ca_table_insert_row (table, table_name,
+  return ca_table_insert_row (table,
                               value, sizeof (value) / sizeof (value[0]));
 }
 
@@ -89,7 +86,7 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
                              const struct ca_offset_score *values,
                              size_t count)
 {
-  struct iovec iov;
+  struct iovec iov[2];
 
   uint8_t *target, *o;
   size_t i, target_alloc, target_size = 0;
@@ -99,7 +96,7 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 
   target_alloc = 32;
 
-  if (!(target = safe_malloc (target_alloc)))
+  if (!(target = ca_malloc (target_alloc)))
     return -1;
 
   o = target;
@@ -113,7 +110,7 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 
       if (target_size + 16 > target_alloc)
         {
-          if (-1 == ARRAY_GROW (&target, &target_alloc))
+          if (-1 == CA_ARRAY_GROW (&target, &target_alloc))
             goto done;
 
           o = target + target_size;
@@ -125,10 +122,13 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
       CA_put_float (&o, values[i].score);
     }
 
-  iov.iov_base = target;
-  iov.iov_len = o - target;
+  iov[0].iov_base = (void *) key;
+  iov[0].iov_len = strlen (key) + 1;
 
-  result = ca_table_insert_row (table, key, &iov, 1);
+  iov[1].iov_base = target;
+  iov[1].iov_len = o - target;
+
+  result = ca_table_insert_row (table, iov, sizeof (iov) / sizeof (iov[0]));
 
 done:
 

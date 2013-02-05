@@ -43,17 +43,32 @@ ca_set_error (const char *format, ...);
 
 /*****************************************************************************/
 
+#define CA_INVALID_XID ((uint64_t) -1)
+
+extern uint64_t ca_xid; /* The current transaction ID */
+
+/*****************************************************************************/
+
 enum ca_type
 {
-  CA_INVALID = -1,
+  CA_INVALID            = -1,
 
-  CA_TEXT = 0,
-  CA_TIME_SERIES = 1,
-  CA_TABLE_DECLARATION = 2,
-  CA_INT64 = 3,
-  CA_NUMERIC = 4,
-  CA_TIME = 5,
-  CA_OFFSET_SCORE = 6
+  CA_TEXT              =  0,
+  CA_TIME_FLOAT4       =  1,
+  CA_UINT64            =  2,
+  CA_INT64             =  3,
+  CA_NUMERIC           =  4,
+  CA_TIMESTAMPTZ       =  5,
+  CA_OFFSET_SCORE      =  6,
+  CA_BOOLEAN           =  7,
+  CA_UINT32            =  8,
+  CA_INT32             =  9,
+  CA_UINT16            = 10,
+  CA_INT16             = 11,
+  CA_UINT8             = 12,
+  CA_INT8              = 13,
+  CA_FLOAT4            = 14,
+  CA_FLOAT8            = 15
 };
 
 enum ca_type
@@ -102,24 +117,6 @@ struct ca_offset_score
   float score;
 } CA_PACKED;
 
-struct ca_data
-{
-  enum ca_type type;
-
-  union
-    {
-      struct
-        {
-          uint64_t start_time;
-          uint32_t interval;
-          size_t count;
-          const float *values;
-        } time_series;
-
-      struct ca_table_declaration table_declaration;
-    } v;
-};
-
 /*****************************************************************************/
 
 enum ca_table_flag
@@ -152,8 +149,7 @@ struct ca_table_backend
   (*is_sorted) (void *handle);
 
   int
-  (*insert_row) (void *handle, const char *key,
-                 const struct iovec *value, size_t value_count);
+  (*insert_row) (void *handle, const struct iovec *value, size_t value_count);
 
   int
   (*seek) (void *handle, off_t offset, int whence);
@@ -165,8 +161,7 @@ struct ca_table_backend
   (*offset) (void *handle);
 
   ssize_t
-  (*read_row) (void *handle, const char **key,
-               struct iovec *value);
+  (*read_row) (void *handle, struct iovec *value, size_t value_count);
 
   int
   (*delete_row) (void *handle);
@@ -206,7 +201,7 @@ int
 ca_table_is_sorted (struct ca_table *table) CA_USE_RESULT;
 
 int
-ca_table_insert_row (struct ca_table *table, const char *key,
+ca_table_insert_row (struct ca_table *table,
                      const struct iovec *value, size_t value_count) CA_USE_RESULT;
 
 int
@@ -224,11 +219,32 @@ off_t
 ca_table_offset (struct ca_table *table) CA_USE_RESULT;
 
 ssize_t
-ca_table_read_row (struct ca_table *table, const char **key,
-                   struct iovec *value) CA_USE_RESULT;
+ca_table_read_row (struct ca_table *table, struct iovec *value,
+                   size_t value_count) CA_USE_RESULT;
 
 int
 ca_table_delete_row (struct ca_table *table) CA_USE_RESULT;
+
+/*****************************************************************************/
+
+void *
+ca_malloc (size_t size) CA_USE_RESULT;
+
+void *
+ca_memdup (const void *data, size_t size) CA_USE_RESULT;
+
+char *
+ca_strdup (const char *string) CA_USE_RESULT;
+
+int
+ca_array_grow (void **array, size_t *alloc, size_t element_size,
+               size_t count) CA_USE_RESULT;
+
+#define CA_ARRAY_GROW(array, alloc) \
+  ca_array_grow ((void **) (array), alloc, sizeof(**(array)), 16)
+
+#define CA_ARRAY_GROW_N(array, alloc, n) \
+  ca_array_grow ((void **) (array), alloc, sizeof(**(array)), (n))
 
 /*****************************************************************************/
 
@@ -245,6 +261,27 @@ ca_fifo_put (struct ca_fifo *fifo, const void *data, size_t size);
 
 void
 ca_fifo_get (struct ca_fifo *fifo, void *data, size_t size);
+
+/*****************************************************************************/
+
+struct ca_file_buffer;
+
+struct ca_file_buffer *
+ca_file_buffer_alloc (int fd);
+
+void
+ca_file_buffer_free (struct ca_file_buffer *buffer);
+
+int
+ca_file_buffer_write (struct ca_file_buffer *buffer,
+                      const void *buf, size_t count);
+
+int
+ca_file_buffer_writev (struct ca_file_buffer *buffer,
+                       const struct iovec *iov, int count);
+
+int
+ca_file_buffer_flush (struct ca_file_buffer *buffer);
 
 /*****************************************************************************/
 
@@ -281,11 +318,6 @@ ca_table_write_time_float4 (struct ca_table *table, const char *key,
                             const float *sample_values, size_t sample_count) CA_USE_RESULT;
 
 int
-ca_table_write_table_declaration (struct ca_table *table,
-                                  const char *table_name,
-                                  const struct ca_table_declaration *decl) CA_USE_RESULT;
-
-int
 ca_table_write_offset_score (struct ca_table *table, const char *key,
                              const struct ca_offset_score *values,
                              size_t count);
@@ -293,27 +325,23 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 /*****************************************************************************/
 
 uint64_t
-ca_data_parse_integer (const uint8_t **input);
+ca_parse_integer (const uint8_t **input);
 
 float
-ca_data_parse_float (const uint8_t **input);
+ca_parse_float (const uint8_t **input);
 
 const char *
-ca_data_parse_string (const uint8_t **input);
+ca_parse_string (const uint8_t **input);
 
 void
-ca_data_parse_time_float4 (const uint8_t **input,
-                           uint64_t *start_time, uint32_t *interval,
-                           const float **sample_values, uint32_t *count);
-
-void
-ca_data_parse_table_declaration (const uint8_t **input,
-                                 struct ca_table_declaration *declaration);
+ca_parse_time_float4 (const uint8_t **input,
+                      uint64_t *start_time, uint32_t *interval,
+                      const float **sample_values, uint32_t *count);
 
 int
-ca_data_parse_offset_score (const uint8_t **input,
-                            struct ca_offset_score **sample_values,
-                            uint32_t *count) CA_USE_RESULT;
+ca_parse_offset_score (const uint8_t **input,
+                       struct ca_offset_score **sample_values,
+                       uint32_t *count) CA_USE_RESULT;
 
 /*****************************************************************************/
 

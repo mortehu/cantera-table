@@ -520,7 +520,7 @@ static int
 CA_wo_seek_to_key (void *handle, const char *key)
 {
   struct CA_wo *t = handle;
-  size_t first = 0, middle, half, count;
+  size_t first = 0, middle = 0, half, count;
 
   count = t->entry_count;
 

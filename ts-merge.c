@@ -298,6 +298,9 @@ data_flush (const char *key)
     case SAMPLE_TIME_FLOAT4:
 
         {
+          uint8_t *buffer = NULL;
+          size_t buffer_fill = 0, buffer_alloc = 0;
+
           qsort (time_float4_samples, sample_count, sizeof (*time_float4_samples), sample_float4_cmp);
 
           for (i = 0; i < sample_count; ++i)
@@ -338,6 +341,9 @@ data_flush (const char *key)
               uint64_t start_time;
               uint32_t interval = 0;
 
+              uint8_t *tmp_output;
+              size_t max_size;
+
               start_time = time_float4_samples[i].time;
 
               series_values[0] = time_float4_samples[i].value;
@@ -361,14 +367,35 @@ data_flush (const char *key)
                   while (i != sample_count && time_float4_samples[i].time - time_float4_samples[i - 1].time == interval);
                 }
 
-              if (-1 == ca_table_write_time_float4 (output, key, start_time, interval, series_values, series_count))
+              max_size = 64 + sizeof (*series_values) * series_count;
+
+              if (buffer_fill + max_size > buffer_alloc
+                  && -1 == CA_ARRAY_GROW_N (&buffer, &buffer_alloc, max_size))
                 {
                   free (series_values);
                   goto done;
                 }
+
+              tmp_output = buffer + buffer_fill;
+
+              if (-1 == ca_format_time_float4 (&tmp_output, start_time, interval, series_values, series_count))
+                {
+                  free (series_values);
+                  goto done;
+                }
+
+              buffer_fill = tmp_output - buffer;
             }
 
           free (series_values);
+
+          value[0].iov_base = (void *) key;
+          value[0].iov_len = strlen (key) + 1;
+          value[1].iov_base = buffer;
+          value[1].iov_len = buffer_fill;
+
+          if (-1 == ca_table_insert_row (output, value, 2))
+            goto done;
         }
 
       break;

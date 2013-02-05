@@ -521,6 +521,7 @@ CA_wo_seek_to_key (void *handle, const char *key)
 {
   struct CA_wo *t = handle;
   size_t first = 0, middle, half, count;
+  int found = 0;
 
   count = t->entry_count;
 
@@ -541,10 +542,15 @@ CA_wo_seek_to_key (void *handle, const char *key)
               count -= half + 1;
             }
           else
-            count = half;
+            {
+              if (!cmp)
+                found = 1;
+
+              count = half;
+            }
         }
 
-      if (middle != t->entry_count)
+      if (found)
         {
           t->offset = first;
 
@@ -568,10 +574,15 @@ CA_wo_seek_to_key (void *handle, const char *key)
               count -= half + 1;
             }
           else
-            count = half;
+            {
+              if (!cmp)
+                found = 1;
+
+              count = half;
+            }
         }
 
-      if (middle != t->entry_count)
+      if (found)
         {
           t->offset = first;
 

@@ -140,7 +140,12 @@ main (int argc, char **argv)
       if (-1 == (ret = ca_table_seek_to_key (table_B, words[i])))
         goto fail;
 
-      assert (ret == 1);
+      if (ret != 1)
+        {
+          ca_set_error ("Seek to key '%s' unexpectedly returned %d", words[i], ret);
+
+          goto fail;
+        }
 
       if (0 >= (ret = ca_table_read_row (table_B, value, sizeof (value) / sizeof (value[0]))))
         {

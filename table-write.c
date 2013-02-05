@@ -28,27 +28,6 @@
 #define MAX_HEADER_SIZE 64
 
 static void
-CA_put_integer (uint8_t **output, uint64_t value)
-{
-  uint8_t buffer[10];
-  unsigned int ptr = 9;
-
-  buffer[ptr] = value & 0x7f;
-  value >>= 7;
-
-  while (value)
-    {
-      buffer[--ptr] = 0x80 | value;
-
-      value >>= 7;
-    }
-
-  memcpy (*output, &buffer[ptr], 10 - ptr);
-
-  *output += 10 - ptr;
-}
-
-static void
 CA_put_float (uint8_t **output, float value)
 {
   memcpy (*output, &value, sizeof (value));
@@ -66,9 +45,9 @@ ca_table_write_time_float4 (struct ca_table *table, const char *key,
 
   o = header;
 
-  CA_put_integer (&o, start_time);
-  CA_put_integer (&o, interval);
-  CA_put_integer (&o, sample_count);
+  ca_format_integer (&o, start_time);
+  ca_format_integer (&o, interval);
+  ca_format_integer (&o, sample_count);
 
   value[0].iov_base = (void *) key;
   value[0].iov_len = strlen (key) + 1;
@@ -101,8 +80,8 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 
   o = target;
 
-  CA_put_integer (&o, CA_OFFSET_SCORE_VARBYTE_FLOAT);
-  CA_put_integer (&o, count);
+  ca_format_integer (&o, CA_OFFSET_SCORE_VARBYTE_FLOAT);
+  ca_format_integer (&o, count);
 
   for (i = 0; i < count; ++i)
     {
@@ -116,7 +95,7 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
           o = target + target_size;
         }
 
-      CA_put_integer (&o, values[i].offset - prev_offset);
+      ca_format_integer (&o, values[i].offset - prev_offset);
       prev_offset = values[i].offset;
 
       CA_put_float (&o, values[i].score);

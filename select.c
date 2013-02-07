@@ -260,112 +260,6 @@ CA_query_resolve_variables (struct expression *expression,
   return 0;
 }
 
-static int
-eval_expression (struct ca_arena_info *arena,
-                 struct expression_value *result,
-                 const struct iovec *field_values,
-                 const struct expression *expr)
-{
-  const struct iovec *iov;
-
-  switch (expr->type)
-    {
-    case EXPR_CONSTANT:
-
-      *result = expr->value;
-
-      break;
-
-    case EXPR_FIELD:
-
-      iov = &field_values[expr->value.d.field_index];
-      result->type = expr->value.type;
-
-      switch (expr->value.type)
-        {
-        case CA_TEXT:
-
-          result->d.string_literal = iov->iov_base;
-
-          break;
-
-        case CA_BOOLEAN:
-        case CA_UINT8:
-
-          if (iov->iov_len != 1)
-            {
-              ca_set_error ("Unpexected size %zu of 8 bit field", iov->iov_len);
-
-              return -1;
-            }
-
-          result->d.integer = *(const uint8_t *) iov->iov_base;
-
-          break;
-
-        case CA_INT8:
-
-          if (iov->iov_len != 1)
-            {
-              ca_set_error ("Unpexected size %zu of 8 bit field", iov->iov_len);
-
-              return -1;
-            }
-
-          result->d.integer = *(const int8_t *) iov->iov_base;
-
-          break;
-
-        case CA_UINT64:
-        case CA_INT64:
-
-          if (iov->iov_len != sizeof (int64_t))
-            {
-              ca_set_error ("Unpexected size %zu of 64 bit integer field", iov->iov_len);
-
-              return -1;
-            }
-
-          memcpy (&result->d.integer, iov->iov_base, sizeof (int64_t));
-
-          break;
-
-        case CA_TIME_FLOAT4:
-        case CA_OFFSET_SCORE:
-
-          result->d.iov = *iov;
-
-          break;
-
-        case CA_NUMERIC:
-
-          result->d.numeric = iov->iov_base;
-
-          break;
-
-        default:
-
-          ca_set_error ("eval_expression: Unhandled field type %d", expr->value.type);
-
-          return -1;
-        }
-
-      break;
-
-    case EXPR_PARENTHESIS:
-
-      return eval_expression (arena, result, field_values, expr->lhs);
-
-    default:
-
-      ca_set_error ("eval_expression: Unsupported expression type: %d", expr->type);
-
-      return -1;
-    }
-
-  return 0;
-}
-
 const char *
 ca_cast_to_text (struct ca_arena_info *arena,
                  const struct expression_value *value)
@@ -511,74 +405,6 @@ ca_output_value (uint32_t field_index, const char *value)
   return 0;
 }
 
-static int
-format_select_list (struct ca_arena_info *arena,
-                    struct iovec *field_values,
-                    struct select_variable *fields,
-                    struct select_item *si)
-{
-  int first = 1;
-
-  for (; si; si = (struct select_item *) si->expression.next)
-    {
-      struct expression_value value;
-      const char *string;
-
-      if (!first)
-        putchar ('\t');
-
-      if (si->expression.type == EXPR_ASTERISK)
-        {
-          struct select_variable *vi;
-          size_t i = 0;
-
-          for (vi = fields; vi; vi = vi->next, ++i)
-            {
-              struct expression expr;
-
-              expr.type = EXPR_FIELD;
-              expr.value.type = vi->type;
-              expr.value.d.field_index = i;
-
-              if (-1 == eval_expression (arena, &value, field_values, &expr))
-                return -1;
-
-              if (value.type != CA_TEXT)
-                {
-                  if (!(string = ca_cast_to_text (arena, &value)))
-                    return -1;
-                }
-              else
-                string = value.d.string_literal;
-
-              if (vi != fields)
-                putchar ('\t');
-
-              fwrite (string, 1, strlen (string), stdout);
-            }
-        }
-      else
-        {
-          if (-1 == eval_expression (arena, &value, field_values, &si->expression))
-            return -1;
-
-          if (value.type != CA_TEXT)
-            {
-              if (!(string = ca_cast_to_text (arena, &value)))
-                return -1;
-            }
-          else
-            string = value.d.string_literal;
-
-          fwrite (string, 1, strlen (string), stdout);
-        }
-
-      first = 0;
-    }
-
-  return 0;
-}
-
 int
 CA_select (struct ca_schema *schema, struct select_statement *stmt)
 {
@@ -684,6 +510,8 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
   if (1 == has_unique_primary_key
       && NULL != (primary_key_filter = expr_primary_key_filter (stmt->where, primary_key_index)))
     {
+      struct expression_value tmp_value;
+
       if (-1 == (ret = ca_table_seek_to_key (table, primary_key_filter)))
         goto done;
 
@@ -709,7 +537,7 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
                                   (const uint8_t *) value[i].iov_base + value[i].iov_len);
         }
 
-      if (-1 == format_select_list (&arena, field_values, first_variable, stmt->list))
+      if (-1 == output (&tmp_value, &arena, field_values))
         goto done;
 
       putchar ('\n');

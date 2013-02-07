@@ -263,6 +263,7 @@ ca_schema_load (const char *path)
 
           table->declaration.fields = new_fields;
           field = &table->declaration.fields[table->declaration.field_count - 1];
+          memset (field, 0, sizeof (*field));
 
           tmp = value[1].iov_base;
 

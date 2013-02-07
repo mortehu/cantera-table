@@ -75,13 +75,13 @@ bom : UTF8BOM
     ;
 
 statements
-    : statements statement ';'
-    | statement ';'
+    : statements statement
+    | statement
     ;
 
 statement
     :
-    | SHOW TABLES
+    | SHOW TABLES ';'
       {
         struct select_statement *stmt;
         struct select_item *list;
@@ -97,7 +97,7 @@ statement
         if (-1 == CA_select (context->schema, stmt))
           context->error = 1;
       }
-    | CREATE TABLE Identifier '(' createTableArgs ')' WITH '(' PATH '=' StringLiteral ')'
+    | CREATE TABLE Identifier '(' createTableArgs ')' WITH '(' PATH '=' StringLiteral ')' ';'
       {
         struct ca_table_declaration declaration;
         struct create_table_arg *arg;
@@ -135,12 +135,12 @@ statement
         if (-1 == ca_schema_create_table (context->schema, $3, &declaration))
           context->error = 1;
       }
-    | QUERY StringLiteral WITH '(' INDEX '=' Identifier ',' SUMMARY '=' Identifier ')' limitClause
+    | QUERY StringLiteral WITH '(' INDEX '=' Identifier ',' SUMMARY '=' Identifier ')' limitClause ';'
       {
         if (-1 == ca_schema_query (context->schema, $2, $7, $11, $13))
           context->error = 1;
       }
-    | SELECT selectList FROM Identifier whereClause offsetClause fetchClause
+    | SELECT selectList FROM Identifier whereClause offsetClause fetchClause ';'
       {
         struct select_statement *stmt;
         ALLOC(stmt);

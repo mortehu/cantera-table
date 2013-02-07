@@ -25,7 +25,7 @@
 #include "ca-table.h"
 #include "query.h"
 
-#define ALLOC(t) do { t = ca_arena_calloc(&context->arena, sizeof(*t)); } while(0)
+#define ALLOC(t) do { if (!(t = ca_arena_calloc(&context->arena, sizeof(*t)))) { context->error = 1; YYABORT; } } while(0)
 
 int
 yylex ();

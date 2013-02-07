@@ -66,6 +66,8 @@ Z [zZ]
 {F}{I}{R}{S}{T}                    { character += yyleng; return FIRST; }
 {F}{R}{O}{M}                       { character += yyleng; return FROM; }
 {I}{N}{D}{E}{X}                    { character += yyleng; return INDEX; }
+{I}{N}{S}{E}{R}{T}                 { character += yyleng; return INSERT; }
+{I}{N}{T}{O}                       { character += yyleng; return INTO; }
 {K}{E}{Y}                          { character += yyleng; return KEY; }
 {L}{I}{M}{I}{T}                    { character += yyleng; return LIMIT; }
 {N}{E}{X}{T}                       { character += yyleng; return NEXT; }
@@ -90,6 +92,7 @@ Z [zZ]
 {T}{I}{M}{E}                       { character += yyleng; return TIME; }
 {T}{I}{M}{E}_{F}{L}{O}{A}{T}4      { character += yyleng; return TIME_FLOAT4; }
 {T}{I}{M}{E}{S}{T}{A}{M}{P}        { character += yyleng; return TIMESTAMP; }
+{V}{A}{L}{U}{E}{S}                 { character += yyleng; return VALUES; }
 {W}{H}{E}{R}{E}                    { character += yyleng; return WHERE; }
 {W}{I}{T}{H}                       { character += yyleng; return WITH; }
 {Z}{O}{N}{E}                       { character += yyleng; return ZONE; }

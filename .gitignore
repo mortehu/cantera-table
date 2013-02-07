@@ -5,6 +5,7 @@
 *.lo
 *.log
 *.o
+*.plist
 *.so
 *.status
 *.sw?

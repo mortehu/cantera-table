@@ -260,6 +260,40 @@ CA_query_resolve_variables (struct expression *expression,
   return 0;
 }
 
+void
+ca_format_uint64 (char **output,
+                  uint64_t number,
+                  unsigned int min_width)
+{
+  char *begin, *o;
+
+  begin = o = *output;
+
+  while (number > 0)
+    {
+      *o++ = '0' + (number % 10);
+      number /= 10;
+    }
+
+  while (o - begin < min_width)
+    *o++ = '0';
+
+  *output = o--;
+
+  while (begin < o)
+    {
+      char tmp;
+
+      tmp = *o;
+      *o = *begin;
+      *begin = tmp;
+
+      --o;
+      ++begin;
+    }
+  /* XXX: Reverse string */
+}
+
 const char *
 ca_cast_to_text (struct ca_arena_info *arena,
                  const struct expression_value *value)
@@ -342,6 +376,8 @@ ca_cast_to_text (struct ca_arena_info *arena,
               for (i = 0; i < sample_count; ++i)
                 {
                   time_t time;
+                  struct tm tm;
+                  char *o;
 
                   /*   13 bytes %.7g formatted -FLT_MAX
                    * + 19 bytes for ISO 8601 date/time
@@ -357,13 +393,26 @@ ca_cast_to_text (struct ca_arena_info *arena,
 
                   time = start_time + i * interval;
 
-                  result_size +=
-                    strftime (result + result_size, 20,
-                              "%Y-%m-%dT%H:%M:%S", gmtime (&time));
+                  gmtime_r (&time, &tm);
 
-                  result_size +=
-                    sprintf (result + result_size, "\t%.7g",
-                             sample_values[i]);
+                  o = result + result_size;
+
+                  ca_format_uint64 (&o, tm.tm_year + 1900, 4);
+                  *o++ = '-';
+                  ca_format_uint64 (&o, tm.tm_mon + 1, 2);
+                  *o++ = '-';
+                  ca_format_uint64 (&o, tm.tm_mday, 2);
+                  *o++ = 'T';
+                  ca_format_uint64 (&o, tm.tm_hour, 2);
+                  *o++ = ':';
+                  ca_format_uint64 (&o, tm.tm_min, 2);
+                  *o++ = ':';
+                  ca_format_uint64 (&o, tm.tm_sec, 2);
+                  *o++ = '\t';
+
+                  o += sprintf (o, "%.7g", sample_values[i]);
+
+                  result_size = o - result;
 
                   first = 0;
                 }

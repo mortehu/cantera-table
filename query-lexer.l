@@ -62,6 +62,7 @@ Z [zZ]
 {A}{N}{D}                          { character += yyleng; return AND; }
 {C}{R}{E}{A}{T}{E}                 { character += yyleng; return CREATE; }
 {F}{E}{T}{C}{H}                    { character += yyleng; return FETCH; }
+{F}{A}{L}{S}{E}                    { character += yyleng; return FALSE; }
 {F}{I}{R}{S}{T}                    { character += yyleng; return FIRST; }
 {F}{R}{O}{M}                       { character += yyleng; return FROM; }
 {I}{N}{D}{E}{X}                    { character += yyleng; return INDEX; }
@@ -85,6 +86,7 @@ Z [zZ]
 {T}{A}{B}{L}{E}                    { character += yyleng; return TABLE; }
 {T}{A}{B}{L}{E}{S}                 { character += yyleng; return TABLES; }
 {T}{E}{X}{T}                       { character += yyleng; return TEXT; }
+{T}{R}{U}{E}                       { character += yyleng; return TRUE; }
 {T}{I}{M}{E}                       { character += yyleng; return TIME; }
 {T}{I}{M}{E}_{F}{L}{O}{A}{T}4      { character += yyleng; return TIME_FLOAT4; }
 {T}{I}{M}{E}{S}{T}{A}{M}{P}        { character += yyleng; return TIMESTAMP; }

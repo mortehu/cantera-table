@@ -267,6 +267,12 @@ eval_expression (struct ca_arena_info *arena,
 
   switch (expr->type)
     {
+    case EXPR_CONSTANT:
+
+      *result = expr->value;
+
+      break;
+
     case EXPR_FIELD:
 
       iov = &field_values[expr->value.d.field_index];

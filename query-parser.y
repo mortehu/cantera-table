@@ -40,6 +40,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token SELECT SHOW SUMMARY TABLE TABLES TEXT TIME TIMESTAMP TIME_FLOAT4 UTF8BOM
 %token WHERE WITH ZONE _NULL
 %token OFFSET FETCH FIRST NEXT ROW ROWS ONLY
+%token TRUE FALSE
 
 %token Identifier
 %token Integer
@@ -288,6 +289,23 @@ expression
         expr->type = EXPR_EQUAL;
         expr->lhs = $1;
         expr->rhs = $3;
+        $$ = expr;
+      }
+    | TRUE
+      {
+        struct expression *expr;
+        ALLOC(expr);
+        expr->type = EXPR_CONSTANT;
+        expr->value.type = CA_BOOLEAN;
+        expr->value.d.integer = 1;
+        $$ = expr;
+      }
+    | FALSE
+      {
+        struct expression *expr;
+        ALLOC(expr);
+        expr->type = EXPR_CONSTANT;
+        expr->value.type = CA_BOOLEAN;
         $$ = expr;
       }
     ;

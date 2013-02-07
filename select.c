@@ -258,7 +258,8 @@ CA_query_resolve_variables (struct expression *expression,
 }
 
 static int
-eval_expression (struct expression_value *result,
+eval_expression (struct ca_arena_info *arena,
+                 struct expression_value *result,
                  const struct iovec *field_values,
                  const struct expression *expr)
 {
@@ -344,7 +345,7 @@ eval_expression (struct expression_value *result,
 
     case EXPR_PARENTHESIS:
 
-      return eval_expression (result, field_values, expr->lhs);
+      return eval_expression (arena, result, field_values, expr->lhs);
 
     default:
 
@@ -466,6 +467,12 @@ ca_cast_to_text (struct ca_arena_info *arena,
             return NULL;
 
           result[result_size] = 0;
+
+          if (-1 == ca_arena_add_pointer (arena, result))
+            {
+              free (result);
+              result = NULL;
+            }
         }
 
       break;
@@ -481,14 +488,12 @@ ca_cast_to_text (struct ca_arena_info *arena,
 }
 
 static int
-format_select_list (struct iovec *field_values,
+format_select_list (struct ca_arena_info *arena,
+                    struct iovec *field_values,
                     struct select_variable *fields,
                     struct select_item *si)
 {
   int first = 1;
-  struct ca_arena_info arena;
-
-  ca_arena_init (&arena);
 
   for (; si; si = si->next)
     {
@@ -511,12 +516,12 @@ format_select_list (struct iovec *field_values,
               expr.value.type = vi->type;
               expr.value.d.field_index = i;
 
-              if (-1 == eval_expression (&value, field_values, &expr))
+              if (-1 == eval_expression (arena, &value, field_values, &expr))
                 return -1;
 
               if (value.type != CA_TEXT)
                 {
-                  if (!(string = ca_cast_to_text (&arena, &value)))
+                  if (!(string = ca_cast_to_text (arena, &value)))
                     return -1;
                 }
               else
@@ -530,12 +535,12 @@ format_select_list (struct iovec *field_values,
         }
       else
         {
-          if (-1 == eval_expression (&value, field_values, si->expression))
+          if (-1 == eval_expression (arena, &value, field_values, si->expression))
             return -1;
 
           if (value.type != CA_TEXT)
             {
-              if (!(string = ca_cast_to_text (&arena, &value)))
+              if (!(string = ca_cast_to_text (arena, &value)))
                 return -1;
             }
           else
@@ -546,8 +551,6 @@ format_select_list (struct iovec *field_values,
 
       first = 0;
     }
-
-  ca_arena_free (&arena);
 
   return 0;
 }
@@ -574,7 +577,11 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
 
   struct iovec value[2];
 
+  struct ca_arena_info arena;
+
   ca_clear_error ();
+
+  ca_arena_init (&arena);
 
   if (!(table = ca_schema_table (schema, stmt->from, &declaration)))
     goto done;
@@ -658,7 +665,7 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
                                   (const uint8_t *) value[i].iov_base + value[i].iov_len);
         }
 
-      if (-1 == format_select_list (field_values, first_variable, stmt->list))
+      if (-1 == format_select_list (&arena, field_values, first_variable, stmt->list))
         goto done;
 
       putchar ('\n');
@@ -682,10 +689,12 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
                                       (const uint8_t *) value[i].iov_base + value[i].iov_len);
             }
 
-          if (-1 == format_select_list (field_values, first_variable, stmt->list))
+          if (-1 == format_select_list (&arena, field_values, first_variable, stmt->list))
             goto done;
 
           putchar ('\n');
+
+          ca_arena_reset (&arena);
         }
 
       if (ret == -1)
@@ -695,6 +704,8 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
   result = 0;
 
 done:
+
+  ca_arena_free (&arena);
 
   free (field_values);
   ca_hashmap_free (variables);

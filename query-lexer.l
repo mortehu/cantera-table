@@ -61,19 +61,26 @@ Z [zZ]
 
 {A}{N}{D}                          { character += yyleng; return AND; }
 {C}{R}{E}{A}{T}{E}                 { character += yyleng; return CREATE; }
+{F}{E}{T}{C}{H}                    { character += yyleng; return FETCH; }
+{F}{I}{R}{S}{T}                    { character += yyleng; return FIRST; }
 {F}{R}{O}{M}                       { character += yyleng; return FROM; }
 {I}{N}{D}{E}{X}                    { character += yyleng; return INDEX; }
 {K}{E}{Y}                          { character += yyleng; return KEY; }
 {L}{I}{M}{I}{T}                    { character += yyleng; return LIMIT; }
+{N}{E}{X}{T}                       { character += yyleng; return NEXT; }
 {N}{O}{T}                          { character += yyleng; return NOT; }
 {N}{U}{L}{L}                       { character += yyleng; return _NULL; }
+{O}{F}{F}{S}{E}{T}                 { character += yyleng; return OFFSET; };
+{O}{F}{F}{S}{E}{T}_{S}{C}{O}{R}{E} { character += yyleng; return OFFSET_SCORE; }
+{O}{N}{L}{Y}                       { character += yyleng; return ONLY; }
 {O}{R}                             { character += yyleng; return OR; }
 {P}{A}{T}{H}                       { character += yyleng; return PATH; }
 {P}{R}{I}{M}{A}{R}{Y}              { character += yyleng; return PRIMARY; }
 {Q}{U}{E}{R}{Y}                    { character += yyleng; return QUERY; }
+{R}{O}{W}                          { character += yyleng; return ROW; }
+{R}{O}{W}{S}                       { character += yyleng; return ROWS; }
 {S}{E}{L}{E}{C}{T}                 { character += yyleng; return SELECT; }
 {S}{H}{O}{W}                       { character += yyleng; return SHOW; }
-{O}{F}{F}{S}{E}{T}_{S}{C}{O}{R}{E} { character += yyleng; return OFFSET_SCORE; }
 {S}{U}{M}{M}{A}{R}{Y}              { character += yyleng; return SUMMARY; }
 {T}{A}{B}{L}{E}                    { character += yyleng; return TABLE; }
 {T}{A}{B}{L}{E}{S}                 { character += yyleng; return TABLES; }

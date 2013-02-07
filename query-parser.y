@@ -39,6 +39,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token AND CREATE FROM INDEX KEY LIMIT NOT OFFSET_SCORE OR PATH PRIMARY QUERY
 %token SELECT SHOW SUMMARY TABLE TABLES TEXT TIME TIMESTAMP TIME_FLOAT4 UTF8BOM
 %token WHERE WITH ZONE _NULL
+%token OFFSET FETCH FIRST NEXT ROW ROWS ONLY
 
 %token Identifier
 %token Integer
@@ -58,7 +59,9 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %type<l> notNull
 %type<l> primaryKey
 %type<l> columnType
+%type<l> fetchClause
 %type<l> limitClause
+%type<l> offsetClause
 
 %left '=' '<' '>' '+' '-' '*' '/' LIKE AND OR UMINUS
 
@@ -137,13 +140,15 @@ statement
         if (-1 == ca_schema_query (context->schema, $2, $7, $11, $13))
           context->error = 1;
       }
-    | SELECT selectList FROM Identifier whereClause
+    | SELECT selectList FROM Identifier whereClause offsetClause fetchClause
       {
         struct select_statement *stmt;
         ALLOC(stmt);
         stmt->list = $2;
         stmt->from = $4;
         stmt->where = $5;
+        stmt->offset = $6;
+        stmt->limit = $7;
 
         if (-1 == CA_select (context->schema, stmt))
           context->error = 1;
@@ -295,6 +300,27 @@ whereClause
 limitClause
     :               { $$ = -1; }
     | LIMIT Integer { $$ = $2; }
+    ;
+
+rows
+    : ROW
+    | ROWS
+    |
+    ;
+
+firstOrNext
+    : FIRST
+    | NEXT
+    ;
+
+offsetClause
+    :                     { $$ = -1; }
+    | OFFSET Integer rows { $$ = $2; }
+    ;
+
+fetchClause
+    :                                     { $$ = -1; }
+    | FETCH firstOrNext Integer rows ONLY { $$ = $3; }
     ;
 %%
 #include <stdio.h>

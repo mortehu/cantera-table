@@ -635,6 +635,13 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
         goto done;
     }
 
+  if (!stmt->limit)
+    {
+      result = 0;
+
+      goto done;
+    }
+
   if (!(field_values = ca_malloc (sizeof (*field_values) * declaration->field_count)))
     goto done;
 
@@ -693,10 +700,16 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
                                       (const uint8_t *) value[i].iov_base + value[i].iov_len);
             }
 
+          if (stmt->offset > 0 && stmt->offset--)
+            continue;
+
           if (-1 == format_select_list (&arena, field_values, first_variable, stmt->list))
             goto done;
 
           putchar ('\n');
+
+          if (stmt->limit > 0 && !--stmt->limit)
+            break;
 
           ca_arena_reset (&arena);
         }

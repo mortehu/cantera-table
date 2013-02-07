@@ -124,6 +124,8 @@ struct select_statement
   struct select_item *list;
   char *from;
   struct expression *where;
+
+  int64_t limit, offset;
 };
 
 struct select_variable

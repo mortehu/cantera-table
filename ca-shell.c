@@ -198,6 +198,10 @@ main (int argc, char **argv)
     }
   else
     {
+      char buf[BUFSIZ];
+
+      setvbuf (stdout, buf, _IOFBF, sizeof buf);
+
       if (-1 == ca_schema_parse_script (schema, stdin))
         fprintf (stderr, "Error: %s\n", ca_last_error ());
     }

@@ -21,14 +21,15 @@ libca_table_la_SOURCES = \
   arena.c arena.h \
   crc32c.c crc32c.h \
   error.c error.h \
-  expression-llvm.cc \
   fifo.c \
   file-buffer.c \
   format.c \
   functions.c \
   hashmap.c hashmap.h \
-  merge.c \
+  llvm-expression.cc \
+  llvm-vm.cc \
   memory.c memory.h \
+  merge.c \
   parse.c \
   query.c \
   schema.c schema.h \

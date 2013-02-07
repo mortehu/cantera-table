@@ -183,10 +183,14 @@ struct statement
 int
 CA_select (struct ca_schema *schema, struct select_statement *stmt);
 
-typedef uint8_t /*struct expression_value */(*ca_expression_function)(void);
+typedef int (*ca_expression_function) (struct expression_value *result,
+                                       struct ca_arena_info *arena,
+                                       const struct iovec *field_values);
 
 ca_expression_function
-ca_expression_compile (struct expression *expr);
+ca_expression_compile (struct expression *expr,
+                       const struct ca_field *fields,
+                       size_t field_count);
 
 #ifdef __cplusplus
 } /* extern "C" */

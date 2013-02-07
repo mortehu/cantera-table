@@ -577,6 +577,8 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
   struct select_variable **last_variable = &first_variable;
   struct ca_hashmap *variables = NULL;
 
+  ca_expression_function where = NULL;
+
   size_t i;
   struct select_item *si;
 
@@ -632,6 +634,11 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
   if (stmt->where)
     {
       if (-1 == CA_query_resolve_variables (stmt->where, variables))
+        goto done;
+
+      if (!(where = ca_expression_compile (stmt->where,
+                                           declaration->fields,
+                                           declaration->field_count)))
         goto done;
     }
 
@@ -706,14 +713,11 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
                                       (const uint8_t *) value[i].iov_base + value[i].iov_len);
             }
 
-          if (stmt->where)
+          if (where)
             {
               struct expression_value filter;
 
-              if (-1 == eval_expression (&arena,
-                                         &filter,
-                                         field_values,
-                                         stmt->where))
+              if (-1 == where (&filter, &arena, field_values))
                 goto done;
 
               if (filter.type != CA_BOOLEAN)

@@ -174,7 +174,7 @@ ca_expression_compile (const char *name,
 {
   using namespace ca_llvm;
 
-  llvm::Value *return_value;
+  llvm::Value *return_value = NULL;
 
   unsigned int field_index = 0;
 

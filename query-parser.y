@@ -41,6 +41,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token WHERE WITH ZONE _NULL
 %token OFFSET FETCH FIRST NEXT ROW ROWS ONLY
 %token TRUE FALSE
+%token INSERT INTO VALUES
 
 %token Identifier
 %token Integer
@@ -48,111 +49,203 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token StringLiteral
 
 %type<p> Numeric Identifier StringLiteral
+%type<p> columnDefinition
 %type<p> createTableArg
 %type<p> createTableArgs
-%type<p> columnDefinition
 %type<p> expression
-%type<p> whereClause
+%type<p> expressionList
 %type<p> selectItem
 %type<p> selectList
+%type<p> statements
+%type<p> statement
+%type<p> whereClause
 
 %type<l> Integer
-%type<l> notNull
-%type<l> primaryKey
 %type<l> columnType
 %type<l> fetchClause
 %type<l> limitClause
+%type<l> notNull
 %type<l> offsetClause
+%type<l> primaryKey
 
 %left '=' '<' '>' '+' '-' '*' '/' LIKE AND OR UMINUS
 
-%start document
 %%
 document
     : bom statements
+      {
+        struct statement *stmt;
+
+        for (stmt = $2; !context->error && stmt; stmt = stmt->next)
+          {
+            switch (stmt->type)
+              {
+              case CA_SQL_CREATE_TABLE:
+
+                if (-1 == ca_schema_create_table (context->schema, stmt->u.create_table.name, &stmt->u.create_table.declaration))
+                  context->error = 1;
+
+                break;
+
+              case CA_SQL_INSERT:
+
+                ca_set_error ("INSERT is not yet supported");
+                context->error = 1;
+
+                break;
+
+              case CA_SQL_SELECT:
+
+                if (-1 == CA_select (context->schema, &stmt->u.select))
+                  context->error = 1;
+
+                break;
+
+              case CA_SQL_QUERY:
+
+                if (-1 == ca_schema_query (context->schema,
+                                           stmt->u.query.query,
+                                           stmt->u.query.index_table_name,
+                                           stmt->u.query.summary_table_name,
+                                           stmt->u.query.limit))
+                  context->error = 1;
+
+                break;
+              }
+          }
+      }
     ;
+
 bom : UTF8BOM
     |
     ;
 
 statements
-    : statements statement
-    | statement
+    : statement ';' statements
+      {
+        struct statement *stmt;
+        stmt = $1;
+        stmt->next = $3;
+        $$ = stmt;
+      }
+    | statement ';'
+      {
+        $$ = $1;
+      }
     ;
 
 statement
-    :
-    | SHOW TABLES ';'
+    : CREATE TABLE Identifier '(' createTableArgs ')' WITH '(' PATH '=' StringLiteral ')'
       {
-        struct select_statement *stmt;
+        struct statement *stmt;
+        struct create_table_statement *create;
+
+        struct create_table_arg *arg;
+        size_t i = 0;
+
+        ALLOC (stmt);
+        stmt->type = CA_SQL_CREATE_TABLE;
+        create = &stmt->u.create_table;
+        create->name = $3;
+
+        create->declaration.path = $11;
+
+        for (arg = $5; arg; arg = arg->next)
+          {
+            if (arg->type == COLUMN_DEFINITION)
+              ++create->declaration.field_count;
+          }
+
+        create->declaration.fields = ca_arena_calloc (&context->arena, sizeof (struct ca_field) * create->declaration.field_count);
+
+        for (arg = $5; arg; arg = arg->next)
+          {
+            struct ca_field *field;
+
+            if (arg->type != COLUMN_DEFINITION)
+              continue;
+
+            field = &create->declaration.fields[i];
+
+            strncpy (field->name, arg->u.column->name, CA_NAMEDATALEN - 1);
+
+            if (arg->u.column->not_null)
+              field->flags |= CA_FIELD_NOT_NULL;
+
+            if (arg->u.column->primary_key)
+              field->flags |= (CA_FIELD_PRIMARY_KEY | CA_FIELD_NOT_NULL);
+
+            field->type = arg->u.column->type;
+
+            ++i;
+          }
+
+        $$ = stmt;
+      }
+    | QUERY StringLiteral WITH '(' INDEX '=' Identifier ',' SUMMARY '=' Identifier ')' limitClause
+      {
+        struct statement *stmt;
+        struct query_statement *query;
+
+        ALLOC (stmt);
+        stmt->type = CA_SQL_QUERY;
+        query = &stmt->u.query;
+        query->query = $2;
+        query->index_table_name = $7;
+        query->summary_table_name = $11;
+        query->limit = $13;
+
+        $$ = stmt;
+      }
+    | INSERT INTO Identifier VALUES '(' expressionList ')'
+      {
+        struct statement *stmt;
+        struct insert_statement *insert;
+
+        ALLOC (stmt);
+        stmt->type = CA_SQL_INSERT;
+        insert = &stmt->u.insert;
+        insert->table_name = $3;
+        insert->values = $6;
+
+        $$ = stmt;
+      }
+    | SHOW TABLES
+      {
+        struct statement *stmt;
+        struct select_statement *select;
         struct select_item *list;
+
+        /* This statement maps directly to SELECT * FROM ca_catalog.ca_tables */
 
         ALLOC(list);
         ALLOC(list->expression);
         list->expression->type = EXPR_ASTERISK;
 
         ALLOC(stmt);
-        stmt->list = list;
-        stmt->from = "ca_catalog.ca_tables";
+        stmt->type = CA_SQL_SELECT;
+        select = &stmt->u.select;
+        select->list = list;
+        select->from = "ca_catalog.ca_tables";
+        select->limit = -1;
 
-        if (-1 == CA_select (context->schema, stmt))
-          context->error = 1;
+        $$ = stmt;
       }
-    | CREATE TABLE Identifier '(' createTableArgs ')' WITH '(' PATH '=' StringLiteral ')' ';'
+    | SELECT selectList FROM Identifier whereClause offsetClause fetchClause
       {
-        struct ca_table_declaration declaration;
-        struct create_table_arg *arg;
-        size_t i = 0;
+        struct statement *stmt;
+        struct select_statement *select;
 
-        memset (&declaration, 0, sizeof (declaration));
-        declaration.path = $11;
-
-        for (arg = $5; arg; arg = arg->next)
-          {
-            if (arg->type == COLUMN_DEFINITION)
-              ++declaration.field_count;
-          }
-
-        declaration.fields = ca_arena_calloc (&context->arena, sizeof (struct ca_field) * declaration.field_count);
-
-        for (arg = $5; arg; arg = arg->next)
-          {
-            if (arg->type != COLUMN_DEFINITION)
-              continue;
-
-            strncpy (declaration.fields[i].name, arg->u.column->name, CA_NAMEDATALEN - 1);
-
-            if (arg->u.column->not_null)
-              declaration.fields[i].flags |= CA_FIELD_NOT_NULL;
-
-            if (arg->u.column->primary_key)
-              declaration.fields[i].flags |= (CA_FIELD_PRIMARY_KEY | CA_FIELD_NOT_NULL);
-
-            declaration.fields[i].type = arg->u.column->type;
-
-            ++i;
-          }
-
-        if (-1 == ca_schema_create_table (context->schema, $3, &declaration))
-          context->error = 1;
-      }
-    | QUERY StringLiteral WITH '(' INDEX '=' Identifier ',' SUMMARY '=' Identifier ')' limitClause ';'
-      {
-        if (-1 == ca_schema_query (context->schema, $2, $7, $11, $13))
-          context->error = 1;
-      }
-    | SELECT selectList FROM Identifier whereClause offsetClause fetchClause ';'
-      {
-        struct select_statement *stmt;
         ALLOC(stmt);
-        stmt->list = $2;
-        stmt->from = $4;
-        stmt->where = $5;
-        stmt->offset = $6;
-        stmt->limit = $7;
+        stmt->type = CA_SQL_SELECT;
+        select = &stmt->u.select;
+        select->list = $2;
+        select->from = $4;
+        select->where = $5;
+        select->offset = $6;
+        select->limit = $7;
 
-        if (-1 == CA_select (context->schema, stmt))
-          context->error = 1;
+        $$ = stmt;
       }
     ;
 
@@ -238,6 +331,19 @@ selectItem
       }
     ;
 
+expressionList
+    : expression
+      {
+        $$ = $1;
+      }
+    | expression ',' expressionList
+      {
+        struct expression *left;
+        left = $1;
+        left->next = $3;
+        $$ = left;
+      }
+    ;
 
 expression
     : '*'

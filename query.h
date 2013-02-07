@@ -119,6 +119,29 @@ struct select_item
   struct select_item *next;
 };
 
+struct select_variable
+{
+  const char *name;
+  uint32_t field_index;
+  enum ca_type type;
+
+  struct select_variable *next;
+};
+
+enum ca_sql_statement_type
+{
+  CA_SQL_CREATE_TABLE,
+  CA_SQL_INSERT,
+  CA_SQL_SELECT,
+  CA_SQL_QUERY
+};
+
+struct create_table_statement
+{
+  const char *name;
+  struct ca_table_declaration declaration;
+};
+
 struct select_statement
 {
   struct select_item *list;
@@ -128,13 +151,33 @@ struct select_statement
   int64_t limit, offset;
 };
 
-struct select_variable
+struct insert_statement
 {
-  const char *name;
-  uint32_t field_index;
-  enum ca_type type;
+  const char *table_name;
+  struct expression *values;
+};
 
-  struct select_variable *next;
+struct query_statement
+{
+  const char *query;
+  const char *index_table_name;
+  const char *summary_table_name;
+  int64_t limit;
+};
+
+struct statement
+{
+  enum ca_sql_statement_type type;
+
+  union
+    {
+      struct create_table_statement create_table;
+      struct insert_statement insert;
+      struct select_statement select;
+      struct query_statement query;
+    } u;
+
+  struct statement *next;
 };
 
 int

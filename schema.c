@@ -114,7 +114,7 @@ CA_schema_create (struct ca_schema *schema, const char *path)
   schema->tables[1].declaration.fields[2].flags = CA_FIELD_NOT_NULL;
   schema->tables[1].declaration.fields[2].type = CA_INT64;
 
-  strcpy (schema->tables[1].declaration.fields[3].name, "null");
+  strcpy (schema->tables[1].declaration.fields[3].name, "not_null");
   schema->tables[1].declaration.fields[3].flags = CA_FIELD_NOT_NULL;
   schema->tables[1].declaration.fields[3].type = CA_BOOLEAN;
 

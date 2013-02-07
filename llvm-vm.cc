@@ -41,24 +41,31 @@ namespace ca_llvm
   llvm::Module *module;
   llvm::ExecutionEngine *engine;
 
+  llvm::Function *f_ca_cast_to_text = NULL;
+  llvm::Function *f_ca_output_value = NULL;
+
   LLVM_TYPE *t_int8;
   LLVM_TYPE *t_int8_pointer;
   LLVM_TYPE *t_int16;
   LLVM_TYPE *t_int32;
   LLVM_TYPE *t_int64;
+  LLVM_TYPE *t_int64_pointer;
 
   LLVM_TYPE *t_pointer;
   LLVM_TYPE *t_size;
 
+  LLVM_TYPE *t_float;
+  LLVM_TYPE *t_double;
+
   /* t_int32    header
-  * t_int8[4]  padding
-  * t_int8[8]  data0
-  * t_int8[8]  data1 */
+   * t_int8[4]  padding
+   * t_int8[8]  data0
+   * t_int8[8]  data1 */
   LLVM_TYPE *t_expression_value;
   LLVM_TYPE *t_expression_value_pointer;
 
   /* t_pointer
-  * t_size */
+   * t_size */
   LLVM_TYPE *t_iovec;
   LLVM_TYPE *t_iovec_pointer;
 
@@ -73,6 +80,7 @@ namespace ca_llvm
     t_int64 = llvm::Type::getInt64Ty (llvm::getGlobalContext ());
 
     t_int8_pointer = llvm::PointerType::get (t_int8, 0);
+    t_int64_pointer = llvm::PointerType::get (t_int64, 0);
 
     if (sizeof (void *) == sizeof (int64_t))
       t_pointer = t_int64;
@@ -88,6 +96,9 @@ namespace ca_llvm
     else
       assert (!"unhandled void * size");
 
+    t_float = llvm::Type::getFloatTy (llvm::getGlobalContext ());
+    t_double = llvm::Type::getDoubleTy (llvm::getGlobalContext ());
+
     types.clear ();
     types.push_back (t_int32);
     types.push_back (llvm::ArrayType::get (t_int8, 4));
@@ -102,8 +113,7 @@ namespace ca_llvm
     types.push_back (t_pointer);
     types.push_back (t_size);
     t_iovec = llvm::StructType::get (llvm::getGlobalContext (), types);
-    t_iovec_pointer
-      = llvm::PointerType::get (t_iovec, 0);
+    t_iovec_pointer = llvm::PointerType::get (t_iovec, 0);
 
     assert (sizeof (struct expression_value) == data_layout->getTypeAllocSize (t_expression_value));
     assert (sizeof (struct iovec) == data_layout->getTypeAllocSize (t_iovec));
@@ -112,6 +122,8 @@ namespace ca_llvm
   bool
   initialize ()
   {
+    std::vector<LLVM_TYPE *> argument_types;
+
     llvm::InitializeNativeTarget();
 
     module = new llvm::Module ("ca-table JIT module", llvm::getGlobalContext ());
@@ -130,6 +142,24 @@ namespace ca_llvm
 
     initialize_types (engine->getDataLayout ());
 
+    argument_types.clear ();
+    argument_types.push_back (t_pointer);
+    argument_types.push_back (t_expression_value_pointer);
+
+    f_ca_cast_to_text
+      = llvm::Function::Create (llvm::FunctionType::get (t_int8_pointer, argument_types, false),
+                                llvm::Function::ExternalLinkage,
+                                "ca_cast_to_text", module);
+
+    argument_types.clear ();
+    argument_types.push_back (t_int32);
+    argument_types.push_back (t_int8_pointer);
+
+    f_ca_output_value
+      = llvm::Function::Create (llvm::FunctionType::get (t_int32, argument_types, false),
+                                llvm::Function::ExternalLinkage,
+                                "ca_output_value", module);
+
     initialize_done = true;
 
     return true;
@@ -137,13 +167,17 @@ namespace ca_llvm
 } /* namespace ca_llvm */
 
 ca_expression_function
-ca_expression_compile (struct expression *expr,
-                      const struct ca_field *fields,
-                      size_t field_count)
+ca_expression_compile (const char *name,
+                       struct expression *expr,
+                       const struct ca_field *fields,
+                       size_t field_count,
+                       unsigned int flags)
 {
   using namespace ca_llvm;
 
   llvm::Value *return_value;
+
+  unsigned int field_index = 0;
 
   std::vector<LLVM_TYPE *> argument_types;
 
@@ -155,10 +189,9 @@ ca_expression_compile (struct expression *expr,
   argument_types.push_back (t_expression_value_pointer);
   argument_types.push_back (t_pointer);
   argument_types.push_back (t_iovec_pointer);
-
   auto function_type = llvm::FunctionType::get (t_int32, argument_types, false);
 
-  auto function = llvm::Function::Create (function_type, llvm::Function::InternalLinkage, "my_function", module);
+  auto function = llvm::Function::Create (function_type, llvm::Function::InternalLinkage, name, module);
 
   auto argument = function->arg_begin ();
   llvm::Value *result = argument++;
@@ -170,8 +203,50 @@ ca_expression_compile (struct expression *expr,
 
   builder->SetInsertPoint (basic_block);
 
-  if (!(return_value = subexpression_compile (builder, module, expr, result, arena, field_values)))
-    return NULL;
+  for (; expr; expr = expr->next)
+    {
+      if (expr->type == EXPR_ASTERISK)
+        {
+          size_t i = 0;
+
+          for (i = 0; i < field_count; ++i)
+            {
+              struct expression tmp_expr;
+
+              tmp_expr.type = EXPR_FIELD;
+              tmp_expr.value.type = (enum ca_type) fields[i].type;
+              tmp_expr.value.d.field_index = i;
+
+              if (!(return_value = subexpression_compile (builder, module, &tmp_expr, fields, result, arena, field_values)))
+                return NULL;
+
+              if (0 != (flags & CA_EXPRESSION_PRINT))
+                {
+                  llvm::Value *string;
+
+                  string = builder->CreateCall2 (f_ca_cast_to_text, arena, result);
+
+                  builder->CreateCall2 (f_ca_output_value, llvm::ConstantInt::get (t_int32, field_index), string);
+                  ++field_index;
+                }
+            }
+        }
+      else
+        {
+          if (!(return_value = subexpression_compile (builder, module, expr, fields, result, arena, field_values)))
+            return NULL;
+
+          if (0 != (flags & CA_EXPRESSION_PRINT))
+            {
+              llvm::Value *string;
+
+              string = builder->CreateCall2 (f_ca_cast_to_text, arena, result);
+
+              builder->CreateCall2 (f_ca_output_value, llvm::ConstantInt::get (t_int32, field_index), string);
+              ++field_index;
+            }
+        }
+    }
 
   builder->CreateRet (return_value);
 
@@ -179,7 +254,7 @@ ca_expression_compile (struct expression *expr,
 
   auto fpm = new llvm::FunctionPassManager (module);
 
-  /* XXX: From example code: fpm->add (new llvm::DataLayout (engine->getDataLayout ())); */
+  fpm->add (new llvm::DataLayout (*engine->getDataLayout ())); /* Freed by fpm */
   fpm->add (llvm::createBasicAliasAnalysisPass ());
   fpm->add (llvm::createInstructionCombiningPass ());
   fpm->add (llvm::createReassociatePass ());

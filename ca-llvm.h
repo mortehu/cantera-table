@@ -17,9 +17,13 @@ namespace ca_llvm
   extern LLVM_TYPE *t_int16;
   extern LLVM_TYPE *t_int32;
   extern LLVM_TYPE *t_int64;
+  extern LLVM_TYPE *t_int64_pointer;
 
   extern LLVM_TYPE *t_pointer;
   extern LLVM_TYPE *t_size;
+
+  extern LLVM_TYPE *t_float;
+  extern LLVM_TYPE *t_double;
 
   /* t_int32    header
    * t_int8[4]  padding
@@ -31,11 +35,11 @@ namespace ca_llvm
   /* t_pointer
    * t_size */
   extern LLVM_TYPE *t_iovec;
-  extern LLVM_TYPE *t_iovec_pointer;
 
   llvm::Value *
   subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
                          struct expression *expr,
+                         const struct ca_field *fields,
                          llvm::Value *result,
                          llvm::Value *arena,
                          llvm::Value *field_values);

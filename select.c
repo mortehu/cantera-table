@@ -500,6 +500,17 @@ ca_cast_to_text (struct ca_arena_info *arena,
   return result;
 }
 
+int
+ca_output_value (uint32_t field_index, const char *value)
+{
+  if (field_index)
+    putchar ('\t');
+
+  fwrite (value, 1, strlen (value), stdout);
+
+  return 0;
+}
+
 static int
 format_select_list (struct ca_arena_info *arena,
                     struct iovec *field_values,
@@ -580,7 +591,7 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
   struct select_variable **last_variable = &first_variable;
   struct ca_hashmap *variables = NULL;
 
-  ca_expression_function where = NULL;
+  ca_expression_function output = NULL, where = NULL;
 
   size_t i;
 
@@ -633,19 +644,29 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
       last_variable = &new_variable->next;
     }
 
+  if (-1 == CA_query_resolve_variables (&stmt->list->expression, variables))
+    goto done;
+
+  if (!(output = ca_expression_compile ("output",
+                                        &stmt->list->expression,
+                                        declaration->fields,
+                                        declaration->field_count,
+                                        CA_EXPRESSION_PRINT)))
+    {
+      goto done;
+    }
+
   if (stmt->where)
     {
       if (-1 == CA_query_resolve_variables (stmt->where, variables))
         goto done;
 
-      if (!(where = ca_expression_compile (stmt->where,
+      if (!(where = ca_expression_compile ("where",
+                                           stmt->where,
                                            declaration->fields,
-                                           declaration->field_count)))
+                                           declaration->field_count, 0)))
         goto done;
     }
-
-  if (-1 == CA_query_resolve_variables (&stmt->list->expression, variables))
-    goto done;
 
   if (!stmt->limit)
     {
@@ -700,6 +721,8 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
 
       while (0 < (ret = ca_table_read_row (table, value, 2)))
         {
+          struct expression_value tmp_value;
+
           field_index = 0;
 
           for (i = 0; i < ret; ++i)
@@ -714,26 +737,24 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
 
           if (where)
             {
-              struct expression_value filter;
-
-              if (-1 == where (&filter, &arena, field_values))
+              if (-1 == where (&tmp_value, &arena, field_values))
                 goto done;
 
-              if (filter.type != CA_BOOLEAN)
+              if (tmp_value.type != CA_BOOLEAN)
                 {
                   ca_set_error ("WHERE expression is not boolean");
 
                   goto done;
                 }
 
-              if (!filter.d.integer)
+              if (!tmp_value.d.integer)
                 continue;
             }
 
           if (stmt->offset > 0 && stmt->offset--)
             continue;
 
-          if (-1 == format_select_list (&arena, field_values, first_variable, stmt->list))
+          if (-1 == output (&tmp_value, &arena, field_values))
             goto done;
 
           putchar ('\n');

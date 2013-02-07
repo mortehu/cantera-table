@@ -179,6 +179,15 @@ struct statement
   struct statement *next;
 };
 
+/*****************************************************************************/
+
+const char *
+ca_cast_to_text (struct ca_arena_info *arena,
+                 const struct expression_value *value);
+
+int
+ca_output_value (uint32_t field_index, const char *value);
+
 int
 CA_select (struct ca_schema *schema, struct select_statement *stmt);
 
@@ -186,10 +195,14 @@ typedef int (*ca_expression_function) (struct expression_value *result,
                                        struct ca_arena_info *arena,
                                        const struct iovec *field_values);
 
+#define CA_EXPRESSION_PRINT 0x0001
+
 ca_expression_function
-ca_expression_compile (struct expression *expr,
+ca_expression_compile (const char *name,
+                       struct expression *expr,
                        const struct ca_field *fields,
-                       size_t field_count);
+                       size_t field_count,
+                       unsigned int flags);
 
 #ifdef __cplusplus
 } /* extern "C" */

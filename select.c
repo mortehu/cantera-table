@@ -706,6 +706,27 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
                                       (const uint8_t *) value[i].iov_base + value[i].iov_len);
             }
 
+          if (stmt->where)
+            {
+              struct expression_value filter;
+
+              if (-1 == eval_expression (&arena,
+                                         &filter,
+                                         field_values,
+                                         stmt->where))
+                goto done;
+
+              if (filter.type != CA_BOOLEAN)
+                {
+                  ca_set_error ("WHERE expression is not boolean");
+
+                  goto done;
+                }
+
+              if (!filter.d.integer)
+                continue;
+            }
+
           if (stmt->offset > 0 && stmt->offset--)
             continue;
 

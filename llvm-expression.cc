@@ -35,7 +35,7 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
 
             {
               llvm::Value *type = builder->CreateStructGEP (result, 0);
-              llvm::Value *value0 = builder->CreateStructGEP (result, 2);
+              llvm::Value *value0 = builder->CreateStructGEP (result, 1);
 
               builder->CreateStore (llvm::ConstantInt::get (t_int32, expr->value.type), type);
 
@@ -53,7 +53,7 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
                 case CA_TIMESTAMPTZ:
 
                   builder->CreateStore (llvm::ConstantInt::get (t_int64, expr->value.d.integer),
-                                        builder->CreatePointerCast (value0, t_int64_pointer));
+                                        value0);
 
                   break;
 
@@ -108,11 +108,10 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
                 case CA_TEXT:
 
                     {
-                      llvm::Value *result_text = builder->CreateStructGEP (result, 2);
+                      llvm::Value *result_text = builder->CreateStructGEP (result, 1);
                       llvm::Value *text = builder->CreateLoad (field_ptr);
 
-                      builder->CreateStore (text,
-                                            builder->CreatePointerCast (result_text, t_int64_pointer));
+                      builder->CreateStore (text, result_text);
                     }
 
                   break;
@@ -121,12 +120,11 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
                 case CA_UINT64:
 
                     {
-                      llvm::Value *result_int = builder->CreateStructGEP (result, 2);
+                      llvm::Value *result_int = builder->CreateStructGEP (result, 1);
                       llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
                       llvm::Value *data_pointer = builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_int64_pointer));
 
-                      builder->CreateStore (data_pointer,
-                                            builder->CreatePointerCast (result_int, t_int64_pointer));
+                      builder->CreateStore (data_pointer, result_int);
                     }
 
                   break;
@@ -134,13 +132,12 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
                 case CA_BOOLEAN:
 
                     {
-                      llvm::Value *result_int = builder->CreateStructGEP (result, 2);
+                      llvm::Value *result_int = builder->CreateStructGEP (result, 1);
                       llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
                       llvm::Value *data_pointer = builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_int8_pointer));
                       data_pointer = builder->CreateIntCast (data_pointer, t_int64, false);
 
-                      builder->CreateStore (data_pointer,
-                                            builder->CreatePointerCast (result_int, t_int64_pointer));
+                      builder->CreateStore (data_pointer, result_int);
 
                     }
 

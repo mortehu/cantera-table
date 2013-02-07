@@ -101,9 +101,8 @@ namespace ca_llvm
 
     types.clear ();
     types.push_back (t_int32);
-    types.push_back (llvm::ArrayType::get (t_int8, 4));
-    types.push_back (llvm::ArrayType::get (t_int8, 8));
-    types.push_back (llvm::ArrayType::get (t_int8, 8));
+    types.push_back (t_int64);
+    types.push_back (t_int64);
     t_expression_value
       = llvm::StructType::get (llvm::getGlobalContext (), types);
     t_expression_value_pointer

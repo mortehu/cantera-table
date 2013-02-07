@@ -440,8 +440,13 @@ ca_cast_to_text (struct ca_arena_info *arena,
                 {
                   time_t time;
 
-                  if (result_size + 32 >= result_alloc
-                      && -1 == CA_ARRAY_GROW_N (&result, &result_alloc, 32))
+                  /*   13 bytes %.7g formatted -FLT_MAX
+                   * + 19 bytes for ISO 8601 date/time
+                   * + 1 byte for LF
+                   * + 1 byte for TAB
+                   */
+                  if (result_size + 34 >= result_alloc
+                      && -1 == CA_ARRAY_GROW_N (&result, &result_alloc, 34))
                     return NULL;
 
                   if (!first)
@@ -450,13 +455,12 @@ ca_cast_to_text (struct ca_arena_info *arena,
                   time = start_time + i * interval;
 
                   result_size +=
-                    strftime (result + result_size, 32,
+                    strftime (result + result_size, 20,
                               "%Y-%m-%dT%H:%M:%S", gmtime (&time));
 
-                  /* XXX: Use snprintf? Check return value? */
-
                   result_size +=
-                    sprintf (result + result_size, "\t%.7g", sample_values[i]);
+                    sprintf (result + result_size, "\t%.7g",
+                             sample_values[i]);
 
                   first = 0;
                 }

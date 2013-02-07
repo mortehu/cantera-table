@@ -34,14 +34,56 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
         case EXPR_CONSTANT:
 
             {
-              llvm::Value *constant;
+              llvm::Value *type = builder->CreateStructGEP (result, 0);
+              llvm::Value *value0 = builder->CreateStructGEP (result, 2);
 
-              constant = builder->CreateIntToPtr(llvm::ConstantInt::get (t_pointer, (ptrdiff_t) &expr->value),
-                                                 t_int8_pointer);
+              builder->CreateStore (llvm::ConstantInt::get (t_int32, expr->value.type), type);
 
-              builder->CreateMemCpy (result,
-                                     constant,
-                                     sizeof (expr->value), UINT64_ALIGNMENT);
+              switch (expr->value.type)
+                {
+                case CA_BOOLEAN:
+                case CA_INT8:
+                case CA_UINT8:
+                case CA_INT16:
+                case CA_UINT16:
+                case CA_INT32:
+                case CA_UINT32:
+                case CA_INT64:
+                case CA_UINT64:
+                case CA_TIMESTAMPTZ:
+
+                  builder->CreateStore (llvm::ConstantInt::get (t_int64, expr->value.d.integer),
+                                        builder->CreatePointerCast (value0, t_int64_pointer));
+
+                  break;
+
+                case CA_FLOAT4:
+
+                  builder->CreateStore (llvm::ConstantFP::get (t_float, expr->value.d.float4),
+                                        builder->CreateBitCast (value0, t_float));
+
+                  break;
+
+                case CA_FLOAT8:
+
+                  builder->CreateStore (llvm::ConstantFP::get (t_double, expr->value.d.float8),
+                                        builder->CreateBitCast (value0, t_double));
+
+                  break;
+
+                case CA_TEXT:
+                case CA_NUMERIC:
+
+                  builder->CreateStore (llvm::ConstantInt::get (t_pointer, (ptrdiff_t) expr->value.d.string_literal), value0);
+
+                  break;
+
+                default:
+
+                  ca_set_error ("subexpression_compile: Unhandled constant value type %d", expr->value.type);
+
+                  return NULL;
+                }
             }
 
           return llvm::ConstantInt::get (t_int32, 0);

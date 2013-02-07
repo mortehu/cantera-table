@@ -105,6 +105,24 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
 
               switch (fields[field_index].type)
                 {
+                case CA_TIME_FLOAT4:
+
+                    {
+                      llvm::Value *field_length;
+
+                      field_length = builder->CreateStructGEP (field_iov, 1);
+
+                      llvm::Value *result_pointer = builder->CreateStructGEP (result, 1);
+                      llvm::Value *result_length = builder->CreateStructGEP (result, 2);
+                      llvm::Value *pointer = builder->CreateLoad (field_ptr);
+                      llvm::Value *length = builder->CreateLoad (field_length);
+
+                      builder->CreateStore (pointer, result_pointer);
+                      builder->CreateStore (length, result_length);
+                    }
+
+                  break;
+
                 case CA_TEXT:
 
                     {

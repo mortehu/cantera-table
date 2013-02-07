@@ -332,7 +332,7 @@ firstOrNext
     ;
 
 offsetClause
-    :                     { $$ = -1; }
+    :                     { $$ = 0; }
     | OFFSET Integer rows { $$ = $2; }
     ;
 

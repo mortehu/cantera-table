@@ -114,9 +114,8 @@ struct expression
 
 struct select_item
 {
-  struct expression *expression;
+  struct expression expression;
   char *alias;
-  struct select_item *next;
 };
 
 struct select_variable

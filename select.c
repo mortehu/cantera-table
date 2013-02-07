@@ -211,7 +211,7 @@ CA_query_resolve_variables (struct expression *expression,
           expression->value.type = variable->type;
           expression->value.d.field_index = variable->field_index;
 
-          return 0;
+          break;
 
         case EXPR_ADD:
         case EXPR_AND:
@@ -237,14 +237,15 @@ CA_query_resolve_variables (struct expression *expression,
         case EXPR_NEGATIVE:
         case EXPR_PARENTHESIS:
 
-          expression = expression->lhs;
+          if (-1 == CA_query_resolve_variables (expression->lhs, variables))
+            return -1;
 
-          continue;
+          break;
 
         case EXPR_ASTERISK:
         case EXPR_CONSTANT:
 
-          return 0;
+          break;
 
         default:
 
@@ -252,6 +253,8 @@ CA_query_resolve_variables (struct expression *expression,
 
           assert (!"fix me");
         }
+
+      expression = expression->next;
     }
 
   return 0;
@@ -505,7 +508,7 @@ format_select_list (struct ca_arena_info *arena,
 {
   int first = 1;
 
-  for (; si; si = si->next)
+  for (; si; si = (struct select_item *) si->expression.next)
     {
       struct expression_value value;
       const char *string;
@@ -513,7 +516,7 @@ format_select_list (struct ca_arena_info *arena,
       if (!first)
         putchar ('\t');
 
-      if (si->expression->type == EXPR_ASTERISK)
+      if (si->expression.type == EXPR_ASTERISK)
         {
           struct select_variable *vi;
           size_t i = 0;
@@ -545,7 +548,7 @@ format_select_list (struct ca_arena_info *arena,
         }
       else
         {
-          if (-1 == eval_expression (arena, &value, field_values, si->expression))
+          if (-1 == eval_expression (arena, &value, field_values, &si->expression))
             return -1;
 
           if (value.type != CA_TEXT)
@@ -580,7 +583,6 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
   ca_expression_function where = NULL;
 
   size_t i;
-  struct select_item *si;
 
   int ret, result = -1;
 
@@ -642,11 +644,8 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
         goto done;
     }
 
-  for (si = stmt->list; si; si = si->next)
-    {
-      if (-1 == CA_query_resolve_variables (si->expression, variables))
-        goto done;
-    }
+  if (-1 == CA_query_resolve_variables (&stmt->list->expression, variables))
+    goto done;
 
   if (!stmt->limit)
     {

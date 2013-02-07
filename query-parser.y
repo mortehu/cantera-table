@@ -219,8 +219,7 @@ statement
         /* This statement maps directly to SELECT * FROM ca_catalog.ca_tables */
 
         ALLOC(list);
-        ALLOC(list->expression);
-        list->expression->type = EXPR_ASTERISK;
+        list->expression.type = EXPR_ASTERISK;
 
         ALLOC(stmt);
         stmt->type = CA_SQL_SELECT;
@@ -314,7 +313,7 @@ selectList
       {
         struct select_item *left;
         left = $1;
-        left->next = $3;;
+        left->expression.next = $3;;
         $$ = left;
       }
     ;
@@ -324,9 +323,7 @@ selectItem
       {
         struct select_item *item;
         ALLOC(item);
-        item->expression = $1;
-        item->alias = 0;
-        item->next = 0;
+        memcpy (&item->expression, $1, sizeof (item->expression));
         $$ = item;
       }
     ;

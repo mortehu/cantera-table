@@ -130,10 +130,9 @@ ca_table_offset (struct ca_table *table)
 }
 
 ssize_t
-ca_table_read_row (struct ca_table *table, struct iovec *value,
-                   size_t value_count)
+ca_table_read_row (struct ca_table *table, struct iovec *value)
 {
-  return table->backend->read_row (table->handle, value, value_count);
+  return table->backend->read_row (table->handle, value);
 }
 
 int

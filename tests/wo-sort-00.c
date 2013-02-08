@@ -12,7 +12,7 @@ main (int argc, char **argv)
   struct ca_table *table_A = NULL, *table_B = NULL;
 
   char tmp_path[256];
-  struct iovec value[2];
+  struct iovec value;
 
   int fd;
   size_t i;
@@ -38,13 +38,15 @@ main (int argc, char **argv)
 
   for (i = 0; i < WORD_COUNT; ++i)
     {
-      value[0].iov_base = (void *) words[i];
-      value[0].iov_len = strlen (words[i]) + 1;
+      struct iovec iov[2];
 
-      value[1].iov_base = &i;
-      value[1].iov_len = sizeof (i);
+      iov[0].iov_base = (void *) words[i];
+      iov[0].iov_len = strlen (words[i]) + 1;
 
-      if (-1 == ca_table_insert_row (table_A, value, sizeof (value) / sizeof (value[0])))
+      iov[1].iov_base = &i;
+      iov[1].iov_len = sizeof (i);
+
+      if (-1 == ca_table_insert_row (table_A, iov, sizeof (iov) / sizeof (iov[0])))
         goto fail;
     }
 
@@ -59,13 +61,12 @@ main (int argc, char **argv)
     {
       const char *key;
 
-      if (-1 == (ret = ca_table_read_row (table_A, value, sizeof (value) / sizeof (value[0]))))
+      if (-1 == (ret = ca_table_read_row (table_A, &value)))
         goto fail;
 
-      assert (ret <= sizeof (value) / sizeof (value[0]));
-      assert (ret == 2); /* ret == 1 is also valid -- learn to deal with it */
+      assert (ret == 1);
 
-      key = value[0].iov_base;
+      key = value.iov_base;
 
       if (strcmp (key, words[i]))
         {
@@ -91,26 +92,28 @@ main (int argc, char **argv)
     goto fail;
 
   /* Check that keys come out in the right order */
-  while (0 < (ret = ca_table_read_row (table_B, value, sizeof (value) / sizeof (value[0]))))
+  while (0 < (ret = ca_table_read_row (table_B, &value)))
     {
       const char *key;
+      size_t key_length;
 
-      assert (ret <= sizeof (value) / sizeof (value[0]));
-      assert (ret == 2); /* ret == 1 is also valid -- learn to deal with it */
+      assert (ret == 1);
 
-      key = value[0].iov_base;
+      key = value.iov_base;
 
       assert (!prev_key || strcmp (prev_key, key) < 0);
 
-      if (value[1].iov_len != sizeof (i))
+      key_length = strlen (key) + 1;
+
+      if (value.iov_len != sizeof (i) + key_length)
         {
           ca_set_error ("Got value size %zu while %zu was expected (key was %s)",
-                        value[1].iov_len, sizeof (i), key);
+                        value.iov_len, sizeof (i) + key_length, key);
 
           goto fail;
         }
 
-      memcpy (&i, value[1].iov_base, sizeof (i));
+      memcpy (&i, key + key_length, sizeof (i));
 
       if (i >= sizeof (words) / sizeof (words[0]))
         {
@@ -147,7 +150,7 @@ main (int argc, char **argv)
           goto fail;
         }
 
-      if (0 >= (ret = ca_table_read_row (table_B, value, sizeof (value) / sizeof (value[0]))))
+      if (0 >= (ret = ca_table_read_row (table_B, &value)))
         {
           if (!ret)
             ca_set_error ("Did not get value for key %s after seek to key", words[i]);
@@ -155,9 +158,7 @@ main (int argc, char **argv)
           goto fail;
         }
 
-      assert (ret == 2); /* ret == 1 is also valid -- learn to deal with it */
-
-      key = value[0].iov_base;
+      key = value.iov_base;
 
       assert (!strcmp (words[i], key));
     }

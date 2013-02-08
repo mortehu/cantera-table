@@ -187,16 +187,13 @@ ca_schema_load (const char *path)
     {
       struct schema_table *table;
       const char *tmp;
-      struct iovec value[2];
+      struct iovec value;
       ssize_t ret;
 
-      if (2 != (ret = ca_table_read_row (ca_tables, value, 2)))
+      if (1 != (ret = ca_table_read_row (ca_tables, &value)))
         {
           if (ret == 0)
             break;
-
-          if (ret == 1)
-            ca_set_error ("Got only one iovec from ca_table_read_row, but not supported in code yet");
 
           goto fail;
         }
@@ -208,10 +205,10 @@ ca_schema_load (const char *path)
       table = &result->tables[result->table_count++];
       memset (table, 0, sizeof (*table));
 
-      if (!(table->name = ca_strdup (value[0].iov_base)))
+      if (!(table->name = ca_strdup (value.iov_base)))
         goto fail;
 
-      tmp = value[1].iov_base;
+      tmp = strchr (value.iov_base, 0) + 1;
 
       if (!(table->declaration.path = ca_strdup (tmp)))
         goto fail;
@@ -223,7 +220,7 @@ ca_schema_load (const char *path)
 
       tmp = strchr (tmp, 0) + 1;
 
-      assert (tmp == (const char *) value[1].iov_base + value[1].iov_len);
+      assert (tmp == (const char *) value.iov_base + value.iov_len);
 
       if (1 != (ret = ca_table_seek_to_key (ca_columns, table->name)))
         {
@@ -244,18 +241,15 @@ ca_schema_load (const char *path)
           struct ca_field *new_fields, *field;
           int64_t type;
 
-          if (2 != (ret = ca_table_read_row (ca_columns, value, 2)))
+          if (1 != (ret = ca_table_read_row (ca_columns, &value)))
             {
               if (ret == 0)
                 break;
 
-              if (ret == 1)
-                ca_set_error ("Got only one iovec from ca_table_read_row, but not supported in code yet");
-
               goto fail;
             }
 
-          if (strcmp (value[0].iov_base, table->name))
+          if (strcmp (value.iov_base, table->name))
             break;
 
           if (!(new_fields = realloc (table->declaration.fields, sizeof (*table->declaration.fields) * ++table->declaration.field_count)))
@@ -265,7 +259,7 @@ ca_schema_load (const char *path)
           field = &table->declaration.fields[table->declaration.field_count - 1];
           memset (field, 0, sizeof (*field));
 
-          tmp = value[1].iov_base;
+          tmp = strchr (value.iov_base, 0) + 1;
 
           assert (strlen (tmp) + 1 < sizeof (field->name));
 
@@ -282,7 +276,7 @@ ca_schema_load (const char *path)
           if (*tmp++)
             field->flags |= CA_FIELD_PRIMARY_KEY;
 
-          assert (tmp == (const char *) value[1].iov_base + value[1].iov_len);
+          assert (tmp == (const char *) value.iov_base + value.iov_len);
 
           field->type = type;
         }

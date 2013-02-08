@@ -184,7 +184,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
   struct ca_table *summary_table;
   struct ca_table_declaration *summary_declaration;
 
-  struct iovec data_iov[2];
+  struct iovec data_iov;
   const uint8_t *data;
 
   struct ca_offset_score *offsets = NULL;
@@ -279,7 +279,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
           goto done;
         }
 
-      if (2 != (ret = ca_table_read_row (index_table, data_iov, 2)))
+      if (1 != (ret = ca_table_read_row (index_table, &data_iov)))
         {
           if (ret >= 0)
             ca_set_error ("ca_table_read_row unexpectedly returned %d", (int) ret);
@@ -287,7 +287,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
           goto done;
         }
 
-      data = data_iov[1].iov_base;
+      data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
 
       if (-1 == ca_parse_offset_score (&data, &token_offsets, &token_offset_count))
         goto done;
@@ -343,7 +343,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
       if (-1 == ca_table_seek (summary_table, offsets[i].offset, SEEK_SET))
         goto done;
 
-      if (2 != (ret = ca_table_read_row (summary_table, data_iov, 2)))
+      if (1 != (ret = ca_table_read_row (summary_table, &data_iov)))
         {
           if (ret >= 0)
             ca_set_error ("ca_table_read_row unexpectedly returned %d.  Is the index stale?", (int) ret);
@@ -351,7 +351,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
           goto done;
         }
 
-      printf ("%s", (const char *) data_iov[1].iov_base + 8);
+      printf ("%s", (const char *) strchr (data_iov.iov_base, 0) + 9);
     }
 
   printf ("]\n");

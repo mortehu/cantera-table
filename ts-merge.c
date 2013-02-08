@@ -436,14 +436,19 @@ done:
 }
 
 static int
-data_callback (const struct iovec *value, size_t value_count, void *opaque)
+data_callback (const struct iovec *value, void *opaque)
 {
-  const char *key;
   const uint8_t *begin, *end;
+  const char *key;
+  size_t key_length;
 
-  assert (value_count == 2);
+  begin = value->iov_base;
+  end = begin + value->iov_len;
 
-  key = value[0].iov_base;
+  key = (const char *) begin;
+  key_length = strlen (key) + 1;
+
+  begin += key_length;
 
   if (!prev_key || strcmp (key, prev_key))
     {
@@ -455,9 +460,6 @@ data_callback (const struct iovec *value, size_t value_count, void *opaque)
       if (!(prev_key = ca_strdup (key)))
         return -1;
     }
-
-  begin = value[1].iov_base;
-  end = begin + value[1].iov_len;
 
   if (column_count == 1 && column_types[0] == CA_TIME_FLOAT4)
     {

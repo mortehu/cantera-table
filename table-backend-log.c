@@ -74,7 +74,7 @@ static off_t
 CA_log_offset (void *handle);
 
 static ssize_t
-CA_log_read_row (void *handle, struct iovec *value, size_t value_count);
+CA_log_read_row (void *handle, struct iovec *value);
 
 static int
 CA_log_delete_row (void *handle);
@@ -337,7 +337,7 @@ CA_log_offset (void *handle)
 }
 
 static ssize_t
-CA_log_read_row (void *handle, struct iovec *value, size_t value_size)
+CA_log_read_row (void *handle, struct iovec *value)
 {
   struct CA_log *t = handle;
   uint64_t size;
@@ -393,15 +393,6 @@ CA_log_read_row (void *handle, struct iovec *value, size_t value_size)
 
   memcpy (&size, t->read_map + t->offset, sizeof (size));
 
-  if (!size || value_size < 1)
-    {
-      t->offset += size;
-
-      memset (value, 0, value_size * sizeof (*value));
-
-      return 1;
-    }
-
   if (t->offset + size > t->read_map_size)
     {
       ca_set_error ("Record truncated");
@@ -409,8 +400,8 @@ CA_log_read_row (void *handle, struct iovec *value, size_t value_size)
       return -1;
     }
 
-  value[0].iov_base = t->read_map + t->offset + sizeof (size);
-  value[0].iov_len = size - sizeof (size);
+  value->iov_base = t->read_map + t->offset + sizeof (size);
+  value->iov_len = size - sizeof (size);
 
   t->offset += size;
 

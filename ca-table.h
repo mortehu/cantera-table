@@ -161,7 +161,7 @@ struct ca_table_backend
   (*offset) (void *handle);
 
   ssize_t
-  (*read_row) (void *handle, struct iovec *value, size_t value_count);
+  (*read_row) (void *handle, struct iovec *value);
 
   int
   (*delete_row) (void *handle);
@@ -219,8 +219,7 @@ off_t
 ca_table_offset (struct ca_table *table) CA_USE_RESULT;
 
 ssize_t
-ca_table_read_row (struct ca_table *table, struct iovec *value,
-                   size_t value_count) CA_USE_RESULT;
+ca_table_read_row (struct ca_table *table, struct iovec *value) CA_USE_RESULT;
 
 int
 ca_table_delete_row (struct ca_table *table) CA_USE_RESULT;
@@ -358,8 +357,8 @@ ca_parse_offset_score (const uint8_t **input,
 int
 ca_table_sort (struct ca_table *output, struct ca_table *input) CA_USE_RESULT;
 
-typedef int (*ca_merge_callback) (const struct iovec *value,
-                                  size_t value_count, void *opaque);
+typedef int (*ca_merge_callback) (const struct iovec *value, void *opaque);
+
 int
 ca_table_merge (struct ca_table **tables, size_t table_count,
                 ca_merge_callback callback, void *opaque) CA_USE_RESULT;

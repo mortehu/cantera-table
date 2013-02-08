@@ -82,7 +82,7 @@ static off_t
 CA_wo_offset (void *handle);
 
 static ssize_t
-CA_wo_read_row (void *handle, struct iovec *value, size_t value_count);
+CA_wo_read_row (void *handle, struct iovec *value);
 
 static int
 CA_wo_delete_row (void *handle);
@@ -618,11 +618,9 @@ CA_wo_offset (void *handle)
 }
 
 static ssize_t
-CA_wo_read_row (void *handle, struct iovec *value, size_t value_count)
+CA_wo_read_row (void *handle, struct iovec *value)
 {
   struct CA_wo *t = handle;
-  const char *key;
-  size_t key_length, o = 0;
 
   if (t->offset < 0)
     {
@@ -634,28 +632,12 @@ CA_wo_read_row (void *handle, struct iovec *value, size_t value_count)
   if (t->offset >= t->entry_count)
     return 0;
 
-  /* XXX: We really only need one struct iovec */
-
-  key = t->buffer + t->entries[t->offset];
-  key_length = strlen (key) + 1;
-
-  if (o < value_count)
-    {
-      value[o].iov_base = (void *) key;
-      value[o].iov_len = key_length;
-      ++o;
-    }
-
-  if (o < value_count)
-    {
-      value[o].iov_base = (void *) (key + key_length);
-      value[o].iov_len = t->entries[t->offset + 1] - t->entries[t->offset] - key_length;
-      ++o;
-    }
+  value->iov_base = (void *) t->buffer + t->entries[t->offset];
+  value->iov_len = t->entries[t->offset + 1] - t->entries[t->offset];
 
   ++t->offset;
 
-  return o;
+  return 1;
 }
 
 static int

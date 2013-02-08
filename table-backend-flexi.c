@@ -56,7 +56,7 @@ static off_t
 CA_flexi_offset (void *handle);
 
 static ssize_t
-CA_flexi_read_row (void *handle, struct iovec *value, size_t value_count);
+CA_flexi_read_row (void *handle, struct iovec *value);
 
 static int
 CA_flexi_delete_row (void *handle);
@@ -346,7 +346,7 @@ CA_flexi_offset (void *handle)
 }
 
 static ssize_t
-CA_flexi_read_row (void *handle, struct iovec *value, size_t value_size)
+CA_flexi_read_row (void *handle, struct iovec *value)
 {
   struct CA_flexi *t = handle;
   const struct CA_flexi_row_header *header = NULL;
@@ -395,13 +395,6 @@ CA_flexi_read_row (void *handle, struct iovec *value, size_t value_size)
           continue;
         }
 
-      if (value_size < 1)
-        {
-          t->offset += sizeof (*header) + header->size;
-
-          return 1;
-        }
-
       if (t->offset + sizeof (*header) + header->size > t->map_size)
         {
           ca_set_error ("Table truncated (expected %lu + %lu bytes, got %lu)",
@@ -412,8 +405,8 @@ CA_flexi_read_row (void *handle, struct iovec *value, size_t value_size)
           return -1;
         }
 
-      value[0].iov_base = t->map + t->offset + sizeof (*header);
-      value[0].iov_len = header->size;
+      value->iov_base = t->map + t->offset + sizeof (*header);
+      value->iov_len = header->size;
 
       t->offset += sizeof (*header) + header->size;
 

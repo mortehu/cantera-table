@@ -75,7 +75,7 @@ main (int argc, char **argv)
       struct iovec value;
       ssize_t ret;
 
-      while (1 == (ret = ca_table_read_row (table, &value, 1)))
+      while (1 == (ret = ca_table_read_row (table, &value)))
         printf ("%s\n", (const char *) value.iov_base);
 
       if (ret == -1)
@@ -88,7 +88,7 @@ main (int argc, char **argv)
   else
     {
       const char *key = argv[optind++];
-      struct iovec value[2];
+      struct iovec value;
       const uint8_t *begin, *end;
       ssize_t ret;
 
@@ -102,7 +102,7 @@ main (int argc, char **argv)
           return EXIT_FAILURE;
         }
 
-      if (2 != (ret = ca_table_read_row (table, value, 2)))
+      if (1 != (ret = ca_table_read_row (table, &value)))
         {
           if (ret < 0)
             fprintf (stderr, "Error: %s\n", ca_last_error ());
@@ -113,8 +113,11 @@ main (int argc, char **argv)
           return EXIT_FAILURE;
         }
 
-      begin = value[1].iov_base;
-      end = begin + value[1].iov_len;
+      begin = value.iov_base;
+      end = begin + value.iov_len;
+
+      /* Skip key */
+      begin = (const uint8_t *) strchr ((const char *) begin, 0) + 1;
 
       while (begin != end)
         {

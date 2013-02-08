@@ -474,7 +474,7 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
   unsigned int primary_key_index = 0;
   int has_unique_primary_key = -1;
 
-  struct iovec value[2];
+  struct iovec value;
 
   struct ca_arena_info arena;
 
@@ -566,7 +566,7 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
       if (!ret)
         return 0; /* Key does not exist in table */
 
-      if (0 >= (ret = ca_table_read_row (table, value, 2)))
+      if (0 >= (ret = ca_table_read_row (table, &value)))
         {
           if (!ret)
             ca_set_error ("ca_table_read_row on '%s' unexpectedly returned %d",
@@ -575,15 +575,11 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
           goto done;
         }
 
-      for (i = 0; i < ret; ++i)
-        {
-          field_index +=
-            collect_field_values (field_values + field_index,
-                                  &declaration->fields[field_index],
-                                  declaration->field_count - field_index,
-                                  value[i].iov_base,
-                                  (const uint8_t *) value[i].iov_base + value[i].iov_len);
-        }
+      collect_field_values (field_values + field_index,
+                            declaration->fields,
+                            declaration->field_count,
+                            value.iov_base,
+                            (const uint8_t *) value.iov_base + value.iov_len);
 
       if (-1 == output (&tmp_value, &arena, field_values))
         goto done;
@@ -595,21 +591,17 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
       if (-1 == (ret = ca_table_seek (table, 0, SEEK_SET)))
         goto done;
 
-      while (0 < (ret = ca_table_read_row (table, value, 2)))
+      while (0 < (ret = ca_table_read_row (table, &value)))
         {
           struct expression_value tmp_value;
 
           field_index = 0;
 
-          for (i = 0; i < ret; ++i)
-            {
-              field_index +=
-                collect_field_values (field_values + field_index,
-                                      &declaration->fields[field_index],
-                                      declaration->field_count - field_index,
-                                      value[i].iov_base,
-                                      (const uint8_t *) value[i].iov_base + value[i].iov_len);
-            }
+          collect_field_values (field_values,
+                                declaration->fields,
+                                declaration->field_count,
+                                value.iov_base,
+                                (const uint8_t *) value.iov_base + value.iov_len);
 
           if (where)
             {

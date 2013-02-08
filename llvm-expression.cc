@@ -172,7 +172,35 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
           return llvm::ConstantInt::get (t_int32, 0);
 
 
+        case EXPR_AND:
 
+            {
+              llvm::Value *result_int = builder->CreateStructGEP (result, 1);
+              llvm::Value *lhs, *rhs;
+
+              lhs = builder->CreateAlloca (t_expression_value);
+              rhs = builder->CreateAlloca (t_expression_value);
+
+              /* XXX: Check return values */
+
+              subexpression_compile (builder, module, expr->lhs,
+                                     fields, lhs, arena,
+                                     field_values);
+
+              subexpression_compile (builder, module, expr->rhs,
+                                     fields, rhs, arena,
+                                     field_values);
+
+              /* XXX: Check that lhs and rhs are bools */
+
+              builder->CreateStore (llvm::ConstantInt::get (t_int32, CA_BOOLEAN), builder->CreateStructGEP (result, 0));
+              builder->CreateStore (builder->CreateAnd (builder->CreateLoad (builder->CreateStructGEP (lhs, 1)),
+                                                        builder->CreateLoad (builder->CreateStructGEP (rhs, 1))),
+                                    result_int);
+
+            }
+
+          return llvm::ConstantInt::get (t_int32, 0);
 
         default:
 

@@ -136,6 +136,7 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
 
                 case CA_INT64:
                 case CA_UINT64:
+                case CA_TIMESTAMPTZ:
 
                     {
                       llvm::Value *result_int = builder->CreateStructGEP (result, 1);
@@ -156,7 +157,6 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
                       data_pointer = builder->CreateIntCast (data_pointer, t_int64, false);
 
                       builder->CreateStore (data_pointer, result_int);
-
                     }
 
                   break;

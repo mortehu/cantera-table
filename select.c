@@ -164,6 +164,7 @@ collect_field_values (struct iovec *output,
         case CA_FLOAT8:
         case CA_INT64:
         case CA_UINT64:
+        case CA_TIMESTAMPTZ:
 
           begin += 8;
 

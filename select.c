@@ -93,10 +93,6 @@ expr_primary_key_filter (struct expression *expr, unsigned int primary_key_field
 
       break;
 
-    case EXPR_PARENTHESIS:
-
-      return expr_primary_key_filter (expr->lhs, primary_key_field);
-
     default:
 
       return NULL;
@@ -235,7 +231,6 @@ CA_query_resolve_variables (struct expression *expression,
 
         case EXPR_DISTINCT:
         case EXPR_NEGATIVE:
-        case EXPR_PARENTHESIS:
 
           if (-1 == CA_query_resolve_variables (expression->lhs, variables))
             return -1;

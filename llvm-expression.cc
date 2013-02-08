@@ -171,11 +171,8 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
 
           return llvm::ConstantInt::get (t_int32, 0);
 
-        case EXPR_PARENTHESIS:
 
-          expr = expr->lhs;
 
-          continue;
 
         default:
 

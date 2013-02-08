@@ -64,7 +64,6 @@ enum expression_type
   EXPR_NOT,
   EXPR_NOT_EQUAL,
   EXPR_OR,
-  EXPR_PARENTHESIS,
   EXPR_SELECT,
   EXPR_SUB,
 

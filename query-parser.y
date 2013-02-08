@@ -411,6 +411,10 @@ expression
         expr->value.type = CA_BOOLEAN;
         $$ = expr;
       }
+    | '(' expression ')'
+      {
+        $$ = $2;
+      }
     ;
 
 whereClause

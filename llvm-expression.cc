@@ -194,6 +194,31 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
 
           return llvm::ConstantInt::get (t_int32, 0);
 
+        case EXPR_LIKE:
+
+            {
+              llvm::Value *lhs, *rhs;
+
+              lhs = builder->CreateAlloca (t_expression_value);
+              rhs = builder->CreateAlloca (t_expression_value);
+
+              /* XXX: Check return values */
+
+              subexpression_compile (builder, module, expr->lhs,
+                                     fields, lhs, arena,
+                                     field_values);
+
+              subexpression_compile (builder, module, expr->rhs,
+                                     fields, rhs, arena,
+                                     field_values);
+
+              /* XXX: Check that lhs and rhs can be text */
+
+              builder->CreateCall3 (f_ca_compare_like, result, lhs, rhs);
+            }
+
+          return llvm::ConstantInt::get (t_int32, 0);
+
         case EXPR_AND:
 
             {

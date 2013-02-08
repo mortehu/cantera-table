@@ -394,6 +394,15 @@ expression
         expr->rhs = $3;
         $$ = expr;
       }
+    | expression LIKE expression
+      {
+        struct expression *expr;
+        ALLOC(expr);
+        expr->type = EXPR_LIKE;
+        expr->lhs = $1;
+        expr->rhs = $3;
+        $$ = expr;
+      }
     | expression AND expression
       {
         struct expression *expr;

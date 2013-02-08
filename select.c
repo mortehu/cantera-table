@@ -468,6 +468,58 @@ ca_compare_equal (struct expression_value *result,
     }
 }
 
+int
+ca_compare_like (struct expression_value *result,
+                 const struct expression_value *lhs,
+                 const struct expression_value *rhs)
+{
+  const char *haystack, *filter;
+
+  result->type = CA_BOOLEAN;
+
+  if (lhs->type != CA_TEXT || rhs->type != CA_TEXT)
+    {
+      ca_set_error ("Both operands to LIKE must be of type TEXT");
+
+      return -1;
+    }
+
+  haystack = lhs->d.string_literal;
+  filter = rhs->d.string_literal;
+
+  result->d.integer = 0;
+
+  /* Process everything up to the first '%' */
+  while (*haystack && *filter)
+    {
+      if (*filter == '%')
+        break;
+
+      if (*haystack != *filter && *filter != '_')
+        return 0;
+
+      ++haystack;
+      ++filter;
+    }
+
+  if (!*filter)
+    {
+      result->d.integer = !*haystack;
+
+      return 0;
+    }
+
+  if (filter[0] == '%' && !filter[1])
+    {
+      result->d.integer = 1;
+
+      return 0;
+    }
+
+  ca_set_error ("LIKE expression is too complex");
+
+  return -1;
+}
 
 int
 ca_output_value (uint32_t field_index, const char *value)

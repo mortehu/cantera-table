@@ -15,6 +15,7 @@
 namespace ca_llvm
 {
   extern llvm::Function *f_ca_compare_equal;
+  extern llvm::Function *f_ca_compare_like;
 
   extern LLVM_TYPE *t_int8;
   extern LLVM_TYPE *t_int8_pointer;

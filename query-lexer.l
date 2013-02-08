@@ -69,6 +69,7 @@ Z [zZ]
 {I}{N}{S}{E}{R}{T}                 { character += yyleng; return INSERT; }
 {I}{N}{T}{O}                       { character += yyleng; return INTO; }
 {K}{E}{Y}                          { character += yyleng; return KEY; }
+{L}{I}{K}{E}                       { character += yyleng; return LIKE; }
 {L}{I}{M}{I}{T}                    { character += yyleng; return LIMIT; }
 {N}{E}{X}{T}                       { character += yyleng; return NEXT; }
 {N}{O}{T}                          { character += yyleng; return NOT; }

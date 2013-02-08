@@ -42,6 +42,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token OFFSET FETCH FIRST NEXT ROW ROWS ONLY
 %token TRUE FALSE
 %token INSERT INTO VALUES
+%token DROP
 
 %token Identifier
 %token Integer
@@ -83,6 +84,13 @@ document
               case CA_SQL_CREATE_TABLE:
 
                 if (-1 == ca_schema_create_table (context->schema, stmt->u.create_table.name, &stmt->u.create_table.declaration))
+                  context->error = 1;
+
+                break;
+
+              case CA_SQL_DROP_TABLE:
+
+                if (-1 == ca_schema_drop_table (context->schema, stmt->u.drop_table.name))
                   context->error = 1;
 
                 break;
@@ -179,6 +187,18 @@ statement
 
             ++i;
           }
+
+        $$ = stmt;
+      }
+    | DROP TABLE Identifier
+      {
+        struct statement *stmt;
+        struct drop_table_statement *drop;
+
+        ALLOC (stmt);
+        stmt->type = CA_SQL_DROP_TABLE;
+        drop = &stmt->u.drop_table;
+        drop->name = $3;
 
         $$ = stmt;
       }

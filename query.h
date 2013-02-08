@@ -129,6 +129,7 @@ struct select_variable
 enum ca_sql_statement_type
 {
   CA_SQL_CREATE_TABLE,
+  CA_SQL_DROP_TABLE,
   CA_SQL_INSERT,
   CA_SQL_SELECT,
   CA_SQL_QUERY
@@ -138,6 +139,11 @@ struct create_table_statement
 {
   const char *name;
   struct ca_table_declaration declaration;
+};
+
+struct drop_table_statement
+{
+  const char *name;
 };
 
 struct select_statement
@@ -170,6 +176,7 @@ struct statement
   union
     {
       struct create_table_statement create_table;
+      struct drop_table_statement drop_table;
       struct insert_statement insert;
       struct select_statement select;
       struct query_statement query;

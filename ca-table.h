@@ -296,6 +296,10 @@ int
 ca_schema_create_table (struct ca_schema *schema, const char *table_name,
                         struct ca_table_declaration *declaration) CA_USE_RESULT;
 
+int
+ca_schema_drop_table (struct ca_schema *schema,
+                      const char *table_name) CA_USE_RESULT;
+
 struct ca_table *
 ca_schema_table (struct ca_schema *schema, const char *table_name,
                  struct ca_table_declaration **declaration) CA_USE_RESULT;

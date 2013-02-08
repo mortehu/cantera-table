@@ -467,6 +467,45 @@ fail:
   return -1;
 }
 
+int
+ca_schema_drop_table (struct ca_schema *schema,
+                      const char *table_name)
+{
+  size_t i;
+  struct schema_table backup;
+
+  for (i = 0; i < schema->table_count; ++i)
+    {
+      if (strcmp (schema->tables[i].name, table_name))
+        continue;
+
+      backup = schema->tables[i];
+
+      --schema->table_count;
+
+      memmove (&schema->tables[i],
+               &schema->tables[i - 1],
+               sizeof (*schema->tables) * (schema->table_count - i));
+
+      /* XXX: Defer until COMMIT */
+
+      if (-1 == CA_schema_save (schema))
+        {
+          schema->tables[schema->table_count++] = backup;
+
+          return -1;
+        }
+
+      /* XXX: Free pointers of `backup' */
+
+      return 0;
+    }
+
+  ca_set_error ("Table '%s' does not exist", table_name);
+
+  return -1;
+}
+
 struct ca_table *
 ca_schema_table (struct ca_schema *schema, const char *table_name,
                  struct ca_table_declaration **declaration)

@@ -61,6 +61,7 @@ Z [zZ]
 
 {A}{N}{D}                          { character += yyleng; return AND; }
 {C}{R}{E}{A}{T}{E}                 { character += yyleng; return CREATE; }
+{D}{R}{O}{P}                       { character += yyleng; return DROP; }
 {F}{E}{T}{C}{H}                    { character += yyleng; return FETCH; }
 {F}{A}{L}{S}{E}                    { character += yyleng; return FALSE; }
 {F}{I}{R}{S}{T}                    { character += yyleng; return FIRST; }

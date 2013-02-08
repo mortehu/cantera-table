@@ -577,10 +577,26 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
                             value.iov_base,
                             (const uint8_t *) value.iov_base + value.iov_len);
 
-      if (-1 == output (&tmp_value, &arena, field_values))
-        goto done;
+      if (where)
+        {
+          if (-1 == where (&tmp_value, &arena, field_values))
+            goto done;
 
-      putchar ('\n');
+          if (tmp_value.type != CA_BOOLEAN)
+            {
+              ca_set_error ("WHERE expression is not boolean");
+
+              goto done;
+            }
+        }
+
+      if (!where || tmp_value.d.integer)
+        {
+          if (-1 == output (&tmp_value, &arena, field_values))
+            goto done;
+
+          putchar ('\n');
+        }
     }
   else
     {

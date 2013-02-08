@@ -291,7 +291,6 @@ ca_format_uint64 (char **output,
       --o;
       ++begin;
     }
-  /* XXX: Reverse string */
 }
 
 const char *

@@ -439,6 +439,37 @@ ca_cast_to_text (struct ca_arena_info *arena,
 }
 
 int
+ca_compare_equal (struct expression_value *result,
+                  const struct expression_value *lhs,
+                  const struct expression_value *rhs)
+{
+  result->type = CA_BOOLEAN;
+
+  if (lhs->type != rhs->type)
+    {
+      ca_set_error ("Attempt to compare values of different types");
+
+      return -1;
+    }
+
+  switch (lhs->type)
+    {
+    case CA_TEXT:
+
+      result->d.integer = !strcmp (lhs->d.string_literal, rhs->d.string_literal);
+
+      return 0;
+
+    default:
+
+      ca_set_error ("Comparing values of type %d is not yet supported", lhs->type);
+
+      return -1;
+    }
+}
+
+
+int
 ca_output_value (uint32_t field_index, const char *value)
 {
   if (field_index)

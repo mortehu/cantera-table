@@ -2,6 +2,8 @@
 #  include "config.h"
 #endif
 
+#include <llvm/Function.h>
+
 #include "query.h"
 
 #if (LLVM_VERSION_MAJOR > 3) || (LLVM_VERSION_MINOR >= 2)
@@ -12,6 +14,8 @@
 
 namespace ca_llvm
 {
+  extern llvm::Function *f_ca_compare_equal;
+
   extern LLVM_TYPE *t_int8;
   extern LLVM_TYPE *t_int8_pointer;
   extern LLVM_TYPE *t_int16;

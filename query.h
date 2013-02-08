@@ -185,6 +185,11 @@ ca_cast_to_text (struct ca_arena_info *arena,
                  const struct expression_value *value);
 
 int
+ca_compare_equal (struct expression_value *result,
+                  const struct expression_value *lhs,
+                  const struct expression_value *rhs);
+
+int
 ca_output_value (uint32_t field_index, const char *value);
 
 int

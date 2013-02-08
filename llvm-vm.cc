@@ -43,6 +43,7 @@ namespace ca_llvm
 
   llvm::Function *f_ca_cast_to_text = NULL;
   llvm::Function *f_ca_output_value = NULL;
+  llvm::Function *f_ca_compare_equal = NULL;
 
   LLVM_TYPE *t_int8;
   LLVM_TYPE *t_int8_pointer;
@@ -158,6 +159,16 @@ namespace ca_llvm
       = llvm::Function::Create (llvm::FunctionType::get (t_int32, argument_types, false),
                                 llvm::Function::ExternalLinkage,
                                 "ca_output_value", module);
+
+    argument_types.clear ();
+    argument_types.push_back (t_expression_value_pointer);
+    argument_types.push_back (t_expression_value_pointer);
+    argument_types.push_back (t_expression_value_pointer);
+
+    f_ca_compare_equal
+      = llvm::Function::Create (llvm::FunctionType::get (t_int32, argument_types, false),
+                                llvm::Function::ExternalLinkage,
+                                "ca_compare_equal", module);
 
     initialize_done = true;
 

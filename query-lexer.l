@@ -197,11 +197,8 @@ fail:
 static void
 strtolower(char *c)
 {
-  while (*c)
-    {
-      *c = tolower (*c);
-      ++c;
-    }
+  for (; *c; ++c)
+    *c = tolower (*c);
 }
 
 int

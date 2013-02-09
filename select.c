@@ -521,8 +521,8 @@ ca_compare_like (struct expression_value *result,
   return -1;
 }
 
-int
-ca_output_value (uint32_t field_index, const char *value)
+static int
+output_plain (uint32_t field_index, const char *value)
 {
   if (field_index)
     putchar ('\t');
@@ -532,9 +532,52 @@ ca_output_value (uint32_t field_index, const char *value)
   return 0;
 }
 
-int
-CA_select (struct ca_schema *schema, struct select_statement *stmt)
+static int
+output_csv (uint32_t field_index, const char *value)
 {
+  if (field_index)
+    putchar ('\t');
+
+  for (; *value; ++value)
+    {
+      switch (*value)
+        {
+        case '\t':
+
+          putchar ('\\');
+          putchar ('t');
+
+          break;
+
+        case '\r':
+
+          putchar ('\\');
+          putchar ('r');
+
+          break;
+
+        case '\n':
+
+          putchar ('\\');
+          putchar ('n');
+
+          break;
+
+        default:
+
+          putchar (*value);
+        }
+    }
+
+  return 0;
+}
+
+int
+CA_select (struct ca_query_parse_context *context, struct select_statement *stmt)
+{
+  ca_output_function output_function;
+
+  struct ca_schema *schema;
   struct ca_table *table;
   struct ca_table_declaration *declaration;
 
@@ -561,8 +604,26 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
 
   ca_arena_init (&arena);
 
+  schema = context->schema;
+
   if (!(table = ca_schema_table (schema, stmt->from, &declaration)))
     goto done;
+
+  switch (context->output_format)
+    {
+    case CA_PARAM_VALUE_CSV:
+
+      output_function = output_csv;
+
+      break;
+
+    default:
+    case CA_PARAM_VALUE_PLAIN:
+
+      output_function = output_plain;
+
+      break;
+    }
 
   /*** Replace identifiers with pointers to the table field ***/
 
@@ -604,7 +665,7 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
                                         &stmt->list->expression,
                                         declaration->fields,
                                         declaration->field_count,
-                                        CA_EXPRESSION_PRINT)))
+                                        output_function)))
     {
       goto done;
     }
@@ -617,7 +678,8 @@ CA_select (struct ca_schema *schema, struct select_statement *stmt)
       if (!(where = ca_expression_compile ("where",
                                            stmt->where,
                                            declaration->fields,
-                                           declaration->field_count, 0)))
+                                           declaration->field_count,
+                                           NULL)))
         goto done;
     }
 

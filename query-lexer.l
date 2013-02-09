@@ -61,11 +61,13 @@ Z [zZ]
 
 {A}{N}{D}                          { character += yyleng; return AND; }
 {C}{R}{E}{A}{T}{E}                 { character += yyleng; return CREATE; }
+{C}{S}{V}                          { character += yyleng; return CSV; }
 {D}{R}{O}{P}                       { character += yyleng; return DROP; }
 {F}{E}{T}{C}{H}                    { character += yyleng; return FETCH; }
 {F}{A}{L}{S}{E}                    { character += yyleng; return FALSE; }
 {F}{I}{R}{S}{T}                    { character += yyleng; return FIRST; }
 {F}{R}{O}{M}                       { character += yyleng; return FROM; }
+{F}{O}{R}{M}{A}{T}                 { character += yyleng; return FORMAT; }
 {I}{N}{D}{E}{X}                    { character += yyleng; return INDEX; }
 {I}{N}{S}{E}{R}{T}                 { character += yyleng; return INSERT; }
 {I}{N}{T}{O}                       { character += yyleng; return INTO; }
@@ -79,12 +81,14 @@ Z [zZ]
 {O}{F}{F}{S}{E}{T}_{S}{C}{O}{R}{E} { character += yyleng; return OFFSET_SCORE; }
 {O}{N}{L}{Y}                       { character += yyleng; return ONLY; }
 {O}{R}                             { character += yyleng; return OR; }
+{O}{U}{T}{P}{U}{T}                 { character += yyleng; return OUTPUT; }
 {P}{A}{T}{H}                       { character += yyleng; return PATH; }
 {P}{R}{I}{M}{A}{R}{Y}              { character += yyleng; return PRIMARY; }
 {Q}{U}{E}{R}{Y}                    { character += yyleng; return QUERY; }
 {R}{O}{W}                          { character += yyleng; return ROW; }
 {R}{O}{W}{S}                       { character += yyleng; return ROWS; }
 {S}{E}{L}{E}{C}{T}                 { character += yyleng; return SELECT; }
+{S}{E}{T}                          { character += yyleng; return SET; }
 {S}{H}{O}{W}                       { character += yyleng; return SHOW; }
 {S}{U}{M}{M}{A}{R}{Y}              { character += yyleng; return SUMMARY; }
 {T}{A}{B}{L}{E}                    { character += yyleng; return TABLE; }
@@ -209,6 +213,7 @@ ca_schema_parse_script(struct ca_schema *schema, FILE *input)
 
   memset (&context, 0, sizeof (context));
   context.schema = schema;
+  context.output_format = CA_PARAM_VALUE_PLAIN;
 
   yylex_init (&context.scanner);
 

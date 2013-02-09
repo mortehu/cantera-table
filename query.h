@@ -8,11 +8,20 @@
 extern "C" {
 #endif
 
+enum ca_param_value
+{
+  /* OUTPUT FORMAT */
+  CA_PARAM_VALUE_PLAIN,
+  CA_PARAM_VALUE_CSV
+};
+
 struct ca_query_parse_context
 {
   void *scanner;
   struct ca_arena_info arena;
   int error;
+
+  enum ca_param_value output_format;
 
   struct ca_schema *schema;
 };
@@ -132,6 +141,7 @@ enum ca_sql_statement_type
   CA_SQL_DROP_TABLE,
   CA_SQL_INSERT,
   CA_SQL_SELECT,
+  CA_SQL_SET,
   CA_SQL_QUERY
 };
 
@@ -169,6 +179,17 @@ struct query_statement
   int64_t limit;
 };
 
+enum ca_param
+{
+  CA_PARAM_OUTPUT_FORMAT
+};
+
+struct set_statement
+{
+  enum ca_param parameter;
+  enum ca_param_value value;
+};
+
 struct statement
 {
   enum ca_sql_statement_type type;
@@ -179,6 +200,7 @@ struct statement
       struct drop_table_statement drop_table;
       struct insert_statement insert;
       struct select_statement select;
+      struct set_statement set;
       struct query_statement query;
     } u;
 
@@ -202,14 +224,14 @@ ca_compare_like (struct expression_value *result,
                  const struct expression_value *rhs);
 
 int
-ca_output_value (uint32_t field_index, const char *value);
-
-int
-CA_select (struct ca_schema *schema, struct select_statement *stmt);
+CA_select (struct ca_query_parse_context *context,
+           struct select_statement *stmt);
 
 typedef int (*ca_expression_function) (struct expression_value *result,
                                        struct ca_arena_info *arena,
                                        const struct iovec *field_values);
+
+typedef int (*ca_output_function) (uint32_t field_index, const char *value);
 
 #define CA_EXPRESSION_PRINT 0x0001
 
@@ -218,7 +240,7 @@ ca_expression_compile (const char *name,
                        struct expression *expr,
                        const struct ca_field *fields,
                        size_t field_count,
-                       unsigned int flags);
+                       ca_output_function output_function);
 
 #ifdef __cplusplus
 } /* extern "C" */

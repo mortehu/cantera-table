@@ -42,9 +42,10 @@ namespace ca_llvm
   llvm::ExecutionEngine *engine;
 
   llvm::Function *f_ca_cast_to_text = NULL;
-  llvm::Function *f_ca_output_value = NULL;
   llvm::Function *f_ca_compare_equal = NULL;
   llvm::Function *f_ca_compare_like = NULL;
+
+  LLVM_TYPE *t_output_value = NULL;
 
   LLVM_TYPE *t_int8;
   LLVM_TYPE *t_int8_pointer;
@@ -153,15 +154,6 @@ namespace ca_llvm
                                 "ca_cast_to_text", module);
 
     argument_types.clear ();
-    argument_types.push_back (t_int32);
-    argument_types.push_back (t_int8_pointer);
-
-    f_ca_output_value
-      = llvm::Function::Create (llvm::FunctionType::get (t_int32, argument_types, false),
-                                llvm::Function::ExternalLinkage,
-                                "ca_output_value", module);
-
-    argument_types.clear ();
     argument_types.push_back (t_expression_value_pointer);
     argument_types.push_back (t_expression_value_pointer);
     argument_types.push_back (t_expression_value_pointer);
@@ -175,6 +167,12 @@ namespace ca_llvm
                                 llvm::Function::ExternalLinkage,
                                 "ca_compare_like", module);
 
+    argument_types.clear ();
+    argument_types.push_back (t_int32);
+    argument_types.push_back (t_int8_pointer);
+
+    t_output_value = llvm::FunctionType::get (t_int32, argument_types, false);
+
     initialize_done = true;
 
     return true;
@@ -186,11 +184,12 @@ ca_expression_compile (const char *name,
                        struct expression *expr,
                        const struct ca_field *fields,
                        size_t field_count,
-                       unsigned int flags)
+                       ca_output_function output_function)
 {
   using namespace ca_llvm;
 
   llvm::Value *return_value = NULL;
+  llvm::Value *output_value = NULL;
 
   unsigned int field_index = 0;
 
@@ -218,6 +217,12 @@ ca_expression_compile (const char *name,
 
   builder->SetInsertPoint (basic_block);
 
+  if (output_function)
+    {
+      output_value = builder->CreateIntToPtr (llvm::ConstantInt::get (t_pointer, (ptrdiff_t) output_function),
+                                              llvm::PointerType::get (t_output_value, 0));
+    }
+
   for (; expr; expr = expr->next)
     {
       if (expr->type == EXPR_ASTERISK)
@@ -235,13 +240,13 @@ ca_expression_compile (const char *name,
               if (!(return_value = subexpression_compile (builder, module, &tmp_expr, fields, result, arena, field_values)))
                 return NULL;
 
-              if (0 != (flags & CA_EXPRESSION_PRINT))
+              if (output_value)
                 {
                   llvm::Value *string;
 
                   string = builder->CreateCall2 (f_ca_cast_to_text, arena, result);
 
-                  builder->CreateCall2 (f_ca_output_value, llvm::ConstantInt::get (t_int32, field_index), string);
+                  builder->CreateCall2 (output_value, llvm::ConstantInt::get (t_int32, field_index), string);
                   ++field_index;
                 }
             }
@@ -251,13 +256,13 @@ ca_expression_compile (const char *name,
           if (!(return_value = subexpression_compile (builder, module, expr, fields, result, arena, field_values)))
             return NULL;
 
-          if (0 != (flags & CA_EXPRESSION_PRINT))
+          if (output_value)
             {
               llvm::Value *string;
 
               string = builder->CreateCall2 (f_ca_cast_to_text, arena, result);
 
-              builder->CreateCall2 (f_ca_output_value, llvm::ConstantInt::get (t_int32, field_index), string);
+              builder->CreateCall2 (output_value, llvm::ConstantInt::get (t_int32, field_index), string);
               ++field_index;
             }
         }

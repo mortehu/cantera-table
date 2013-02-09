@@ -43,6 +43,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token TRUE FALSE
 %token INSERT INTO VALUES
 %token DROP
+%token SET OUTPUT FORMAT CSV
 
 %token Identifier
 %token Integer
@@ -68,6 +69,8 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %type<l> notNull
 %type<l> offsetClause
 %type<l> primaryKey
+%type<l> runtimeParameter
+%type<l> runtimeParameterValue
 
 %left '=' '<' '>' '+' '-' '*' '/' LIKE AND OR UMINUS
 
@@ -104,8 +107,21 @@ document
 
               case CA_SQL_SELECT:
 
-                if (-1 == CA_select (context->schema, &stmt->u.select))
+                if (-1 == CA_select (context, &stmt->u.select))
                   context->error = 1;
+
+                break;
+
+              case CA_SQL_SET:
+
+                switch (stmt->u.set.parameter)
+                  {
+                  case CA_PARAM_OUTPUT_FORMAT:
+
+                    context->output_format = stmt->u.set.value;
+
+                    break;
+                  }
 
                 break;
 
@@ -266,6 +282,27 @@ statement
 
         $$ = stmt;
       }
+    | SET runtimeParameter runtimeParameterValue
+      {
+        struct statement *stmt;
+        struct set_statement *set;
+
+        ALLOC (stmt);
+        stmt->type = CA_SQL_SET;
+        set = &stmt->u.set;
+        set->parameter = $2;
+        set->value = $3;
+
+        $$ = stmt;
+      }
+    ;
+
+runtimeParameter
+    : OUTPUT FORMAT { $$ = CA_PARAM_OUTPUT_FORMAT; }
+    ;
+
+runtimeParameterValue
+    : CSV           { $$ = CA_PARAM_VALUE_CSV; }
     ;
 
 createTableArgs

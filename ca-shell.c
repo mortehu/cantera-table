@@ -204,6 +204,8 @@ main (int argc, char **argv)
 
       if (-1 == ca_schema_parse_script (schema, stdin))
         fprintf (stderr, "Error: %s\n", ca_last_error ());
+
+      fflush (stdout);
     }
 
   ca_schema_close (schema);

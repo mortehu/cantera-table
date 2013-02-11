@@ -60,6 +60,8 @@ Z [zZ]
 --[^\n]*
 
 {A}{N}{D}                          { character += yyleng; return AND; }
+{B}{E}{G}{I}{N}                    { character += yyleng; return BEGIN_; }
+{C}{O}{M}{M}{I}{T}                 { character += yyleng; return COMMIT; }
 {C}{R}{E}{A}{T}{E}                 { character += yyleng; return CREATE; }
 {C}{S}{V}                          { character += yyleng; return CSV; }
 {D}{R}{O}{P}                       { character += yyleng; return DROP; }
@@ -74,6 +76,7 @@ Z [zZ]
 {K}{E}{Y}                          { character += yyleng; return KEY; }
 {L}{I}{K}{E}                       { character += yyleng; return LIKE; }
 {L}{I}{M}{I}{T}                    { character += yyleng; return LIMIT; }
+{L}{O}{C}{K}                       { character += yyleng; return LOCK; }
 {N}{E}{X}{T}                       { character += yyleng; return NEXT; }
 {N}{O}{T}                          { character += yyleng; return NOT; }
 {N}{U}{L}{L}                       { character += yyleng; return _NULL; }

@@ -44,6 +44,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token INSERT INTO VALUES
 %token DROP
 %token SET OUTPUT FORMAT CSV
+%token BEGIN_ COMMIT LOCK
 
 %token Identifier
 %token Integer
@@ -84,6 +85,17 @@ document
           {
             switch (stmt->type)
               {
+              case CA_SQL_BEGIN:
+
+                break;
+
+              case CA_SQL_COMMIT:
+
+                if (-1 == ca_lock_release ())
+                  context->error = 1;
+
+                break;
+
               case CA_SQL_CREATE_TABLE:
 
                 if (-1 == ca_schema_create_table (context->schema, stmt->u.create_table.name, &stmt->u.create_table.declaration))
@@ -102,6 +114,12 @@ document
 
                 ca_set_error ("INSERT is not yet supported");
                 context->error = 1;
+
+                break;
+
+              case CA_SQL_LOCK:
+
+                ca_lock_grab_global ();
 
                 break;
 
@@ -159,7 +177,25 @@ statements
     ;
 
 statement
-    : CREATE TABLE Identifier '(' createTableArgs ')' WITH '(' PATH '=' StringLiteral ')'
+    : BEGIN_
+      {
+        struct statement *stmt;
+
+        ALLOC (stmt);
+        stmt->type = CA_SQL_BEGIN;
+
+        $$ = stmt;
+      }
+    | COMMIT
+      {
+        struct statement *stmt;
+
+        ALLOC (stmt);
+        stmt->type = CA_SQL_COMMIT;
+
+        $$ = stmt;
+      }
+    | CREATE TABLE Identifier '(' createTableArgs ')' WITH '(' PATH '=' StringLiteral ')'
       {
         struct statement *stmt;
         struct create_table_statement *create;
@@ -243,6 +279,15 @@ statement
         insert = &stmt->u.insert;
         insert->table_name = $3;
         insert->values = $6;
+
+        $$ = stmt;
+      }
+    | LOCK
+      {
+        struct statement *stmt;
+
+        ALLOC (stmt);
+        stmt->type = CA_SQL_LOCK;
 
         $$ = stmt;
       }

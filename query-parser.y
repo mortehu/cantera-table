@@ -65,7 +65,6 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %type<l> Integer
 %type<l> columnType
 %type<l> fetchClause
-%type<l> limitClause
 %type<l> notNull
 %type<l> offsetClause
 %type<l> primaryKey
@@ -218,7 +217,7 @@ statement
 
         $$ = stmt;
       }
-    | QUERY StringLiteral WITH '(' INDEX '=' Identifier ',' SUMMARY '=' Identifier ')' limitClause
+    | QUERY StringLiteral WITH '(' INDEX '=' Identifier ',' SUMMARY '=' Identifier ')' fetchClause
       {
         struct statement *stmt;
         struct query_statement *query;
@@ -497,11 +496,6 @@ whereClause
     | WHERE expression { $$ = $2; }
     ;
 
-limitClause
-    :               { $$ = -1; }
-    | LIMIT Integer { $$ = $2; }
-    ;
-
 rows
     : ROW
     | ROWS
@@ -521,6 +515,7 @@ offsetClause
 fetchClause
     :                                     { $$ = -1; }
     | FETCH firstOrNext Integer rows ONLY { $$ = $3; }
+    | LIMIT Integer                       { $$ = $2; }
     ;
 %%
 #include <stdio.h>

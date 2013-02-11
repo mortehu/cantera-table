@@ -290,7 +290,7 @@ ca_format_uint64 (char **output,
 }
 
 const char *
-ca_cast_to_text (struct ca_arena_info *arena,
+ca_cast_to_text (struct ca_query_parse_context *context,
                  const struct expression_value *value)
 {
   char *result = NULL;
@@ -304,25 +304,25 @@ ca_cast_to_text (struct ca_arena_info *arena,
 
     case CA_FLOAT4:
 
-      return ca_arena_sprintf (arena, "%.7g", value->d.float4);
+      return ca_arena_sprintf (&context->arena, "%.7g", value->d.float4);
 
     case CA_FLOAT8:
 
-      return ca_arena_sprintf (arena, "%.7g", value->d.float8);
+      return ca_arena_sprintf (&context->arena, "%.7g", value->d.float8);
 
     case CA_INT8:
     case CA_INT16:
     case CA_INT32:
     case CA_INT64:
 
-      return ca_arena_sprintf (arena, "%lld", (long long) value->d.integer);
+      return ca_arena_sprintf (&context->arena, "%lld", (long long) value->d.integer);
 
     case CA_UINT8:
     case CA_UINT16:
     case CA_UINT32:
     case CA_UINT64:
 
-      return ca_arena_sprintf (arena, "%llu", (long long) value->d.integer);
+      return ca_arena_sprintf (&context->arena, "%llu", (long long) value->d.integer);
 
     case CA_NUMERIC:
 
@@ -337,7 +337,7 @@ ca_cast_to_text (struct ca_arena_info *arena,
         {
           time_t t;
 
-          result = ca_arena_alloc (arena, 24);
+          result = ca_arena_alloc (&context->arena, 24);
 
           t = value->d.integer;
 
@@ -392,17 +392,28 @@ ca_cast_to_text (struct ca_arena_info *arena,
 
                   o = result + result_size;
 
-                  ca_format_uint64 (&o, tm.tm_year + 1900, 4);
-                  *o++ = '-';
-                  ca_format_uint64 (&o, tm.tm_mon + 1, 2);
-                  *o++ = '-';
-                  ca_format_uint64 (&o, tm.tm_mday, 2);
-                  *o++ = 'T';
-                  ca_format_uint64 (&o, tm.tm_hour, 2);
-                  *o++ = ':';
-                  ca_format_uint64 (&o, tm.tm_min, 2);
-                  *o++ = ':';
-                  ca_format_uint64 (&o, tm.tm_sec, 2);
+                  if (!context->time_format[0])
+                    {
+                      ca_format_uint64 (&o, tm.tm_year + 1900, 4);
+                      *o++ = '-';
+                      ca_format_uint64 (&o, tm.tm_mon + 1, 2);
+                      *o++ = '-';
+                      ca_format_uint64 (&o, tm.tm_mday, 2);
+                      *o++ = 'T';
+                      ca_format_uint64 (&o, tm.tm_hour, 2);
+                      *o++ = ':';
+                      ca_format_uint64 (&o, tm.tm_min, 2);
+                      *o++ = ':';
+                      ca_format_uint64 (&o, tm.tm_sec, 2);
+                    }
+                  else
+                    {
+                      /* XXX Support varying length date/time */
+
+                      strftime (o, 20, context->time_format, &tm);
+                      o = strchr (o, 0);
+                    }
+
                   *o++ = '\t';
 
                   o += sprintf (o, "%.7g", sample_values[i]);
@@ -419,7 +430,7 @@ ca_cast_to_text (struct ca_arena_info *arena,
 
           result[result_size] = 0;
 
-          if (-1 == ca_arena_add_pointer (arena, result))
+          if (-1 == ca_arena_add_pointer (&context->arena, result))
             {
               free (result);
               result = NULL;
@@ -724,7 +735,7 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
 
       if (where)
         {
-          if (-1 == where (&tmp_value, &arena, field_values))
+          if (-1 == where (&tmp_value, context, field_values))
             goto done;
 
           if (tmp_value.type != CA_BOOLEAN)
@@ -737,7 +748,7 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
 
       if (!where || tmp_value.d.integer)
         {
-          if (-1 == output (&tmp_value, &arena, field_values))
+          if (-1 == output (&tmp_value, context, field_values))
             goto done;
 
           putchar ('\n');
@@ -762,7 +773,7 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
 
           if (where)
             {
-              if (-1 == where (&tmp_value, &arena, field_values))
+              if (-1 == where (&tmp_value, context, field_values))
                 goto done;
 
               if (tmp_value.type != CA_BOOLEAN)
@@ -779,7 +790,7 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
           if (stmt->offset > 0 && stmt->offset--)
             continue;
 
-          if (-1 == output (&tmp_value, &arena, field_values))
+          if (-1 == output (&tmp_value, context, field_values))
             goto done;
 
           putchar ('\n');

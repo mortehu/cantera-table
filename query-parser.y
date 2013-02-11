@@ -117,7 +117,21 @@ document
                   {
                   case CA_PARAM_OUTPUT_FORMAT:
 
-                    context->output_format = stmt->u.set.value;
+                    context->output_format = stmt->u.set.v.enum_value;
+
+                    break;
+
+                  case CA_PARAM_TIME_FORMAT:
+
+                    if (strlen (stmt->u.set.v.string_value) + 1 > sizeof (context->time_format))
+                      {
+                        ca_set_error ("TIME FORMAT string too long");
+                        context->error = 1;
+
+                        break;
+                      }
+
+                    strcpy (context->time_format, stmt->u.set.v.string_value);
 
                     break;
                   }
@@ -290,7 +304,20 @@ statement
         stmt->type = CA_SQL_SET;
         set = &stmt->u.set;
         set->parameter = $2;
-        set->value = $3;
+        set->v.enum_value = $3;
+
+        $$ = stmt;
+      }
+    | SET TIME FORMAT StringLiteral
+      {
+        struct statement *stmt;
+        struct set_statement *set;
+
+        ALLOC (stmt);
+        stmt->type = CA_SQL_SET;
+        set = &stmt->u.set;
+        set->parameter = CA_PARAM_TIME_FORMAT;
+        set->v.string_value = $4;
 
         $$ = stmt;
       }

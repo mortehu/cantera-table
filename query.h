@@ -22,6 +22,7 @@ struct ca_query_parse_context
   int error;
 
   enum ca_param_value output_format;
+  char time_format[64];
 
   struct ca_schema *schema;
 };
@@ -181,13 +182,18 @@ struct query_statement
 
 enum ca_param
 {
-  CA_PARAM_OUTPUT_FORMAT
+  CA_PARAM_OUTPUT_FORMAT,
+  CA_PARAM_TIME_FORMAT
 };
 
 struct set_statement
 {
   enum ca_param parameter;
-  enum ca_param_value value;
+  union
+    {
+      enum ca_param_value enum_value;
+      char *string_value;
+    } v;
 };
 
 struct statement
@@ -210,7 +216,7 @@ struct statement
 /*****************************************************************************/
 
 const char *
-ca_cast_to_text (struct ca_arena_info *arena,
+ca_cast_to_text (struct ca_query_parse_context *context,
                  const struct expression_value *value);
 
 int
@@ -228,7 +234,7 @@ CA_select (struct ca_query_parse_context *context,
            struct select_statement *stmt);
 
 typedef int (*ca_expression_function) (struct expression_value *result,
-                                       struct ca_arena_info *arena,
+                                       struct ca_query_parse_context *context,
                                        const struct iovec *field_values);
 
 typedef int (*ca_output_function) (uint32_t field_index, const char *value);

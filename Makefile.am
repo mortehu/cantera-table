@@ -1,4 +1,5 @@
 BUILT_SOURCES = query-lexer.c query-parser.c
+man1_MANS = doc/ca-shell.1 doc/ca-sql.1
 
 AM_YFLAGS = -d
 

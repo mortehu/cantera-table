@@ -1,0 +1,59 @@
+.TH CANTERA-TABLE 1 "Feb 2013"
+.PP
+.SH "NAME"
+ca-sql \- syntax of the Cantera Table query language
+.SH "STATEMENTS"
+.TP
+\fBCREATE TABLE\fR name \fB(\fRcolumns\fB) WITH (PATH =\fR path\fB)\fR
+Creates a table at the given path.  If the backing table does not exist, it will be created when it is first accessed.
+.TP
+\fBDROP TABLE\fR name
+Removes the table with the given name from the schema.  The backing file is not removed.
+.TP
+\fBSHOW TABLES\fR
+An alias for \fBSELECT * FROM ca_catalog.ca_tables\fR
+.TP
+\fBSELECT\fR expression \fB[,\fR expression\fB...]\fR \fBFROM\fR table \fB[WHERE\fR expression\fB] [OFFSET\fR integer\fB] [LIMIT\fR integer\fB]\fR
+Retrieves rows from the specified table, and prints the value of the listed expressions as in the context of each row.
+
+If the \fBWHERE\fR keyword is used, only rows where its parameter expression evaluates to \fBTRUE\fR will be retrieved.  Note that this expression MUST be boolean.
+.TP
+\fBSET OUTPUT FORMAT\fR format
+Sets the format used in response to \fBSELECT\fR statements.  Supported formats are:
+.RS
+.TP
+\fBPLAIN\fR
+Values are cast to strings and separated by \fBTAB\fR.  Rows are separated by \fBLF\fR.
+.TP
+\fBCSV\fR
+Values are cast to strings and separated by \fBTAB\fR.  Rows are separated by \fBLF\fR.  To prevent ambiguity, \fBTAB\fR and \fBLF\fR characters within strings are escaped to avoid ambiguity.
+.TP
+\fBJSON\fR
+The result set is printed as an array of objects in JSON format.
+.RE
+.TP
+\fBSET TIME FORMAT\fR format
+Sets the format that will be used to output string.  The default is
+\fB'%Y-%m-%dT%H:%M:S'\fR, the ISO 8601 combined date and time format.  Use
+\fB'%s'\fR to get the number of seconds since UNIX epoch.
+.SH "EXPRESSIONS"
+.TP
+lhs \fBAND\fR rhs
+\fBTRUE\fR if \fBlhs\fR and \fBrhs\fR are both equal to \fBTRUE\fR, \fBFALSE\fR otherwise.
+.TP
+lhs \fB=\fR rhs
+\fBTRUE\fR if \fBlhs\fR and \fBrhs\fR are equal, \fBFALSE\fR otherwise.
+.TP
+subject \fBLIKE\fR pattern
+Both \fBsubject\fR and \fBpattern\fR must be strings.  Returns \fBTRUE\fR if
+the subject matches the pattern, \fBFALSE\fR otherwise.  The pattern is applied
+to the entire subject, not just a substring.  A \fB_\fR character in the
+pattern matches any character in the subject.  A \fB%\fR character in the
+pattern matches any number of any character in the subject.
+.TP
+\fB(\fRexpr\fB)\fR
+Returns the value of \fBexpr\fR.  The parantheses instruct the parser about the
+order in which operators take precedence.
+.SH "AUTHOR"
+.PP
+This manual page was written by Morten Hustveit <morten.hustveit@gmail.com>.

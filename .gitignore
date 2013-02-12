@@ -17,6 +17,7 @@
 /aclocal.m4
 /ca-shell
 /ca-sort
+/ca-table-lockd
 /config.guess
 /config.h
 /config.h.in

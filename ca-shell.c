@@ -65,8 +65,9 @@ static int print_help;
 
 static struct option long_options[] =
 {
-    { "version",        no_argument,       &print_version, 1 },
-    { "help",           no_argument,       &print_help,    1 },
+    { "command",  required_argument,  NULL,           'c' },
+    { "version",        no_argument,  &print_version, 1 },
+    { "help",           no_argument,  &print_help,    1 },
     { 0, 0, 0, 0 }
 };
 
@@ -74,17 +75,24 @@ int
 main (int argc, char **argv)
 {
   struct ca_query_parse_context context;
+  const char *command = NULL;
   int i;
 
   memset (&context, 0, sizeof (context));
   context.output_format = CA_PARAM_VALUE_PLAIN;
   strcpy (context.time_format, "%Y-%m-%dT%H:%M:%S");
 
-  while ((i = getopt_long (argc, argv, "", long_options, 0)) != -1)
+  while ((i = getopt_long (argc, argv, "c:", long_options, 0)) != -1)
     {
       switch (i)
         {
         case 0:
+
+          break;
+
+        case 'c':
+
+          command = optarg;
 
           break;
 
@@ -98,8 +106,9 @@ main (int argc, char **argv)
     {
       printf ("Usage: %s [OPTION]...\n"
              "\n"
+             "  -c, --command=STRING       execute commands in STRING and exit\n"
              "      --help     display this help and exit\n"
-             "      --version  display version information\n"
+             "      --version  display version information and exit\n"
              "\n"
              "Report bugs to <morten.hustveit@gmail.com>\n",
              argv[0]);
@@ -120,7 +129,21 @@ main (int argc, char **argv)
   if (!(context.schema = ca_schema_load (schema_path)))
     errx (EXIT_FAILURE, "Failed to load schema: %s", ca_last_error ());
 
-  if (isatty (STDIN_FILENO))
+  if (command)
+    {
+      FILE *file;
+
+      ca_clear_error ();
+
+      if (!(file = fmemopen ((void *) command, strlen (command), "r")))
+        fprintf (stderr, "fmemopen failed: %s\n", strerror (errno));
+
+      if (-1 == CA_parse_script (&context, file))
+        fprintf (stderr, "Error: %s\n", ca_last_error ());
+
+      fclose (file);
+    }
+  else if (isatty (STDIN_FILENO))
     {
       char *home, *history_path = NULL;
 

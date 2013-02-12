@@ -26,236 +26,234 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
                        llvm::Value *result,
                        llvm::Value *arena,
                        llvm::Value *field_values)
-{
-  for (;;)
-    {
-      switch (expr->type)
-        {
-        case EXPR_CONSTANT:
+  {
+    switch (expr->type)
+      {
+      case EXPR_CONSTANT:
 
-            {
-              llvm::Value *type = builder->CreateStructGEP (result, 0);
-              llvm::Value *value0 = builder->CreateStructGEP (result, 1);
+          {
+            llvm::Value *type = builder->CreateStructGEP (result, 0);
+            llvm::Value *value0 = builder->CreateStructGEP (result, 1);
 
-              builder->CreateStore (llvm::ConstantInt::get (t_int32, expr->value.type), type);
+            builder->CreateStore (llvm::ConstantInt::get (t_int32, expr->value.type), type);
 
-              switch (expr->value.type)
-                {
-                case CA_BOOLEAN:
-                case CA_INT8:
-                case CA_UINT8:
-                case CA_INT16:
-                case CA_UINT16:
-                case CA_INT32:
-                case CA_UINT32:
-                case CA_INT64:
-                case CA_UINT64:
-                case CA_TIMESTAMPTZ:
+            switch (expr->value.type)
+              {
+              case CA_BOOLEAN:
+              case CA_INT8:
+              case CA_UINT8:
+              case CA_INT16:
+              case CA_UINT16:
+              case CA_INT32:
+              case CA_UINT32:
+              case CA_INT64:
+              case CA_UINT64:
+              case CA_TIMESTAMPTZ:
 
-                  builder->CreateStore (llvm::ConstantInt::get (t_int64, expr->value.d.integer),
-                                        value0);
+                builder->CreateStore (llvm::ConstantInt::get (t_int64, expr->value.d.integer),
+                                      value0);
 
-                  break;
+                break;
 
-                case CA_FLOAT4:
+              case CA_FLOAT4:
 
-                  builder->CreateStore (llvm::ConstantFP::get (t_float, expr->value.d.float4),
-                                        builder->CreateBitCast (value0, t_float));
+                builder->CreateStore (llvm::ConstantFP::get (t_float, expr->value.d.float4),
+                                      builder->CreateBitCast (value0, t_float));
 
-                  break;
+                break;
 
-                case CA_FLOAT8:
+              case CA_FLOAT8:
 
-                  builder->CreateStore (llvm::ConstantFP::get (t_double, expr->value.d.float8),
-                                        builder->CreateBitCast (value0, t_double));
+                builder->CreateStore (llvm::ConstantFP::get (t_double, expr->value.d.float8),
+                                      builder->CreateBitCast (value0, t_double));
 
-                  break;
+                break;
 
-                case CA_TEXT:
-                case CA_NUMERIC:
+              case CA_TEXT:
+              case CA_NUMERIC:
 
-                  builder->CreateStore (llvm::ConstantInt::get (t_pointer, (ptrdiff_t) expr->value.d.string_literal), value0);
+                builder->CreateStore (llvm::ConstantInt::get (t_pointer, (ptrdiff_t) expr->value.d.string_literal), value0);
 
-                  break;
+                break;
 
-                default:
+              default:
 
-                  ca_set_error ("subexpression_compile: Unhandled constant value type %d", expr->value.type);
+                ca_set_error ("subexpression_compile: Unhandled constant value type %d", expr->value.type);
 
-                  return NULL;
-                }
-            }
+                return NULL;
+              }
+          }
 
-          return llvm::ConstantInt::get (t_int32, 0);
+        break;
 
-        case EXPR_FIELD:
+      case EXPR_FIELD:
 
-            {
-              llvm::Value *result_type, *field_iov, *field_ptr;
-              unsigned int field_index, type;
+          {
+            llvm::Value *result_type, *field_iov, *field_ptr;
+            unsigned int field_index, type;
 
-              field_index = expr->value.d.field_index;
-              type = fields[field_index].type;
+            field_index = expr->value.d.field_index;
+            type = fields[field_index].type;
 
-              result_type = builder->CreateStructGEP (result, 0);
-              field_iov = builder->CreateGEP (field_values, llvm::ConstantInt::get(t_int32, field_index));
-              field_ptr = builder->CreateStructGEP (field_iov, 0);
+            result_type = builder->CreateStructGEP (result, 0);
+            field_iov = builder->CreateGEP (field_values, llvm::ConstantInt::get(t_int32, field_index));
+            field_ptr = builder->CreateStructGEP (field_iov, 0);
 
-              builder->CreateStore (llvm::ConstantInt::get (t_int32, type), result_type);
+            builder->CreateStore (llvm::ConstantInt::get (t_int32, type), result_type);
 
-              switch (fields[field_index].type)
-                {
-                case CA_TIME_FLOAT4:
+            switch (fields[field_index].type)
+              {
+              case CA_TIME_FLOAT4:
 
-                    {
-                      llvm::Value *field_length;
+                  {
+                    llvm::Value *field_length;
 
-                      field_length = builder->CreateStructGEP (field_iov, 1);
+                    field_length = builder->CreateStructGEP (field_iov, 1);
 
-                      llvm::Value *result_pointer = builder->CreateStructGEP (result, 1);
-                      llvm::Value *result_length = builder->CreateStructGEP (result, 2);
-                      llvm::Value *pointer = builder->CreateLoad (field_ptr);
-                      llvm::Value *length = builder->CreateLoad (field_length);
+                    llvm::Value *result_pointer = builder->CreateStructGEP (result, 1);
+                    llvm::Value *result_length = builder->CreateStructGEP (result, 2);
+                    llvm::Value *pointer = builder->CreateLoad (field_ptr);
+                    llvm::Value *length = builder->CreateLoad (field_length);
 
-                      builder->CreateStore (pointer, result_pointer);
-                      builder->CreateStore (length, result_length);
-                    }
+                    builder->CreateStore (pointer, result_pointer);
+                    builder->CreateStore (length, result_length);
+                  }
 
-                  break;
+                break;
 
-                case CA_TEXT:
+              case CA_TEXT:
 
-                    {
-                      llvm::Value *result_text = builder->CreateStructGEP (result, 1);
-                      llvm::Value *text = builder->CreateLoad (field_ptr);
+                  {
+                    llvm::Value *result_text = builder->CreateStructGEP (result, 1);
+                    llvm::Value *text = builder->CreateLoad (field_ptr);
 
-                      builder->CreateStore (text, result_text);
-                    }
+                    builder->CreateStore (text, result_text);
+                  }
 
-                  break;
+                break;
 
-                case CA_INT64:
-                case CA_UINT64:
-                case CA_TIMESTAMPTZ:
+              case CA_INT64:
+              case CA_UINT64:
+              case CA_TIMESTAMPTZ:
 
-                    {
-                      llvm::Value *result_int = builder->CreateStructGEP (result, 1);
-                      llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
-                      llvm::Value *data_pointer = builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_int64_pointer));
+                  {
+                    llvm::Value *result_int = builder->CreateStructGEP (result, 1);
+                    llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
+                    llvm::Value *data_pointer = builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_int64_pointer));
 
-                      builder->CreateStore (data_pointer, result_int);
-                    }
+                    builder->CreateStore (data_pointer, result_int);
+                  }
 
-                  break;
+                break;
 
-                case CA_BOOLEAN:
+              case CA_BOOLEAN:
 
-                    {
-                      llvm::Value *result_int = builder->CreateStructGEP (result, 1);
-                      llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
-                      llvm::Value *data_pointer = builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_int8_pointer));
-                      data_pointer = builder->CreateIntCast (data_pointer, t_int64, false);
+                  {
+                    llvm::Value *result_int = builder->CreateStructGEP (result, 1);
+                    llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
+                    llvm::Value *data_pointer = builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_int8_pointer));
+                    data_pointer = builder->CreateIntCast (data_pointer, t_int64, false);
 
-                      builder->CreateStore (data_pointer, result_int);
-                    }
+                    builder->CreateStore (data_pointer, result_int);
+                  }
 
-                  break;
+                break;
 
-                default:
+              default:
 
-                  ca_set_error ("subexpression_compile: Unhandled field value type %d", type);
+                ca_set_error ("subexpression_compile: Unhandled field value type %d", type);
 
-                  return NULL;
-                }
-            }
+                return NULL;
+              }
+          }
 
-          return llvm::ConstantInt::get (t_int32, 0);
+        break;
 
-        case EXPR_EQUAL:
+      case EXPR_EQUAL:
 
-            {
-              llvm::Value *lhs, *rhs;
+          {
+            llvm::Value *lhs, *rhs;
 
-              lhs = builder->CreateAlloca (t_expression_value);
-              rhs = builder->CreateAlloca (t_expression_value);
+            lhs = builder->CreateAlloca (t_expression_value);
+            rhs = builder->CreateAlloca (t_expression_value);
 
-              /* XXX: Check return values */
+            /* XXX: Check return values */
 
-              subexpression_compile (builder, module, expr->lhs,
-                                     fields, lhs, arena,
-                                     field_values);
+            subexpression_compile (builder, module, expr->lhs,
+                                   fields, lhs, arena,
+                                   field_values);
 
-              subexpression_compile (builder, module, expr->rhs,
-                                     fields, rhs, arena,
-                                     field_values);
+            subexpression_compile (builder, module, expr->rhs,
+                                   fields, rhs, arena,
+                                   field_values);
 
-              builder->CreateCall3 (f_ca_compare_equal, result, lhs, rhs);
-            }
+            builder->CreateCall3 (f_ca_compare_equal, result, lhs, rhs);
+          }
 
-          return llvm::ConstantInt::get (t_int32, 0);
+        break;
 
-        case EXPR_LIKE:
+      case EXPR_LIKE:
 
-            {
-              llvm::Value *lhs, *rhs;
+          {
+            llvm::Value *lhs, *rhs;
 
-              lhs = builder->CreateAlloca (t_expression_value);
-              rhs = builder->CreateAlloca (t_expression_value);
+            lhs = builder->CreateAlloca (t_expression_value);
+            rhs = builder->CreateAlloca (t_expression_value);
 
-              /* XXX: Check return values */
+            /* XXX: Check return values */
 
-              subexpression_compile (builder, module, expr->lhs,
-                                     fields, lhs, arena,
-                                     field_values);
+            subexpression_compile (builder, module, expr->lhs,
+                                   fields, lhs, arena,
+                                   field_values);
 
-              subexpression_compile (builder, module, expr->rhs,
-                                     fields, rhs, arena,
-                                     field_values);
+            subexpression_compile (builder, module, expr->rhs,
+                                   fields, rhs, arena,
+                                   field_values);
 
-              /* XXX: Check that lhs and rhs can be text */
+            /* XXX: Check that lhs and rhs can be text */
 
-              builder->CreateCall3 (f_ca_compare_like, result, lhs, rhs);
-            }
+            builder->CreateCall3 (f_ca_compare_like, result, lhs, rhs);
+          }
 
-          return llvm::ConstantInt::get (t_int32, 0);
+        break;
 
-        case EXPR_AND:
+      case EXPR_AND:
 
-            {
-              llvm::Value *result_int = builder->CreateStructGEP (result, 1);
-              llvm::Value *lhs, *rhs;
+          {
+            llvm::Value *result_int = builder->CreateStructGEP (result, 1);
+            llvm::Value *lhs, *rhs;
 
-              lhs = builder->CreateAlloca (t_expression_value);
-              rhs = builder->CreateAlloca (t_expression_value);
+            lhs = builder->CreateAlloca (t_expression_value);
+            rhs = builder->CreateAlloca (t_expression_value);
 
-              /* XXX: Check return values */
+            /* XXX: Check return values */
 
-              subexpression_compile (builder, module, expr->lhs,
-                                     fields, lhs, arena,
-                                     field_values);
+            subexpression_compile (builder, module, expr->lhs,
+                                   fields, lhs, arena,
+                                   field_values);
 
-              subexpression_compile (builder, module, expr->rhs,
-                                     fields, rhs, arena,
-                                     field_values);
+            subexpression_compile (builder, module, expr->rhs,
+                                   fields, rhs, arena,
+                                   field_values);
 
-              /* XXX: Check that lhs and rhs are bools */
+            /* XXX: Check that lhs and rhs are bools */
 
-              builder->CreateStore (llvm::ConstantInt::get (t_int32, CA_BOOLEAN), builder->CreateStructGEP (result, 0));
-              builder->CreateStore (builder->CreateAnd (builder->CreateLoad (builder->CreateStructGEP (lhs, 1)),
-                                                        builder->CreateLoad (builder->CreateStructGEP (rhs, 1))),
-                                    result_int);
+            builder->CreateStore (llvm::ConstantInt::get (t_int32, CA_BOOLEAN), builder->CreateStructGEP (result, 0));
+            builder->CreateStore (builder->CreateAnd (builder->CreateLoad (builder->CreateStructGEP (lhs, 1)),
+                                                      builder->CreateLoad (builder->CreateStructGEP (rhs, 1))),
+                                  result_int);
 
-            }
+          }
 
-          return llvm::ConstantInt::get (t_int32, 0);
+        break;
 
-        default:
+      default:
 
-          ca_set_error ("Expression type %d not supported", expr->type);
+        ca_set_error ("Expression type %d not supported", expr->type);
 
-          return NULL;
-        }
-    }
-}
+        return NULL;
+      }
 
+    return llvm::ConstantInt::get (t_int32, 0);
+  }
 } /* namespace ca_llvm */

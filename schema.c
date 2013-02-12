@@ -153,6 +153,9 @@ ca_schema_load (const char *path)
       return NULL;
     }
 
+  if (-1 == ca_lock_init (path))
+    return NULL;
+
   if (!(result = ca_malloc (sizeof (*result))))
     return NULL;
 

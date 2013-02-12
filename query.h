@@ -139,9 +139,12 @@ struct select_variable
 
 enum ca_sql_statement_type
 {
+  CA_SQL_BEGIN,
+  CA_SQL_COMMIT,
   CA_SQL_CREATE_TABLE,
   CA_SQL_DROP_TABLE,
   CA_SQL_INSERT,
+  CA_SQL_LOCK,
   CA_SQL_SELECT,
   CA_SQL_SET,
   CA_SQL_QUERY
@@ -171,6 +174,11 @@ struct insert_statement
 {
   const char *table_name;
   struct expression *values;
+};
+
+struct lock_statement
+{
+  const char *table_name;
 };
 
 struct query_statement
@@ -206,6 +214,7 @@ struct statement
       struct create_table_statement create_table;
       struct drop_table_statement drop_table;
       struct insert_statement insert;
+      struct lock_statement lock;
       struct select_statement select;
       struct set_statement set;
       struct query_statement query;

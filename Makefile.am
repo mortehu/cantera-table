@@ -8,6 +8,7 @@ include_HEADERS = ca-table.h ca-functions.h
 bin_PROGRAMS = \
   ca-shell \
   ca-sort \
+  ca-table-lockd \
   ts-extract \
   ts-load \
   ts-merge
@@ -28,6 +29,7 @@ libca_table_la_SOURCES = \
   hashmap.c hashmap.h \
   llvm-expression.cc \
   llvm-vm.cc \
+  lock.c \
   memory.c memory.h \
   merge.c \
   parse.c \
@@ -42,6 +44,8 @@ libca_table_la_SOURCES = \
   table.c \
   type.c
 libca_table_la_LDFLAGS = $(LLVM_LDFLAGS) $(LLVM_LIBS) -pthread
+
+ca_table_lockd_SOURCES = lockd.c
 
 ca_shell_SOURCES = ca-shell.c query-parser.y query-lexer.l
 ca_shell_LDFLAGS = -lreadline

@@ -315,6 +315,42 @@ ca_schema_query (struct ca_schema *schema, const char *query,
 
 /*****************************************************************************/
 
+#define CA_LOCK_MESSAGE_SIZE 508
+
+enum ca_lock_direction
+{
+  CA_LOCK_GLOBAL,
+  CA_LOCK_TABLE,
+
+  CA_LOCK_LESS,
+  CA_LOCK_LEQUAL,
+  CA_LOCK_EQUAL,
+  CA_LOCK_GEQUAL,
+  CA_LOCK_GREATER
+};
+
+int
+ca_lock_init (const char *schema_path);
+
+int
+ca_lock_grab (const char *table_name,
+              const char *column_name,
+              enum ca_lock_direction direction,
+              const void *value,
+              size_t size);
+
+int
+ca_lock_grab_table (const char *table_name);
+
+int
+ca_lock_grab_global (void);
+
+int
+ca_lock_release (void);
+
+
+/*****************************************************************************/
+
 int
 ca_table_write_time_float4 (struct ca_table *table, const char *key,
                             uint64_t start_time, uint32_t interval,

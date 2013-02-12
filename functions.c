@@ -5,8 +5,96 @@
 
 #include "ca-functions.h"
 #include "ca-table.h"
+#include "query.h"
 
 #define POW2(x) ((x) * (x))
+
+/*****************************************************************************/
+
+int
+CA_compare_equal (struct expression_value *result,
+                  const struct expression_value *lhs,
+                  const struct expression_value *rhs)
+{
+  result->type = CA_BOOLEAN;
+
+  if (lhs->type != rhs->type)
+    {
+      ca_set_error ("Attempt to compare values of different types");
+
+      return -1;
+    }
+
+  switch (lhs->type)
+    {
+    case CA_TEXT:
+
+      result->d.integer = !strcmp (lhs->d.string_literal, rhs->d.string_literal);
+
+      return 0;
+
+    default:
+
+      ca_set_error ("Comparing values of type %d is not yet supported", lhs->type);
+
+      return -1;
+    }
+}
+
+int
+CA_compare_like (struct expression_value *result,
+                 const struct expression_value *lhs,
+                 const struct expression_value *rhs)
+{
+  const char *haystack, *filter;
+
+  result->type = CA_BOOLEAN;
+
+  if (lhs->type != CA_TEXT || rhs->type != CA_TEXT)
+    {
+      ca_set_error ("Both operands to LIKE must be of type TEXT");
+
+      return -1;
+    }
+
+  haystack = lhs->d.string_literal;
+  filter = rhs->d.string_literal;
+
+  result->d.integer = 0;
+
+  /* Process everything up to the first '%' */
+  while (*haystack && *filter)
+    {
+      if (*filter == '%')
+        break;
+
+      if (*haystack != *filter && *filter != '_')
+        return 0;
+
+      ++haystack;
+      ++filter;
+    }
+
+  if (!*filter)
+    {
+      result->d.integer = !*haystack;
+
+      return 0;
+    }
+
+  if (filter[0] == '%' && !filter[1])
+    {
+      result->d.integer = 1;
+
+      return 0;
+    }
+
+  ca_set_error ("LIKE expression is too complex");
+
+  return -1;
+}
+
+/*****************************************************************************/
 
 float
 ca_stats_correlation (const float *lhs,

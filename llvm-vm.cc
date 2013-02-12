@@ -152,12 +152,12 @@ namespace ca_llvm
     f_ca_cast_to_text
       = llvm::Function::Create (llvm::FunctionType::get (t_int8_pointer, argument_types, false),
                                 llvm::Function::ExternalLinkage,
-                                "ca_cast_to_text", module);
+                                "CA_cast_to_text", module);
 
     f_ca_cast_to_json
       = llvm::Function::Create (llvm::FunctionType::get (t_int8_pointer, argument_types, false),
                                 llvm::Function::ExternalLinkage,
-                                "ca_cast_to_json", module);
+                                "CA_cast_to_json", module);
 
     argument_types.clear ();
     argument_types.push_back (t_expression_value_pointer);
@@ -167,11 +167,11 @@ namespace ca_llvm
     f_ca_compare_equal
       = llvm::Function::Create (llvm::FunctionType::get (t_int32, argument_types, false),
                                 llvm::Function::ExternalLinkage,
-                                "ca_compare_equal", module);
+                                "CA_compare_equal", module);
     f_ca_compare_like
       = llvm::Function::Create (llvm::FunctionType::get (t_int32, argument_types, false),
                                 llvm::Function::ExternalLinkage,
-                                "ca_compare_like", module);
+                                "CA_compare_like", module);
 
     argument_types.clear ();
     argument_types.push_back (t_pointer);

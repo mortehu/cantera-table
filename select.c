@@ -100,9 +100,9 @@ expr_primary_key_filter (struct expression *expr, unsigned int primary_key_field
 }
 
 static size_t
-collect_field_values (struct iovec *output,
-                      const struct ca_field *fields, size_t field_count,
-                      const uint8_t *begin, const uint8_t *end)
+CA_collect_field_values (struct iovec *output,
+                         const struct ca_field *fields, size_t field_count,
+                         const uint8_t *begin, const uint8_t *end)
 {
   size_t field_index;
 
@@ -256,380 +256,9 @@ CA_query_resolve_variables (struct expression *expression,
   return 0;
 }
 
-const char *
-ca_cast_to_text (struct ca_query_parse_context *context,
-                 const struct expression_value *value)
-{
-  char *result = NULL;
-  size_t result_alloc = 0, result_size = 0;
-
-  switch (value->type)
-    {
-    case CA_BOOLEAN:
-
-      return value->d.integer ? "TRUE" : "FALSE";
-
-    case CA_FLOAT4:
-
-      return ca_arena_sprintf (&context->arena, "%.7g", value->d.float4);
-
-    case CA_FLOAT8:
-
-      return ca_arena_sprintf (&context->arena, "%.7g", value->d.float8);
-
-    case CA_INT8:
-    case CA_INT16:
-    case CA_INT32:
-    case CA_INT64:
-
-      return ca_arena_sprintf (&context->arena, "%lld", (long long) value->d.integer);
-
-    case CA_UINT8:
-    case CA_UINT16:
-    case CA_UINT32:
-    case CA_UINT64:
-
-      return ca_arena_sprintf (&context->arena, "%llu", (long long) value->d.integer);
-
-    case CA_NUMERIC:
-
-      return value->d.numeric;
-
-    case CA_TEXT:
-
-      return value->d.string_literal;
-
-    case CA_TIMESTAMPTZ:
-
-        {
-          time_t t;
-
-          result = ca_arena_alloc (&context->arena, 24);
-
-          t = value->d.integer;
-
-          strftime (result, 24, context->time_format, gmtime (&t));
-        }
-
-      break;
-
-    case CA_TIME_FLOAT4:
-
-        {
-          const uint8_t *begin, *end;
-          size_t i;
-          int first = 1;
-
-          begin = value->d.iov.iov_base;
-          end = begin + value->d.iov.iov_len;
-
-          assert (value->d.iov.iov_len > 0);
-
-          while (begin != end)
-            {
-              uint64_t start_time;
-              uint32_t interval, sample_count;
-              const float *sample_values;
-
-              ca_parse_time_float4 (&begin,
-                                    &start_time, &interval,
-                                    &sample_values, &sample_count);
-
-              for (i = 0; i < sample_count; ++i)
-                {
-                  time_t time;
-                  struct tm tm;
-                  char *o;
-
-                  /*   13 bytes %.7g formatted -FLT_MAX
-                   * + 19 bytes for ISO 8601 date/time
-                   * + 1 byte for LF
-                   * + 1 byte for TAB
-                   */
-                  if (result_size + 34 >= result_alloc
-                      && -1 == CA_ARRAY_GROW_N (&result, &result_alloc, 34))
-                    return NULL;
-
-                  if (!first)
-                    result[result_size++] = '\n';
-
-                  time = start_time + i * interval;
-
-                  gmtime_r (&time, &tm);
-
-                  o = result + result_size;
-
-                  /* XXX Support varying length date/time */
-
-                  o += strftime (o, 20, context->time_format, &tm);
-
-                  *o++ = '\t';
-
-                  o += sprintf (o, "%.7g", sample_values[i]);
-
-                  result_size = o - result;
-
-                  first = 0;
-                }
-            }
-
-          if (result_size == result_alloc
-              && -1 == CA_ARRAY_GROW_N (&result, &result_alloc, 1))
-            return NULL;
-
-          result[result_size] = 0;
-
-          if (-1 == ca_arena_add_pointer (&context->arena, result))
-            {
-              free (result);
-              result = NULL;
-            }
-        }
-
-      break;
-
-    default:
-
-      ca_set_error ("Unsupported type %d", value->type);
-
-      break;
-    }
-
-  return result;
-}
-
-const char *
-ca_cast_to_json (struct ca_query_parse_context *context,
-                 const struct expression_value *value)
-{
-  char *result = NULL;
-  size_t result_alloc = 0, result_size = 0;
-
-  switch (value->type)
-    {
-    case CA_BOOLEAN:
-
-      return value->d.integer ? "true" : "false";
-
-    case CA_FLOAT4:
-
-      return ca_arena_sprintf (&context->arena, "%.7g", value->d.float4);
-
-    case CA_FLOAT8:
-
-      return ca_arena_sprintf (&context->arena, "%.7g", value->d.float8);
-
-    case CA_INT8:
-    case CA_INT16:
-    case CA_INT32:
-    case CA_INT64:
-
-      return ca_arena_sprintf (&context->arena, "%lld", (long long) value->d.integer);
-
-    case CA_UINT8:
-    case CA_UINT16:
-    case CA_UINT32:
-    case CA_UINT64:
-
-      return ca_arena_sprintf (&context->arena, "%llu", (long long) value->d.integer);
-
-    case CA_NUMERIC:
-
-      return value->d.numeric;
-
-    case CA_TEXT:
-
-      /* XXX: Escape special characters */
-      return ca_arena_sprintf (&context->arena, "\"%s\"", value->d.string_literal);
-
-    case CA_TIMESTAMPTZ:
-
-        {
-          time_t t;
-
-          result = ca_arena_alloc (&context->arena, 22);
-
-          t = value->d.integer;
-
-          strftime (result, 22, "\"%Y-%m-%dT%H:%M:%S\"", gmtime (&t));
-        }
-
-      break;
-
-    case CA_TIME_FLOAT4:
-
-        {
-          const uint8_t *begin, *end;
-          size_t i;
-          int first = 1;
-
-          begin = value->d.iov.iov_base;
-          end = begin + value->d.iov.iov_len;
-
-          assert (value->d.iov.iov_len > 0);
-
-          if (-1 == CA_ARRAY_GROW_N (&result, &result_alloc, 2))
-            {
-              free (result);
-
-              return NULL;
-            }
-
-          result[result_size++] = '[';
-
-          while (begin != end)
-            {
-              uint64_t start_time;
-              uint32_t interval, sample_count;
-              const float *sample_values;
-
-              ca_parse_time_float4 (&begin,
-                                    &start_time, &interval,
-                                    &sample_values, &sample_count);
-
-              for (i = 0; i < sample_count; ++i)
-                {
-                  time_t time;
-                  struct tm tm;
-                  char *o;
-
-                  if (result_size + 128 >= result_alloc
-                      && -1 == CA_ARRAY_GROW_N (&result, &result_alloc, 128))
-                    return NULL;
-
-                  if (!first)
-                    result[result_size++] = ',';
-
-                  time = start_time + i * interval;
-
-                  gmtime_r (&time, &tm);
-
-                  o = result + result_size;
-
-                  /* XXX: Check for overflow */
-
-                  o += sprintf (o, "{\"time\":\"");
-                  o += strftime (o, result + result_alloc - o, context->time_format, &tm);
-                  o += sprintf (o, "\",\"value\":%.7g}", sample_values[i]);
-
-                  result_size = o - result;
-
-                  first = 0;
-                }
-            }
-
-          if (result_size == result_alloc
-              && -1 == CA_ARRAY_GROW (&result, &result_alloc))
-            return NULL;
-
-          result[result_size++] = ']';
-          result[result_size++] = 0;
-
-          if (-1 == ca_arena_add_pointer (&context->arena, result))
-            {
-              free (result);
-              result = NULL;
-            }
-        }
-
-      break;
-
-    default:
-
-      ca_set_error ("Unsupported type %d", value->type);
-
-      break;
-    }
-
-  return result;
-}
-
-int
-ca_compare_equal (struct expression_value *result,
-                  const struct expression_value *lhs,
-                  const struct expression_value *rhs)
-{
-  result->type = CA_BOOLEAN;
-
-  if (lhs->type != rhs->type)
-    {
-      ca_set_error ("Attempt to compare values of different types");
-
-      return -1;
-    }
-
-  switch (lhs->type)
-    {
-    case CA_TEXT:
-
-      result->d.integer = !strcmp (lhs->d.string_literal, rhs->d.string_literal);
-
-      return 0;
-
-    default:
-
-      ca_set_error ("Comparing values of type %d is not yet supported", lhs->type);
-
-      return -1;
-    }
-}
-
-int
-ca_compare_like (struct expression_value *result,
-                 const struct expression_value *lhs,
-                 const struct expression_value *rhs)
-{
-  const char *haystack, *filter;
-
-  result->type = CA_BOOLEAN;
-
-  if (lhs->type != CA_TEXT || rhs->type != CA_TEXT)
-    {
-      ca_set_error ("Both operands to LIKE must be of type TEXT");
-
-      return -1;
-    }
-
-  haystack = lhs->d.string_literal;
-  filter = rhs->d.string_literal;
-
-  result->d.integer = 0;
-
-  /* Process everything up to the first '%' */
-  while (*haystack && *filter)
-    {
-      if (*filter == '%')
-        break;
-
-      if (*haystack != *filter && *filter != '_')
-        return 0;
-
-      ++haystack;
-      ++filter;
-    }
-
-  if (!*filter)
-    {
-      result->d.integer = !*haystack;
-
-      return 0;
-    }
-
-  if (filter[0] == '%' && !filter[1])
-    {
-      result->d.integer = 1;
-
-      return 0;
-    }
-
-  ca_set_error ("LIKE expression is too complex");
-
-  return -1;
-}
-
 static int
-output_plain (const char *field_name, const char *value,
-              uint32_t field_index, uint32_t field_count)
+CA_output_plain (const char *field_name, const char *value,
+                 uint32_t field_index, uint32_t field_count)
 {
   if (field_index)
     putchar ('\t');
@@ -640,8 +269,8 @@ output_plain (const char *field_name, const char *value,
 }
 
 static int
-output_csv (const char *field_name, const char *value,
-            uint32_t field_index, uint32_t field_count)
+CA_output_csv (const char *field_name, const char *value,
+               uint32_t field_index, uint32_t field_count)
 {
   if (field_index)
     putchar ('\t');
@@ -676,25 +305,6 @@ output_csv (const char *field_name, const char *value,
           putchar (*value);
         }
     }
-
-  return 0;
-}
-
-static int
-output_json (const char *field_name, const char *value,
-             uint32_t field_index, uint32_t field_count)
-{
-  if (!field_index)
-    putchar ('{');
-  else
-    putchar (',');
-
-  printf ("\"%s\":", field_name);
-
-  fwrite (value, 1, strlen (value), stdout);
-
-  if (field_index + 1 == field_count)
-    putchar ('}');
 
   return 0;
 }
@@ -742,20 +352,20 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
     {
     case CA_PARAM_VALUE_CSV:
 
-      output_function = output_csv;
+      output_function = CA_output_csv;
 
       break;
 
     case CA_PARAM_VALUE_JSON:
 
-      output_function = output_json;
+      output_function = CA_output_json;
 
       break;
 
     default:
     case CA_PARAM_VALUE_PLAIN:
 
-      output_function = output_plain;
+      output_function = CA_output_plain;
 
       break;
     }
@@ -869,11 +479,11 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
           goto done;
         }
 
-      collect_field_values (field_values + field_index,
-                            declaration->fields,
-                            declaration->field_count,
-                            value.iov_base,
-                            (const uint8_t *) value.iov_base + value.iov_len);
+      CA_collect_field_values (field_values + field_index,
+                               declaration->fields,
+                               declaration->field_count,
+                               value.iov_base,
+                               (const uint8_t *) value.iov_base + value.iov_len);
 
       if (where)
         {
@@ -910,11 +520,11 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
 
           field_index = 0;
 
-          collect_field_values (field_values,
-                                declaration->fields,
-                                declaration->field_count,
-                                value.iov_base,
-                                (const uint8_t *) value.iov_base + value.iov_len);
+          CA_collect_field_values (field_values,
+                                   declaration->fields,
+                                   declaration->field_count,
+                                   value.iov_base,
+                                   (const uint8_t *) value.iov_base + value.iov_len);
 
           if (where)
             {

@@ -226,20 +226,26 @@ struct statement
 /*****************************************************************************/
 
 const char *
-ca_cast_to_text (struct ca_query_parse_context *context,
+CA_cast_to_text (struct ca_query_parse_context *context,
                  const struct expression_value *value);
 
 const char *
-ca_cast_to_json (struct ca_query_parse_context *context,
+CA_cast_to_json (struct ca_query_parse_context *context,
                  const struct expression_value *value);
 
 int
-ca_compare_equal (struct expression_value *result,
+CA_output_json (const char *field_name, const char *value,
+                uint32_t field_index, uint32_t field_count);
+
+/*****************************************************************************/
+
+int
+CA_compare_equal (struct expression_value *result,
                   const struct expression_value *lhs,
                   const struct expression_value *rhs);
 
 int
-ca_compare_like (struct expression_value *result,
+CA_compare_like (struct expression_value *result,
                  const struct expression_value *lhs,
                  const struct expression_value *rhs);
 

@@ -40,6 +40,7 @@ libca_table_la_SOURCES = \
   schema.c schema.h \
   select.c \
   sort.c \
+  statement.c \
   table-backend-flexi.c \
   table-backend-log.c \
   table-backend-writeonce.c \

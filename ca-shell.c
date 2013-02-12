@@ -73,8 +73,12 @@ static struct option long_options[] =
 int
 main (int argc, char **argv)
 {
-  struct ca_schema *schema;
+  struct ca_query_parse_context context;
   int i;
+
+  memset (&context, 0, sizeof (context));
+  context.output_format = CA_PARAM_VALUE_PLAIN;
+  strcpy (context.time_format, "%Y-%m-%dT%H:%M:%S");
 
   while ((i = getopt_long (argc, argv, "", long_options, 0)) != -1)
     {
@@ -113,7 +117,7 @@ main (int argc, char **argv)
   if (optind != argc)
     errx (EX_USAGE, "Usage: %s [OPTION]...", argv[0]);
 
-  if (!(schema = ca_schema_load (schema_path)))
+  if (!(context.schema = ca_schema_load (schema_path)))
     errx (EXIT_FAILURE, "Failed to load schema: %s", ca_last_error ());
 
   if (isatty (STDIN_FILENO))
@@ -183,7 +187,7 @@ main (int argc, char **argv)
           if (!(file = fmemopen ((void *) line, strlen (line), "r")))
             fprintf (stderr, "fmemopen failed: %s\n", strerror (errno));
 
-          if (-1 == ca_schema_parse_script (schema, file))
+          if (-1 == CA_parse_script (&context, file))
             fprintf (stderr, "Error: %s\n", ca_last_error ());
 
           fclose (file);
@@ -202,13 +206,13 @@ main (int argc, char **argv)
 
       setvbuf (stdout, buf, _IOFBF, sizeof buf);
 
-      if (-1 == ca_schema_parse_script (schema, stdin))
+      if (-1 == CA_parse_script (&context, stdin))
         fprintf (stderr, "Error: %s\n", ca_last_error ());
 
       fflush (stdout);
     }
 
-  ca_schema_close (schema);
+  ca_schema_close (context.schema);
 
   return EXIT_SUCCESS;
 }

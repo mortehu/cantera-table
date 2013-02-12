@@ -305,9 +305,6 @@ ca_schema_table (struct ca_schema *schema, const char *table_name,
                  struct ca_table_declaration **declaration) CA_USE_RESULT;
 
 int
-ca_schema_parse_script (struct ca_schema *schema, FILE *input);
-
-int
 ca_schema_query (struct ca_schema *schema, const char *query,
                  const char *index_table_name,
                  const char *summary_table_name,

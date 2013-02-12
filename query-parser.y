@@ -59,7 +59,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %type<p> expressionList
 %type<p> selectItem
 %type<p> selectList
-%type<p> statements
+%type<p> topStatements
 %type<p> statement
 %type<p> whereClause
 
@@ -76,117 +76,24 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 
 %%
 document
-    : bom statements
+    : bom topStatements
+    ;
+
+topStatements
+    : topStatements statement ';'
       {
-        struct statement *stmt;
-
-        for (stmt = $2; !context->error && stmt; stmt = stmt->next)
-          {
-            switch (stmt->type)
-              {
-              case CA_SQL_BEGIN:
-
-                break;
-
-              case CA_SQL_COMMIT:
-
-                if (-1 == ca_lock_release ())
-                  context->error = 1;
-
-                break;
-
-              case CA_SQL_CREATE_TABLE:
-
-                if (-1 == ca_schema_create_table (context->schema, stmt->u.create_table.name, &stmt->u.create_table.declaration))
-                  context->error = 1;
-
-                break;
-
-              case CA_SQL_DROP_TABLE:
-
-                if (-1 == ca_schema_drop_table (context->schema, stmt->u.drop_table.name))
-                  context->error = 1;
-
-                break;
-
-              case CA_SQL_INSERT:
-
-                ca_set_error ("INSERT is not yet supported");
-                context->error = 1;
-
-                break;
-
-              case CA_SQL_LOCK:
-
-                ca_lock_grab_global ();
-
-                break;
-
-              case CA_SQL_SELECT:
-
-                if (-1 == CA_select (context, &stmt->u.select))
-                  context->error = 1;
-
-                break;
-
-              case CA_SQL_SET:
-
-                switch (stmt->u.set.parameter)
-                  {
-                  case CA_PARAM_OUTPUT_FORMAT:
-
-                    context->output_format = stmt->u.set.v.enum_value;
-
-                    break;
-
-                  case CA_PARAM_TIME_FORMAT:
-
-                    if (strlen (stmt->u.set.v.string_value) + 1 > sizeof (context->time_format))
-                      {
-                        ca_set_error ("TIME FORMAT string too long");
-                        context->error = 1;
-
-                        break;
-                      }
-
-                    strcpy (context->time_format, stmt->u.set.v.string_value);
-
-                    break;
-                  }
-
-                break;
-
-              case CA_SQL_QUERY:
-
-                if (-1 == ca_schema_query (context->schema,
-                                           stmt->u.query.query,
-                                           stmt->u.query.index_table_name,
-                                           stmt->u.query.summary_table_name,
-                                           stmt->u.query.limit))
-                  context->error = 1;
-
-                break;
-              }
-          }
+        CA_process_statement (context, $2);
+        fflush (stdout);
+      }
+    | statement ';'
+      {
+        CA_process_statement (context, $1);
+        fflush (stdout);
       }
     ;
 
 bom : UTF8BOM
     |
-    ;
-
-statements
-    : statement ';' statements
-      {
-        struct statement *stmt;
-        stmt = $1;
-        stmt->next = $3;
-        $$ = stmt;
-      }
-    | statement ';'
-      {
-        $$ = $1;
-      }
     ;
 
 statement

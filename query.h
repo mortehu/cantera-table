@@ -225,6 +225,15 @@ struct statement
 
 /*****************************************************************************/
 
+int
+CA_parse_script (struct ca_query_parse_context *context, FILE *input);
+
+void
+CA_process_statement (struct ca_query_parse_context *context,
+                      struct statement *stmt);
+
+/*****************************************************************************/
+
 const char *
 CA_cast_to_text (struct ca_query_parse_context *context,
                  const struct expression_value *value);

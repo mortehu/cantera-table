@@ -256,39 +256,6 @@ CA_query_resolve_variables (struct expression *expression,
   return 0;
 }
 
-void
-ca_format_uint64 (char **output,
-                  uint64_t number,
-                  unsigned int min_width)
-{
-  char *begin, *o;
-
-  begin = o = *output;
-
-  while (number > 0)
-    {
-      *o++ = '0' + (number % 10);
-      number /= 10;
-    }
-
-  while (o - begin < min_width)
-    *o++ = '0';
-
-  *output = o--;
-
-  while (begin < o)
-    {
-      char tmp;
-
-      tmp = *o;
-      *o = *begin;
-      *begin = tmp;
-
-      --o;
-      ++begin;
-    }
-}
-
 const char *
 ca_cast_to_text (struct ca_query_parse_context *context,
                  const struct expression_value *value)
@@ -341,7 +308,7 @@ ca_cast_to_text (struct ca_query_parse_context *context,
 
           t = value->d.integer;
 
-          strftime (result, 24, "%Y-%m-%dT%H:%M:%S", gmtime (&t));
+          strftime (result, 24, context->time_format, gmtime (&t));
         }
 
       break;
@@ -392,27 +359,9 @@ ca_cast_to_text (struct ca_query_parse_context *context,
 
                   o = result + result_size;
 
-                  if (!context->time_format[0])
-                    {
-                      ca_format_uint64 (&o, tm.tm_year + 1900, 4);
-                      *o++ = '-';
-                      ca_format_uint64 (&o, tm.tm_mon + 1, 2);
-                      *o++ = '-';
-                      ca_format_uint64 (&o, tm.tm_mday, 2);
-                      *o++ = 'T';
-                      ca_format_uint64 (&o, tm.tm_hour, 2);
-                      *o++ = ':';
-                      ca_format_uint64 (&o, tm.tm_min, 2);
-                      *o++ = ':';
-                      ca_format_uint64 (&o, tm.tm_sec, 2);
-                    }
-                  else
-                    {
-                      /* XXX Support varying length date/time */
+                  /* XXX Support varying length date/time */
 
-                      strftime (o, 20, context->time_format, &tm);
-                      o = strchr (o, 0);
-                    }
+                  o += strftime (o, 20, context->time_format, &tm);
 
                   *o++ = '\t';
 
@@ -897,6 +846,9 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
   const char *primary_key_filter;
   size_t field_index = 0;
 
+  if (context->output_format == CA_PARAM_VALUE_JSON)
+    putchar ('[');
+
   if (1 == has_unique_primary_key
       && NULL != (primary_key_filter = expr_primary_key_filter (stmt->where, primary_key_index)))
     {
@@ -941,11 +893,14 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
           if (-1 == output (&tmp_value, context, field_values))
             goto done;
 
-          putchar ('\n');
+          if (context->output_format != CA_PARAM_VALUE_JSON)
+            putchar ('\n');
         }
     }
   else
     {
+      int first = 1;
+
       if (-1 == (ret = ca_table_seek (table, 0, SEEK_SET)))
         goto done;
 
@@ -980,20 +935,29 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
           if (stmt->offset > 0 && stmt->offset--)
             continue;
 
+          if (!first && context->output_format == CA_PARAM_VALUE_JSON)
+            putchar (',');
+
           if (-1 == output (&tmp_value, context, field_values))
             goto done;
 
-          putchar ('\n');
+          if (context->output_format != CA_PARAM_VALUE_JSON)
+            putchar ('\n');
 
           if (stmt->limit > 0 && !--stmt->limit)
             break;
 
           ca_arena_reset (&arena);
+
+          first = 0;
         }
 
       if (ret == -1)
         goto done;
     }
+
+  if (context->output_format == CA_PARAM_VALUE_JSON)
+    putchar (']');
 
   result = 0;
 

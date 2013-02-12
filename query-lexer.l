@@ -212,6 +212,7 @@ ca_schema_parse_script(struct ca_schema *schema, FILE *input)
   memset (&context, 0, sizeof (context));
   context.schema = schema;
   context.output_format = CA_PARAM_VALUE_PLAIN;
+  strcpy (context.time_format, "%Y-%m-%dT%H:%M:%S");
 
   yylex_init (&context.scanner);
 

@@ -12,7 +12,8 @@ enum ca_param_value
 {
   /* OUTPUT FORMAT */
   CA_PARAM_VALUE_PLAIN,
-  CA_PARAM_VALUE_CSV
+  CA_PARAM_VALUE_CSV,
+  CA_PARAM_VALUE_JSON
 };
 
 struct ca_query_parse_context
@@ -219,6 +220,10 @@ const char *
 ca_cast_to_text (struct ca_query_parse_context *context,
                  const struct expression_value *value);
 
+const char *
+ca_cast_to_json (struct ca_query_parse_context *context,
+                 const struct expression_value *value);
+
 int
 ca_compare_equal (struct expression_value *result,
                   const struct expression_value *lhs,
@@ -237,12 +242,14 @@ typedef int (*ca_expression_function) (struct expression_value *result,
                                        struct ca_query_parse_context *context,
                                        const struct iovec *field_values);
 
-typedef int (*ca_output_function) (uint32_t field_index, const char *value);
+typedef int (*ca_output_function) (const char *field_name, const char *value,
+                                   uint32_t field_index, uint32_t field_count);
 
 #define CA_EXPRESSION_PRINT 0x0001
 
 ca_expression_function
-ca_expression_compile (const char *name,
+ca_expression_compile (struct ca_query_parse_context *context,
+                       const char *name,
                        struct expression *expr,
                        const struct ca_field *fields,
                        size_t field_count,

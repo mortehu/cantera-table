@@ -42,6 +42,7 @@ namespace ca_llvm
   llvm::ExecutionEngine *engine;
 
   llvm::Function *f_ca_cast_to_text = NULL;
+  llvm::Function *f_ca_cast_to_json = NULL;
   llvm::Function *f_ca_compare_equal = NULL;
   llvm::Function *f_ca_compare_like = NULL;
 
@@ -153,6 +154,11 @@ namespace ca_llvm
                                 llvm::Function::ExternalLinkage,
                                 "ca_cast_to_text", module);
 
+    f_ca_cast_to_json
+      = llvm::Function::Create (llvm::FunctionType::get (t_int8_pointer, argument_types, false),
+                                llvm::Function::ExternalLinkage,
+                                "ca_cast_to_json", module);
+
     argument_types.clear ();
     argument_types.push_back (t_expression_value_pointer);
     argument_types.push_back (t_expression_value_pointer);
@@ -168,8 +174,10 @@ namespace ca_llvm
                                 "ca_compare_like", module);
 
     argument_types.clear ();
-    argument_types.push_back (t_int32);
+    argument_types.push_back (t_pointer);
     argument_types.push_back (t_int8_pointer);
+    argument_types.push_back (t_int32);
+    argument_types.push_back (t_int32);
 
     t_output_value = llvm::FunctionType::get (t_int32, argument_types, false);
 
@@ -180,7 +188,8 @@ namespace ca_llvm
 } /* namespace ca_llvm */
 
 ca_expression_function
-ca_expression_compile (const char *name,
+ca_expression_compile (struct ca_query_parse_context *context,
+                       const char *name,
                        struct expression *expr,
                        const struct ca_field *fields,
                        size_t field_count,
@@ -191,7 +200,8 @@ ca_expression_compile (const char *name,
   llvm::Value *return_value = NULL;
   llvm::Value *output_value = NULL;
 
-  unsigned int field_index = 0;
+  unsigned int item_index = 0, item_count = 0;
+  struct expression *expr_i;
 
   std::vector<LLVM_TYPE *> argument_types;
 
@@ -223,8 +233,20 @@ ca_expression_compile (const char *name,
                                               llvm::PointerType::get (t_output_value, 0));
     }
 
+  for (expr_i = expr; expr_i; expr_i = expr_i->next)
+    {
+      if (expr_i->type == EXPR_ASTERISK)
+        item_count += field_count;
+      else
+        ++item_count;
+    }
+
   for (; expr; expr = expr->next)
     {
+      struct select_item *si;
+
+      si = (struct select_item *) expr;
+
       if (expr->type == EXPR_ASTERISK)
         {
           size_t i = 0;
@@ -244,10 +266,17 @@ ca_expression_compile (const char *name,
                 {
                   llvm::Value *string;
 
-                  string = builder->CreateCall2 (f_ca_cast_to_text, arena, result);
+                  if (context->output_format == CA_PARAM_VALUE_JSON)
+                    string = builder->CreateCall2 (f_ca_cast_to_json, arena, result);
+                  else
+                    string = builder->CreateCall2 (f_ca_cast_to_text, arena, result);
 
-                  builder->CreateCall2 (output_value, llvm::ConstantInt::get (t_int32, field_index), string);
-                  ++field_index;
+                  builder->CreateCall4 (output_value,
+                                        llvm::ConstantInt::get (t_pointer, (uintptr_t) fields[i].name),
+                                        string,
+                                        llvm::ConstantInt::get (t_int32, item_index),
+                                        llvm::ConstantInt::get (t_int32, item_count));
+                  ++item_index;
                 }
             }
         }
@@ -260,10 +289,17 @@ ca_expression_compile (const char *name,
             {
               llvm::Value *string;
 
-              string = builder->CreateCall2 (f_ca_cast_to_text, arena, result);
+              if (context->output_format == CA_PARAM_VALUE_JSON)
+                string = builder->CreateCall2 (f_ca_cast_to_json, arena, result);
+              else
+                string = builder->CreateCall2 (f_ca_cast_to_text, arena, result);
 
-              builder->CreateCall2 (output_value, llvm::ConstantInt::get (t_int32, field_index), string);
-              ++field_index;
+              builder->CreateCall4 (output_value,
+                                    llvm::ConstantInt::get (t_pointer, (uintptr_t) si->alias),
+                                    string,
+                                    llvm::ConstantInt::get (t_int32, item_index),
+                                    llvm::ConstantInt::get (t_int32, item_count));
+              ++item_index;
             }
         }
     }

@@ -43,7 +43,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token TRUE FALSE
 %token INSERT INTO VALUES
 %token DROP
-%token SET OUTPUT FORMAT CSV
+%token SET OUTPUT FORMAT CSV JSON
 
 %token Identifier
 %token Integer
@@ -329,6 +329,7 @@ runtimeParameter
 
 runtimeParameterValue
     : CSV           { $$ = CA_PARAM_VALUE_CSV; }
+    | JSON          { $$ = CA_PARAM_VALUE_JSON; }
     ;
 
 createTableArgs

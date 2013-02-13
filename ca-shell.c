@@ -79,8 +79,7 @@ main (int argc, char **argv)
   int i;
 
   memset (&context, 0, sizeof (context));
-  context.output_format = CA_PARAM_VALUE_PLAIN;
-  strcpy (context.time_format, "%Y-%m-%dT%H:%M:%S");
+  strcpy (CA_time_format, "%Y-%m-%dT%H:%M:%S");
 
   while ((i = getopt_long (argc, argv, "c:", long_options, 0)) != -1)
     {
@@ -206,6 +205,7 @@ main (int argc, char **argv)
 #endif
 
           ca_clear_error ();
+          context.error = 0;
 
           if (!(file = fmemopen ((void *) line, strlen (line), "r")))
             fprintf (stderr, "fmemopen failed: %s\n", strerror (errno));

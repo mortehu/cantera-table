@@ -11,7 +11,6 @@ extern "C" {
 enum ca_param_value
 {
   /* OUTPUT FORMAT */
-  CA_PARAM_VALUE_PLAIN,
   CA_PARAM_VALUE_CSV,
   CA_PARAM_VALUE_JSON
 };
@@ -21,9 +20,6 @@ struct ca_query_parse_context
   void *scanner;
   struct ca_arena_info arena;
   int error;
-
-  enum ca_param_value output_format;
-  char time_format[64];
 
   struct ca_schema *schema;
 };
@@ -223,6 +219,11 @@ struct statement
 
 /*****************************************************************************/
 
+extern char CA_time_format[64];
+extern enum ca_param_value CA_output_format;
+
+/*****************************************************************************/
+
 int
 CA_parse_script (struct ca_query_parse_context *context, FILE *input);
 
@@ -231,6 +232,21 @@ CA_process_statement (struct ca_query_parse_context *context,
                       struct statement *stmt);
 
 /*****************************************************************************/
+
+void
+CA_output_char (int ch);
+
+void
+CA_output_string (const char *string);
+
+void
+CA_output_json_string (const char *string);
+
+void
+CA_output_uint64 (uint64_t number);
+
+void
+CA_output_time_float4 (struct iovec *iov);
 
 const char *
 CA_cast_to_text (struct ca_query_parse_context *context,
@@ -252,22 +268,17 @@ CA_compare_equal (struct expression_value *result,
                   const struct expression_value *rhs);
 
 int
-CA_compare_like (struct expression_value *result,
-                 const struct expression_value *lhs,
-                 const struct expression_value *rhs);
+CA_compare_like (const char *subject, const char *pattern);
 
 int
 CA_select (struct ca_query_parse_context *context,
            struct select_statement *stmt);
 
-typedef int (*ca_expression_function) (struct expression_value *result,
-                                       struct ca_query_parse_context *context,
+typedef int (*ca_expression_function) (struct ca_query_parse_context *context,
                                        const struct iovec *field_values);
 
-typedef int (*ca_output_function) (const char *field_name, const char *value,
-                                   uint32_t field_index, uint32_t field_count);
-
-#define CA_EXPRESSION_PRINT 0x0001
+#define CA_EXPRESSION_PRINT       0x0001
+#define CA_EXPRESSION_RETURN_BOOL 0x0002
 
 ca_expression_function
 CA_expression_compile (struct ca_query_parse_context *context,
@@ -275,8 +286,7 @@ CA_expression_compile (struct ca_query_parse_context *context,
                        struct expression *expr,
                        const struct ca_field *fields,
                        size_t field_count,
-                       ca_output_function output_function,
-                       enum ca_type *return_type);
+                       int flags);
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -41,13 +41,18 @@ namespace ca_llvm
   llvm::Module *module;
   llvm::ExecutionEngine *engine;
 
-  llvm::Function *f_ca_cast_to_text = NULL;
-  llvm::Function *f_ca_cast_to_json = NULL;
-  llvm::Function *f_ca_compare_equal = NULL;
-  llvm::Function *f_ca_compare_like = NULL;
+  llvm::Function *f_CA_output_char;
+  llvm::Function *f_CA_output_string;
+  llvm::Function *f_CA_output_json_string;
+  llvm::Function *f_CA_output_uint64;
+  llvm::Function *f_CA_output_time_float4;
 
-  LLVM_TYPE *t_output_value = NULL;
+  llvm::Function *f_ca_compare_like;
+  llvm::Function *f_strcmp;
 
+  LLVM_TYPE *t_void;
+
+  LLVM_TYPE *t_int1;
   LLVM_TYPE *t_int8;
   LLVM_TYPE *t_int8_pointer;
   LLVM_TYPE *t_int16;
@@ -58,15 +63,15 @@ namespace ca_llvm
   LLVM_TYPE *t_int64_pointer;
 
   LLVM_TYPE *t_pointer;
+  LLVM_TYPE *t_pointer_pointer;
   LLVM_TYPE *t_size;
 
   LLVM_TYPE *t_float;
   LLVM_TYPE *t_double;
 
-  /* t_int32    header
-   * t_int8[4]  padding
-   * t_int8[8]  data0
-   * t_int8[8]  data1 */
+  /* t_int32  header
+   * t_int64  data0
+   * t_int64  data1 */
   LLVM_TYPE *t_expression_value;
   LLVM_TYPE *t_expression_value_pointer;
 
@@ -80,6 +85,9 @@ namespace ca_llvm
   {
     std::vector<LLVM_TYPE *> types;
 
+    t_void =  llvm::Type::getVoidTy (llvm::getGlobalContext ());
+
+    t_int1 =  llvm::Type::getInt1Ty (llvm::getGlobalContext ());
     t_int8 =  llvm::Type::getInt8Ty (llvm::getGlobalContext ());
     t_int16 = llvm::Type::getInt16Ty (llvm::getGlobalContext ());
     t_int32 = llvm::Type::getInt32Ty (llvm::getGlobalContext ());
@@ -96,6 +104,8 @@ namespace ca_llvm
       t_pointer = t_int32;
     else
       assert (!"unhandled void * size");
+
+    t_pointer_pointer = llvm::PointerType::get (t_pointer, 0);
 
     if (sizeof (size_t) == sizeof (int64_t))
       t_size = t_int64;
@@ -150,40 +160,55 @@ namespace ca_llvm
     initialize_types (engine->getDataLayout ());
 
     argument_types.clear ();
-    argument_types.push_back (t_pointer);
-    argument_types.push_back (t_expression_value_pointer);
+    argument_types.push_back (t_int32);
 
-    f_ca_cast_to_text
-      = llvm::Function::Create (llvm::FunctionType::get (t_int8_pointer, argument_types, false),
+    f_CA_output_char
+      = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
                                 llvm::Function::ExternalLinkage,
-                                "CA_cast_to_text", module);
-
-    f_ca_cast_to_json
-      = llvm::Function::Create (llvm::FunctionType::get (t_int8_pointer, argument_types, false),
-                                llvm::Function::ExternalLinkage,
-                                "CA_cast_to_json", module);
+                                "CA_output_char", module);
 
     argument_types.clear ();
-    argument_types.push_back (t_expression_value_pointer);
-    argument_types.push_back (t_expression_value_pointer);
-    argument_types.push_back (t_expression_value_pointer);
+    argument_types.push_back (t_pointer);
 
-    f_ca_compare_equal
-      = llvm::Function::Create (llvm::FunctionType::get (t_int32, argument_types, false),
+    f_CA_output_string
+      = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
                                 llvm::Function::ExternalLinkage,
-                                "CA_compare_equal", module);
+                                "CA_output_string", module);
+
+    f_CA_output_json_string
+      = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
+                                llvm::Function::ExternalLinkage,
+                                "CA_output_json_string", module);
+
+    argument_types.clear ();
+    argument_types.push_back (t_int64);
+
+    f_CA_output_uint64
+      = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
+                                llvm::Function::ExternalLinkage,
+                                "CA_output_uint64", module);
+
+    argument_types.clear ();
+    argument_types.push_back (t_iovec_pointer);
+
+    f_CA_output_time_float4
+      = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
+                                llvm::Function::ExternalLinkage,
+                                "CA_output_time_float4", module);
+
+    argument_types.clear ();
+    argument_types.push_back (t_pointer);
+    argument_types.push_back (t_pointer);
+
     f_ca_compare_like
-      = llvm::Function::Create (llvm::FunctionType::get (t_int32, argument_types, false),
+      = llvm::Function::Create (llvm::FunctionType::get (t_int1, argument_types, false),
                                 llvm::Function::ExternalLinkage,
                                 "CA_compare_like", module);
 
-    argument_types.clear ();
-    argument_types.push_back (t_pointer);
-    argument_types.push_back (t_int8_pointer);
-    argument_types.push_back (t_int32);
-    argument_types.push_back (t_int32);
-
-    t_output_value = llvm::FunctionType::get (t_int32, argument_types, false);
+    f_strcmp
+      = llvm::Function::Create (llvm::FunctionType::get (t_int32, argument_types, false),
+                                llvm::Function::ExternalLinkage,
+                                "strcmp", module);
 
     initialize_done = true;
 
@@ -191,22 +216,72 @@ namespace ca_llvm
   }
 } /* namespace ca_llvm */
 
+static int
+CA_generate_output (llvm::IRBuilder<> *builder,
+                    llvm::Function *function,
+                    llvm::Value *value, enum ca_type type,
+                    enum ca_param_value output_format)
+{
+  using namespace ca_llvm;
+
+  switch (type)
+    {
+    case CA_BOOLEAN:
+
+      builder->CreateCall (f_CA_output_string,
+                           builder->CreateSelect (value,
+                                                  llvm::ConstantInt::get (t_pointer, (ptrdiff_t) "true"),
+                                                  llvm::ConstantInt::get (t_pointer, (ptrdiff_t) "false")));
+
+      break;
+
+    case CA_TEXT:
+
+      if (output_format == CA_PARAM_VALUE_JSON)
+        builder->CreateCall (f_CA_output_json_string, value);
+      else
+        builder->CreateCall (f_CA_output_string, value);
+
+      break;
+
+    case CA_INT64:
+
+      builder->CreateCall (f_CA_output_uint64, value);
+
+      break;
+
+    case CA_TIME_FLOAT4:
+
+      builder->CreateCall (f_CA_output_time_float4, value);
+
+      break;
+
+    default:
+
+      ca_set_error ("Don't know how to print data of type %s", ca_type_to_string (type));
+
+      return -1;
+    }
+
+  return 0;
+}
+
 ca_expression_function
 CA_expression_compile (struct ca_query_parse_context *context,
                        const char *name,
                        struct expression *expr,
                        const struct ca_field *fields,
                        size_t field_count,
-                       ca_output_function output_function,
-                       enum ca_type *return_type)
+                       int flags)
 {
   using namespace ca_llvm;
 
+  enum ca_type return_type;
   llvm::Value *return_value = NULL;
-  llvm::Value *output_value = NULL;
 
   unsigned int item_index = 0, item_count = 0;
   struct expression *expr_i;
+  llvm::Value *delimiter = NULL, *key_separator = NULL;
 
   std::vector<LLVM_TYPE *> argument_types;
 
@@ -215,7 +290,6 @@ CA_expression_compile (struct ca_query_parse_context *context,
 
   auto builder = new llvm::IRBuilder<> (llvm::getGlobalContext ());
 
-  argument_types.push_back (t_expression_value_pointer);
   argument_types.push_back (t_pointer);
   argument_types.push_back (t_iovec_pointer);
   auto function_type = llvm::FunctionType::get (t_int32, argument_types, false);
@@ -223,7 +297,6 @@ CA_expression_compile (struct ca_query_parse_context *context,
   auto function = llvm::Function::Create (function_type, llvm::Function::InternalLinkage, name, module);
 
   auto argument = function->arg_begin ();
-  llvm::Value *result = argument++;
   llvm::Value *arena = argument++;
   llvm::Value *field_values = argument++;
   assert (argument == function->arg_end ());
@@ -232,10 +305,18 @@ CA_expression_compile (struct ca_query_parse_context *context,
 
   builder->SetInsertPoint (basic_block);
 
-  if (output_function)
+  if (0 != (flags & CA_EXPRESSION_PRINT))
     {
-      output_value = builder->CreateIntToPtr (llvm::ConstantInt::get (t_pointer, (ptrdiff_t) output_function),
-                                              llvm::PointerType::get (t_output_value, 0));
+      if (CA_output_format == CA_PARAM_VALUE_JSON)
+        {
+          builder->CreateCall (f_CA_output_string,
+                               llvm::ConstantInt::get (t_pointer, (uintptr_t) "{\""));
+
+          delimiter = llvm::ConstantInt::get (t_pointer, (ptrdiff_t) ",\"");
+          key_separator = llvm::ConstantInt::get (t_pointer, (ptrdiff_t) "\":");
+        }
+      else
+        delimiter = llvm::ConstantInt::get (t_int32, '\t');
     }
 
   for (expr_i = expr; expr_i; expr_i = expr_i->next)
@@ -266,61 +347,102 @@ CA_expression_compile (struct ca_query_parse_context *context,
 
               if (!(return_value = subexpression_compile (builder, module,
                                                           &tmp_expr, fields,
-                                                          result, arena,
+                                                          arena,
                                                           field_values,
-                                                          return_type)))
+                                                          &return_type)))
                 {
                   return NULL;
                 }
 
-              if (output_value)
+              if (0 != (flags & CA_EXPRESSION_PRINT))
                 {
-                  llvm::Value *string;
+                  if (item_index)
+                    {
+                      if (CA_output_format == CA_PARAM_VALUE_JSON)
+                        builder->CreateCall (f_CA_output_string, delimiter);
+                      else
+                        builder->CreateCall (f_CA_output_char, delimiter);
+                    }
 
-                  if (context->output_format == CA_PARAM_VALUE_JSON)
-                    string = builder->CreateCall2 (f_ca_cast_to_json, arena, result);
-                  else
-                    string = builder->CreateCall2 (f_ca_cast_to_text, arena, result);
+                  if (CA_output_format == CA_PARAM_VALUE_JSON)
+                    {
+                      builder->CreateCall (f_CA_output_string,
+                                           llvm::ConstantInt::get (t_pointer, (uintptr_t) fields[i].name));
+                      builder->CreateCall (f_CA_output_string, key_separator);
+                    }
 
-                  builder->CreateCall4 (output_value,
-                                        llvm::ConstantInt::get (t_pointer, (uintptr_t) fields[i].name),
-                                        string,
-                                        llvm::ConstantInt::get (t_int32, item_index),
-                                        llvm::ConstantInt::get (t_int32, item_count));
-                  ++item_index;
+                  if (-1 == CA_generate_output (builder, function,
+                                                return_value, return_type,
+                                                CA_output_format))
+                    {
+                      return NULL;
+                    }
                 }
+
+              ++item_index;
             }
         }
       else
         {
-          if (!(return_value = subexpression_compile (builder, module, expr,
-                                                      fields, result, arena,
+          if (!(return_value = subexpression_compile (builder, module,
+                                                      expr, fields,
+                                                      arena,
                                                       field_values,
-                                                      return_type)))
+                                                      &return_type)))
             {
               return NULL;
             }
 
-          if (output_value)
+          if (0 != (flags & CA_EXPRESSION_PRINT))
             {
-              llvm::Value *string;
+              if (item_index)
+                {
+                  if (CA_output_format == CA_PARAM_VALUE_JSON)
+                    builder->CreateCall (f_CA_output_string, delimiter);
+                  else
+                    builder->CreateCall (f_CA_output_char, delimiter);
+                }
 
-              if (context->output_format == CA_PARAM_VALUE_JSON)
-                string = builder->CreateCall2 (f_ca_cast_to_json, arena, result);
-              else
-                string = builder->CreateCall2 (f_ca_cast_to_text, arena, result);
+              if (CA_output_format == CA_PARAM_VALUE_JSON)
+                {
+                  builder->CreateCall (f_CA_output_string,
+                                       llvm::ConstantInt::get (t_pointer, (uintptr_t) si->alias));
+                  builder->CreateCall (f_CA_output_string, key_separator);
+                }
 
-              builder->CreateCall4 (output_value,
-                                    llvm::ConstantInt::get (t_pointer, (uintptr_t) si->alias),
-                                    string,
-                                    llvm::ConstantInt::get (t_int32, item_index),
-                                    llvm::ConstantInt::get (t_int32, item_count));
-              ++item_index;
+              if (-1 == CA_generate_output (builder, function,
+                                            return_value, return_type,
+                                            CA_output_format))
+                {
+                  return NULL;
+                }
             }
+
+          ++item_index;
         }
     }
 
-  builder->CreateRet (return_value);
+  if (0 != (flags & CA_EXPRESSION_PRINT))
+    {
+      if (CA_output_format == CA_PARAM_VALUE_JSON)
+        builder->CreateCall (f_CA_output_char, llvm::ConstantInt::get (t_int32, '}'));
+      else
+        builder->CreateCall (f_CA_output_char, llvm::ConstantInt::get (t_int32, '\n'));
+    }
+
+  if (0 != (flags & CA_EXPRESSION_RETURN_BOOL))
+    {
+      if (return_type != CA_BOOLEAN)
+        {
+          ca_set_error ("Expression is not of type BOOLEAN");
+
+          return NULL;
+        }
+
+      builder->CreateRet (builder->CreateIntCast (return_value, t_int32, false));
+    }
+  else
+    builder->CreateRet (llvm::ConstantInt::get (t_int32, 0));
 
   llvm::verifyFunction (*function);
 

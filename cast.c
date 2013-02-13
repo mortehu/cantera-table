@@ -55,7 +55,7 @@ CA_cast_to_text (struct ca_query_parse_context *context,
 
           t = value->d.integer;
 
-          strftime (result, 24, context->time_format, gmtime (&t));
+          strftime (result, 24, CA_time_format, gmtime (&t));
         }
 
       break;
@@ -108,7 +108,7 @@ CA_cast_to_text (struct ca_query_parse_context *context,
 
                   /* XXX Support varying length date/time */
 
-                  o += strftime (o, 20, context->time_format, &tm);
+                  o += strftime (o, 20, CA_time_format, &tm);
 
                   *o++ = '\t';
 

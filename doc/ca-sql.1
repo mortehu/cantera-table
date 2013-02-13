@@ -22,11 +22,8 @@ If the \fBWHERE\fR keyword is used, only rows where its parameter expression eva
 Sets the format used in response to \fBSELECT\fR statements.  Supported formats are:
 .RS
 .TP
-\fBPLAIN\fR
-Values are cast to strings and separated by \fBTAB\fR.  Rows are separated by \fBLF\fR.  This is the default.
-.TP
 \fBCSV\fR
-Values are cast to strings and separated by \fBTAB\fR.  Rows are separated by \fBLF\fR.  To prevent ambiguity, \fBTAB\fR and \fBLF\fR characters within strings are escaped to avoid ambiguity.
+Values are cast to strings and separated by \fBTAB\fR.  Rows are separated by \fBLF\fR.  To prevent ambiguity, \fBTAB\fR and \fBLF\fR characters within strings are escaped to avoid ambiguity.  This is the default output format.
 .TP
 \fBJSON\fR
 The result set is printed as an array of objects in JSON format.

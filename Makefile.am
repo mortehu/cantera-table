@@ -34,7 +34,7 @@ libca_table_la_SOURCES = \
   lock.c \
   memory.c memory.h \
   merge.c \
-  output-json.c \
+  output.c \
   parse.c \
   query.c \
   schema.c schema.h \

@@ -60,13 +60,13 @@ CA_process_statement (struct ca_query_parse_context *context,
         {
         case CA_PARAM_OUTPUT_FORMAT:
 
-          context->output_format = stmt->u.set.v.enum_value;
+          CA_output_format = stmt->u.set.v.enum_value;
 
           break;
 
         case CA_PARAM_TIME_FORMAT:
 
-          if (strlen (stmt->u.set.v.string_value) + 1 > sizeof (context->time_format))
+          if (strlen (stmt->u.set.v.string_value) + 1 > sizeof (CA_time_format))
             {
               ca_set_error ("TIME FORMAT string too long");
               context->error = 1;
@@ -74,7 +74,7 @@ CA_process_statement (struct ca_query_parse_context *context,
               break;
             }
 
-          strcpy (context->time_format, stmt->u.set.v.string_value);
+          strcpy (CA_time_format, stmt->u.set.v.string_value);
 
           break;
         }

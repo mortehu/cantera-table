@@ -14,9 +14,10 @@
 
 namespace ca_llvm
 {
-  extern llvm::Function *f_ca_compare_equal;
   extern llvm::Function *f_ca_compare_like;
+  extern llvm::Function *f_strcmp;
 
+  extern LLVM_TYPE *t_int1;
   extern LLVM_TYPE *t_int8;
   extern LLVM_TYPE *t_int8_pointer;
   extern LLVM_TYPE *t_int16;
@@ -47,7 +48,6 @@ namespace ca_llvm
   subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
                          struct expression *expr,
                          const struct ca_field *fields,
-                         llvm::Value *result,
                          llvm::Value *arena,
                          llvm::Value *field_values,
                          enum ca_type *return_type);

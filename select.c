@@ -256,64 +256,9 @@ CA_query_resolve_variables (struct expression *expression,
   return 0;
 }
 
-static int
-CA_output_plain (const char *field_name, const char *value,
-                 uint32_t field_index, uint32_t field_count)
-{
-  if (field_index)
-    putchar ('\t');
-
-  fwrite (value, 1, strlen (value), stdout);
-
-  return 0;
-}
-
-static int
-CA_output_csv (const char *field_name, const char *value,
-               uint32_t field_index, uint32_t field_count)
-{
-  if (field_index)
-    putchar ('\t');
-
-  for (; *value; ++value)
-    {
-      switch (*value)
-        {
-        case '\t':
-
-          putchar ('\\');
-          putchar ('t');
-
-          break;
-
-        case '\r':
-
-          putchar ('\\');
-          putchar ('r');
-
-          break;
-
-        case '\n':
-
-          putchar ('\\');
-          putchar ('n');
-
-          break;
-
-        default:
-
-          putchar (*value);
-        }
-    }
-
-  return 0;
-}
-
 int
 CA_select (struct ca_query_parse_context *context, struct select_statement *stmt)
 {
-  ca_output_function output_function;
-
   struct ca_schema *schema;
   struct ca_table *table;
   struct ca_table_declaration *declaration;
@@ -326,7 +271,6 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
 
   struct select_item *si;
 
-  enum ca_type result_type;
   ca_expression_function output = NULL, where = NULL;
 
   size_t i;
@@ -348,28 +292,6 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
 
   if (!(table = ca_schema_table (schema, stmt->from, &declaration)))
     goto done;
-
-  switch (context->output_format)
-    {
-    case CA_PARAM_VALUE_CSV:
-
-      output_function = CA_output_csv;
-
-      break;
-
-    case CA_PARAM_VALUE_JSON:
-
-      output_function = CA_output_json;
-
-      break;
-
-    default:
-    case CA_PARAM_VALUE_PLAIN:
-
-      output_function = CA_output_plain;
-
-      break;
-    }
 
   /*** Replace identifiers with pointers to the table field ***/
 
@@ -425,8 +347,7 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
                                         &stmt->list->expression,
                                         declaration->fields,
                                         declaration->field_count,
-                                        output_function,
-                                        &result_type)))
+                                        CA_EXPRESSION_PRINT)))
     {
       goto done;
     }
@@ -441,15 +362,9 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
                                            stmt->where,
                                            declaration->fields,
                                            declaration->field_count,
-                                           NULL,
-                                           &result_type)))
+                                           CA_EXPRESSION_RETURN_BOOL)))
         {
-          goto done;
-        }
-
-      if (result_type != CA_BOOLEAN)
-        {
-          ca_set_error ("WHERE expression is not boolean");
+          ca_set_error ("Failed to compile WHERE expression: %s", ca_last_error ());
 
           goto done;
         }
@@ -468,14 +383,12 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
   const char *primary_key_filter;
   size_t field_index = 0;
 
-  if (context->output_format == CA_PARAM_VALUE_JSON)
+  if (CA_output_format == CA_PARAM_VALUE_JSON)
     putchar ('[');
 
   if (1 == has_unique_primary_key
       && NULL != (primary_key_filter = expr_primary_key_filter (stmt->where, primary_key_index)))
     {
-      struct expression_value tmp_value;
-
       if (-1 == (ret = ca_table_seek_to_key (table, primary_key_filter)))
         goto done;
 
@@ -497,17 +410,10 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
                                value.iov_base,
                                (const uint8_t *) value.iov_base + value.iov_len);
 
-      if (where
-          && -1 == where (&tmp_value, context, field_values))
-        goto done;
-
-      if (!where || tmp_value.d.integer)
+      if (!where || where (context, field_values))
         {
-          if (-1 == output (&tmp_value, context, field_values))
+          if (-1 == output (context, field_values))
             goto done;
-
-          if (context->output_format != CA_PARAM_VALUE_JSON)
-            putchar ('\n');
         }
     }
   else
@@ -519,8 +425,6 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
 
       while (0 < (ret = ca_table_read_row (table, &value)))
         {
-          struct expression_value tmp_value;
-
           field_index = 0;
 
           CA_collect_field_values (field_values,
@@ -529,26 +433,17 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
                                    value.iov_base,
                                    (const uint8_t *) value.iov_base + value.iov_len);
 
-          if (where)
-            {
-              if (-1 == where (&tmp_value, context, field_values))
-                goto done;
-
-              if (!tmp_value.d.integer)
-                continue;
-            }
+          if (where && !where (context, field_values))
+            continue;
 
           if (stmt->offset > 0 && stmt->offset--)
             continue;
 
-          if (!first && context->output_format == CA_PARAM_VALUE_JSON)
+          if (!first && CA_output_format == CA_PARAM_VALUE_JSON)
             putchar (',');
 
-          if (-1 == output (&tmp_value, context, field_values))
+          if (-1 == output (context, field_values))
             goto done;
-
-          if (context->output_format != CA_PARAM_VALUE_JSON)
-            putchar ('\n');
 
           if (stmt->limit > 0 && !--stmt->limit)
             break;
@@ -562,8 +457,8 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
         goto done;
     }
 
-  if (context->output_format == CA_PARAM_VALUE_JSON)
-    putchar (']');
+  if (CA_output_format == CA_PARAM_VALUE_JSON)
+    printf ("]\n");
 
   result = 0;
 

@@ -187,7 +187,8 @@ CA_collect_field_values (struct iovec *output,
 
 static int
 CA_query_resolve_variables (struct expression *expression,
-                            const struct ca_hashmap *variables)
+                            const struct ca_hashmap *variables,
+                            int *is_constant)
 {
   struct select_variable *variable;
 
@@ -208,6 +209,9 @@ CA_query_resolve_variables (struct expression *expression,
           expression->value.type = variable->type;
           expression->value.d.field_index = variable->field_index;
 
+          if (is_constant)
+            *is_constant = 0;
+
           break;
 
         case EXPR_ADD:
@@ -225,7 +229,8 @@ CA_query_resolve_variables (struct expression *expression,
         case EXPR_OR:
         case EXPR_SUB:
 
-          if (-1 == CA_query_resolve_variables (expression->rhs, variables))
+          if (-1 == CA_query_resolve_variables (expression->rhs, variables,
+                                                is_constant))
             return -1;
 
           /* Fall through */
@@ -233,7 +238,8 @@ CA_query_resolve_variables (struct expression *expression,
         case EXPR_DISTINCT:
         case EXPR_NEGATIVE:
 
-          if (-1 == CA_query_resolve_variables (expression->lhs, variables))
+          if (-1 == CA_query_resolve_variables (expression->lhs, variables,
+                                                is_constant))
             return -1;
 
           break;
@@ -326,7 +332,7 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
       last_variable = &new_variable->next;
     }
 
-  if (-1 == CA_query_resolve_variables (&stmt->list->expression, variables))
+  if (-1 == CA_query_resolve_variables (&stmt->list->expression, variables, NULL))
     goto done;
 
   /*** Resolve names of columns ***/
@@ -354,7 +360,9 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
 
   if (stmt->where)
     {
-      if (-1 == CA_query_resolve_variables (stmt->where, variables))
+      int is_constant = 1;
+
+      if (-1 == CA_query_resolve_variables (stmt->where, variables, &is_constant))
         goto done;
 
       if (!(where = CA_expression_compile (context,
@@ -368,10 +376,21 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
 
           goto done;
         }
+
+      if (is_constant)
+        {
+          if (!where (context, NULL))
+            stmt->limit = 0;
+
+          where = NULL;
+        }
     }
 
   if (!stmt->limit)
     {
+      if (CA_output_format == CA_PARAM_VALUE_JSON)
+        printf ("[]\n");
+
       result = 0;
 
       goto done;

@@ -144,4 +144,3 @@ CA_cast_to_text (struct ca_query_parse_context *context,
 
   return result;
 }
-

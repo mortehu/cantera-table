@@ -97,11 +97,9 @@ enum ca_field_flag
 
 struct ca_field
 {
+  enum ca_type type;
   char name[CA_NAMEDATALEN];
   uint32_t flags;
-  uint16_t pad0;
-  uint8_t pad1;
-  uint8_t type; /* enum ca_type */
 };
 
 struct ca_table_declaration

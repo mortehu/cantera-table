@@ -448,6 +448,15 @@ expression
         expr->rhs = $3;
         $$ = expr;
       }
+    | expression OR expression
+      {
+        struct expression *expr;
+        ALLOC(expr);
+        expr->type = EXPR_OR;
+        expr->lhs = $1;
+        expr->rhs = $3;
+        $$ = expr;
+      }
     | TRUE
       {
         struct expression *expr;

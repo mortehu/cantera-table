@@ -326,6 +326,7 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
 
   struct select_item *si;
 
+  enum ca_type result_type;
   ca_expression_function output = NULL, where = NULL;
 
   size_t i;
@@ -419,12 +420,13 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
         si->alias = "?column?";
     }
 
-  if (!(output = ca_expression_compile (context,
+  if (!(output = CA_expression_compile (context,
                                         "output",
                                         &stmt->list->expression,
                                         declaration->fields,
                                         declaration->field_count,
-                                        output_function)))
+                                        output_function,
+                                        &result_type)))
     {
       goto done;
     }
@@ -434,13 +436,23 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
       if (-1 == CA_query_resolve_variables (stmt->where, variables))
         goto done;
 
-      if (!(where = ca_expression_compile (context,
+      if (!(where = CA_expression_compile (context,
                                            "where",
                                            stmt->where,
                                            declaration->fields,
                                            declaration->field_count,
-                                           NULL)))
-        goto done;
+                                           NULL,
+                                           &result_type)))
+        {
+          goto done;
+        }
+
+      if (result_type != CA_BOOLEAN)
+        {
+          ca_set_error ("WHERE expression is not boolean");
+
+          goto done;
+        }
     }
 
   if (!stmt->limit)
@@ -485,18 +497,9 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
                                value.iov_base,
                                (const uint8_t *) value.iov_base + value.iov_len);
 
-      if (where)
-        {
-          if (-1 == where (&tmp_value, context, field_values))
-            goto done;
-
-          if (tmp_value.type != CA_BOOLEAN)
-            {
-              ca_set_error ("WHERE expression is not boolean");
-
-              goto done;
-            }
-        }
+      if (where
+          && -1 == where (&tmp_value, context, field_values))
+        goto done;
 
       if (!where || tmp_value.d.integer)
         {
@@ -530,13 +533,6 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
             {
               if (-1 == where (&tmp_value, context, field_values))
                 goto done;
-
-              if (tmp_value.type != CA_BOOLEAN)
-                {
-                  ca_set_error ("WHERE expression is not boolean");
-
-                  goto done;
-                }
 
               if (!tmp_value.d.integer)
                 continue;

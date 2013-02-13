@@ -51,7 +51,9 @@ namespace ca_llvm
   LLVM_TYPE *t_int8;
   LLVM_TYPE *t_int8_pointer;
   LLVM_TYPE *t_int16;
+  LLVM_TYPE *t_int16_pointer;
   LLVM_TYPE *t_int32;
+  LLVM_TYPE *t_int32_pointer;
   LLVM_TYPE *t_int64;
   LLVM_TYPE *t_int64_pointer;
 
@@ -84,6 +86,8 @@ namespace ca_llvm
     t_int64 = llvm::Type::getInt64Ty (llvm::getGlobalContext ());
 
     t_int8_pointer = llvm::PointerType::get (t_int8, 0);
+    t_int16_pointer = llvm::PointerType::get (t_int16, 0);
+    t_int32_pointer = llvm::PointerType::get (t_int32, 0);
     t_int64_pointer = llvm::PointerType::get (t_int64, 0);
 
     if (sizeof (void *) == sizeof (int64_t))
@@ -188,12 +192,13 @@ namespace ca_llvm
 } /* namespace ca_llvm */
 
 ca_expression_function
-ca_expression_compile (struct ca_query_parse_context *context,
+CA_expression_compile (struct ca_query_parse_context *context,
                        const char *name,
                        struct expression *expr,
                        const struct ca_field *fields,
                        size_t field_count,
-                       ca_output_function output_function)
+                       ca_output_function output_function,
+                       enum ca_type *return_type)
 {
   using namespace ca_llvm;
 
@@ -259,8 +264,14 @@ ca_expression_compile (struct ca_query_parse_context *context,
               tmp_expr.value.type = (enum ca_type) fields[i].type;
               tmp_expr.value.d.field_index = i;
 
-              if (!(return_value = subexpression_compile (builder, module, &tmp_expr, fields, result, arena, field_values)))
-                return NULL;
+              if (!(return_value = subexpression_compile (builder, module,
+                                                          &tmp_expr, fields,
+                                                          result, arena,
+                                                          field_values,
+                                                          return_type)))
+                {
+                  return NULL;
+                }
 
               if (output_value)
                 {
@@ -282,8 +293,13 @@ ca_expression_compile (struct ca_query_parse_context *context,
         }
       else
         {
-          if (!(return_value = subexpression_compile (builder, module, expr, fields, result, arena, field_values)))
-            return NULL;
+          if (!(return_value = subexpression_compile (builder, module, expr,
+                                                      fields, result, arena,
+                                                      field_values,
+                                                      return_type)))
+            {
+              return NULL;
+            }
 
           if (output_value)
             {

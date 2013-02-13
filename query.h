@@ -52,19 +52,16 @@ enum expression_type
 
   EXPR_ADD,
   EXPR_AND,
-  EXPR_ASTERISK,
   EXPR_CAST,
   EXPR_DISTINCT,
   EXPR_DIV,
   EXPR_EQUAL,
-  EXPR_EQUAL_SELECT,
   EXPR_EXISTS,
   EXPR_FUNCTION_CALL,
   EXPR_GREATER_EQUAL,
   EXPR_GREATER_THAN,
   EXPR_IDENTIFIER,
-  EXPR_IN_LIST,
-  EXPR_IN_SELECT,
+  EXPR_IN,
   EXPR_IS_NULL,
   EXPR_LESS_EQUAL,
   EXPR_LESS_THAN,
@@ -78,6 +75,7 @@ enum expression_type
   EXPR_SELECT,
   EXPR_SUB,
 
+  EXPR_ASTERISK,
   EXPR_FIELD
 };
 
@@ -272,12 +270,13 @@ typedef int (*ca_output_function) (const char *field_name, const char *value,
 #define CA_EXPRESSION_PRINT 0x0001
 
 ca_expression_function
-ca_expression_compile (struct ca_query_parse_context *context,
+CA_expression_compile (struct ca_query_parse_context *context,
                        const char *name,
                        struct expression *expr,
                        const struct ca_field *fields,
                        size_t field_count,
-                       ca_output_function output_function);
+                       ca_output_function output_function,
+                       enum ca_type *return_type);
 
 #ifdef __cplusplus
 } /* extern "C" */

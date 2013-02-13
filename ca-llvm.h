@@ -20,7 +20,9 @@ namespace ca_llvm
   extern LLVM_TYPE *t_int8;
   extern LLVM_TYPE *t_int8_pointer;
   extern LLVM_TYPE *t_int16;
+  extern LLVM_TYPE *t_int16_pointer;
   extern LLVM_TYPE *t_int32;
+  extern LLVM_TYPE *t_int32_pointer;
   extern LLVM_TYPE *t_int64;
   extern LLVM_TYPE *t_int64_pointer;
 
@@ -47,5 +49,6 @@ namespace ca_llvm
                          const struct ca_field *fields,
                          llvm::Value *result,
                          llvm::Value *arena,
-                         llvm::Value *field_values);
+                         llvm::Value *field_values,
+                         enum ca_type *return_type);
 };

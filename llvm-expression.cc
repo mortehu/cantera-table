@@ -17,16 +17,62 @@
 #include "ca-llvm.h"
 #include "query.h"
 
-namespace ca_llvm {
-
-llvm::Value *
-subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
-                       struct expression *expr,
-                       const struct ca_field *fields,
-                       llvm::Value *result,
-                       llvm::Value *arena,
-                       llvm::Value *field_values)
+namespace ca_llvm
+{
+  llvm::Value *
+  subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
+                        struct expression *expr,
+                        const struct ca_field *fields,
+                        llvm::Value *result,
+                        llvm::Value *arena,
+                        llvm::Value *field_values,
+                        enum ca_type *return_type)
   {
+    enum ca_type lhs_type, rhs_type;
+    llvm::Value *lhs = NULL, *rhs = NULL;
+
+    *return_type = CA_INVALID; /* Significes "any type" */
+
+    switch (expr->type)
+      {
+      case EXPR_ADD:
+      case EXPR_AND:
+      case EXPR_CAST:
+      case EXPR_DIV:
+      case EXPR_EQUAL:
+      case EXPR_GREATER_EQUAL:
+      case EXPR_GREATER_THAN:
+      case EXPR_LESS_EQUAL:
+      case EXPR_LESS_THAN:
+      case EXPR_LIKE:
+      case EXPR_NOT_LIKE:
+      case EXPR_MUL:
+      case EXPR_NOT_EQUAL:
+      case EXPR_OR:
+      case EXPR_SUB:
+
+        lhs = builder->CreateAlloca (t_expression_value);
+        rhs = builder->CreateAlloca (t_expression_value);
+
+        if (!(subexpression_compile (builder, module, expr->lhs,
+                                     fields, lhs, arena,
+                                     field_values,
+                                     &lhs_type)))
+          return NULL;
+
+        if (!(subexpression_compile (builder, module, expr->rhs,
+                                     fields, rhs, arena,
+                                     field_values,
+                                     &rhs_type)))
+          return NULL;
+
+        break;
+
+      default:
+
+        ;
+      }
+
     switch (expr->type)
       {
       case EXPR_CONSTANT:
@@ -82,6 +128,8 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
 
                 return NULL;
               }
+
+            *return_type = expr->value.type;
           }
 
         break;
@@ -132,6 +180,32 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
 
                 break;
 
+              case CA_INT16:
+              case CA_UINT16:
+
+                  {
+                    llvm::Value *result_int = builder->CreateStructGEP (result, 1);
+                    llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
+                    llvm::Value *data_pointer = builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_int16_pointer));
+
+                    builder->CreateStore (data_pointer, result_int);
+                  }
+
+                break;
+
+              case CA_INT32:
+              case CA_UINT32:
+
+                  {
+                    llvm::Value *result_int = builder->CreateStructGEP (result, 1);
+                    llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
+                    llvm::Value *data_pointer = builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_int32_pointer));
+
+                    builder->CreateStore (data_pointer, result_int);
+                  }
+
+                break;
+
               case CA_INT64:
               case CA_UINT64:
               case CA_TIMESTAMPTZ:
@@ -165,55 +239,37 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
 
                 return NULL;
               }
+
+            *return_type = fields[field_index].type;
           }
 
         break;
 
       case EXPR_EQUAL:
 
+        if (lhs_type != rhs_type)
           {
-            llvm::Value *lhs, *rhs;
+            ca_set_error ("Arguments to the equality operator must be of equal types");
 
-            lhs = builder->CreateAlloca (t_expression_value);
-            rhs = builder->CreateAlloca (t_expression_value);
-
-            /* XXX: Check return values */
-
-            subexpression_compile (builder, module, expr->lhs,
-                                   fields, lhs, arena,
-                                   field_values);
-
-            subexpression_compile (builder, module, expr->rhs,
-                                   fields, rhs, arena,
-                                   field_values);
-
-            builder->CreateCall3 (f_ca_compare_equal, result, lhs, rhs);
+            return NULL;
           }
+
+        builder->CreateCall3 (f_ca_compare_equal, result, lhs, rhs);
+        *return_type = CA_BOOLEAN;
 
         break;
 
       case EXPR_LIKE:
 
+        if (lhs_type != CA_TEXT || rhs_type != CA_TEXT)
           {
-            llvm::Value *lhs, *rhs;
+            ca_set_error ("Arguments to LIKE must be of type TEXT");
 
-            lhs = builder->CreateAlloca (t_expression_value);
-            rhs = builder->CreateAlloca (t_expression_value);
-
-            /* XXX: Check return values */
-
-            subexpression_compile (builder, module, expr->lhs,
-                                   fields, lhs, arena,
-                                   field_values);
-
-            subexpression_compile (builder, module, expr->rhs,
-                                   fields, rhs, arena,
-                                   field_values);
-
-            /* XXX: Check that lhs and rhs can be text */
-
-            builder->CreateCall3 (f_ca_compare_like, result, lhs, rhs);
+            return NULL;
           }
+
+        builder->CreateCall3 (f_ca_compare_like, result, lhs, rhs);
+        *return_type = CA_BOOLEAN;
 
         break;
 
@@ -221,26 +277,37 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
 
           {
             llvm::Value *result_int = builder->CreateStructGEP (result, 1);
-            llvm::Value *lhs, *rhs;
 
-            lhs = builder->CreateAlloca (t_expression_value);
-            rhs = builder->CreateAlloca (t_expression_value);
+            if (lhs_type != CA_BOOLEAN || rhs_type != CA_BOOLEAN)
+              {
+                ca_set_error ("Arguments to OR must be of type BOOLEAN");
 
-            /* XXX: Check return values */
-
-            subexpression_compile (builder, module, expr->lhs,
-                                   fields, lhs, arena,
-                                   field_values);
-
-            subexpression_compile (builder, module, expr->rhs,
-                                   fields, rhs, arena,
-                                   field_values);
-
-            /* XXX: Check that lhs and rhs are bools */
+                return NULL;
+              }
 
             builder->CreateStore (llvm::ConstantInt::get (t_int32, CA_BOOLEAN), builder->CreateStructGEP (result, 0));
             builder->CreateStore (builder->CreateAnd (builder->CreateLoad (builder->CreateStructGEP (lhs, 1)),
                                                       builder->CreateLoad (builder->CreateStructGEP (rhs, 1))),
+                                  result_int);
+          }
+
+        break;
+
+      case EXPR_OR:
+
+          {
+            llvm::Value *result_int = builder->CreateStructGEP (result, 1);
+
+            if (lhs_type != CA_BOOLEAN || rhs_type != CA_BOOLEAN)
+              {
+                ca_set_error ("Arguments to OR must be of type BOOLEAN");
+
+                return NULL;
+              }
+
+            builder->CreateStore (llvm::ConstantInt::get (t_int32, CA_BOOLEAN), builder->CreateStructGEP (result, 0));
+            builder->CreateStore (builder->CreateOr (builder->CreateLoad (builder->CreateStructGEP (lhs, 1)),
+                                                     builder->CreateLoad (builder->CreateStructGEP (rhs, 1))),
                                   result_int);
 
           }

@@ -41,8 +41,8 @@ lhs \fBAND\fR rhs
 lhs \fBOR\fR rhs
 \fBTRUE\fR if either \fBlhs\fR or \fBrhs\fR is equal to \fBTRUE\fR, \fBFALSE\fR otherwise.
 .TP
-lhs \fB=\fR rhs
-\fBTRUE\fR if \fBlhs\fR and \fBrhs\fR are equal, \fBFALSE\fR otherwise.
+lhs \fBrelational operator\fR rhs
+\fBTRUE\fR if \fBlhs\fR relates to \fBrhs\fR as suggested by the operator, \fBFALSE\fR otherwise.  The operators are \fB<\fR, \fB<=\fR, \fB=\fR, \fB>=\fR, \fB>\fR and \fB!=\fR.  The operators work with \fBTEXT\fR values as well as numerical values.
 .TP
 subject \fBLIKE\fR pattern
 Both \fBsubject\fR and \fBpattern\fR must be strings.  Returns \fBTRUE\fR if

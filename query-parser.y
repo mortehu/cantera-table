@@ -64,6 +64,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %type<p> whereClause
 
 %type<l> Integer
+%type<l> binaryOperator
 %type<l> columnType
 %type<l> fetchClause
 %type<l> notNull
@@ -421,38 +422,11 @@ expression
         expr->value.d.identifier = $1;
         $$ = expr;
       }
-    | expression '=' expression
+    | expression binaryOperator expression
       {
         struct expression *expr;
         ALLOC(expr);
-        expr->type = EXPR_EQUAL;
-        expr->lhs = $1;
-        expr->rhs = $3;
-        $$ = expr;
-      }
-    | expression LIKE expression
-      {
-        struct expression *expr;
-        ALLOC(expr);
-        expr->type = EXPR_LIKE;
-        expr->lhs = $1;
-        expr->rhs = $3;
-        $$ = expr;
-      }
-    | expression AND expression
-      {
-        struct expression *expr;
-        ALLOC(expr);
-        expr->type = EXPR_AND;
-        expr->lhs = $1;
-        expr->rhs = $3;
-        $$ = expr;
-      }
-    | expression OR expression
-      {
-        struct expression *expr;
-        ALLOC(expr);
-        expr->type = EXPR_OR;
+        expr->type = $2;
         expr->lhs = $1;
         expr->rhs = $3;
         $$ = expr;
@@ -478,6 +452,18 @@ expression
       {
         $$ = $2;
       }
+    ;
+
+binaryOperator
+    : '='     { $$ = EXPR_EQUAL; }
+    | '<' '=' { $$ = EXPR_LESS_EQUAL; }
+    | '<'     { $$ = EXPR_LESS_THAN; }
+    | '>' '=' { $$ = EXPR_GREATER_EQUAL; }
+    | '>'     { $$ = EXPR_GREATER_THAN; }
+    | '!' '=' { $$ = EXPR_NOT_EQUAL; }
+    | AND     { $$ = EXPR_AND; }
+    | LIKE    { $$ = EXPR_LIKE; }
+    | OR      { $$ = EXPR_OR; }
     ;
 
 whereClause

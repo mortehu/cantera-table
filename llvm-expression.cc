@@ -206,6 +206,11 @@ namespace ca_llvm
         break;
 
       case EXPR_EQUAL:
+      case EXPR_GREATER_EQUAL:
+      case EXPR_GREATER_THAN:
+      case EXPR_LESS_EQUAL:
+      case EXPR_LESS_THAN:
+      case EXPR_NOT_EQUAL:
 
         if (lhs_type != rhs_type)
           {
@@ -220,19 +225,55 @@ namespace ca_llvm
           {
           case CA_TEXT:
 
-            return builder->CreateICmpEQ (llvm::ConstantInt::get (t_int32, 0),
-                                          builder->CreateCall2 (f_strcmp, lhs, rhs));
+              {
+                llvm::Value *cmp, *zero;
+
+                cmp = builder->CreateCall2 (f_strcmp, lhs, rhs);
+                zero = llvm::ConstantInt::get (t_int32, 0);
+
+                switch (expr->type)
+                  {
+                  case EXPR_EQUAL:         return builder->CreateICmpEQ (cmp, zero);
+                  case EXPR_GREATER_EQUAL: return builder->CreateICmpSGE (cmp, zero);
+                  case EXPR_GREATER_THAN:  return builder->CreateICmpSGT (cmp, zero);
+                  case EXPR_LESS_EQUAL:    return builder->CreateICmpSLE (cmp, zero);
+                  case EXPR_LESS_THAN:     return builder->CreateICmpSLT (cmp, zero);
+                  case EXPR_NOT_EQUAL:     return builder->CreateICmpNE (cmp, zero);
+                  default: assert (!"bug: missing case");
+                  }
+              }
 
           case CA_INT8:
-          case CA_UINT8:
           case CA_INT16:
-          case CA_UINT16:
           case CA_INT32:
-          case CA_UINT32:
           case CA_INT64:
+
+            switch (expr->type)
+              {
+              case EXPR_EQUAL:         return builder->CreateICmpEQ (lhs, rhs);
+              case EXPR_GREATER_EQUAL: return builder->CreateICmpSGE (lhs, rhs);
+              case EXPR_GREATER_THAN:  return builder->CreateICmpSGT (lhs, rhs);
+              case EXPR_LESS_EQUAL:    return builder->CreateICmpSLE (lhs, rhs);
+              case EXPR_LESS_THAN:     return builder->CreateICmpSLT (lhs, rhs);
+              case EXPR_NOT_EQUAL:     return builder->CreateICmpNE (lhs, rhs);
+              default: assert (!"bug: missing case");
+              }
+
+          case CA_UINT8:
+          case CA_UINT16:
+          case CA_UINT32:
           case CA_UINT64:
 
-            return builder->CreateICmpEQ (lhs, rhs);
+            switch (expr->type)
+              {
+              case EXPR_EQUAL:         return builder->CreateICmpEQ (lhs, rhs);
+              case EXPR_GREATER_EQUAL: return builder->CreateICmpUGE (lhs, rhs);
+              case EXPR_GREATER_THAN:  return builder->CreateICmpUGT (lhs, rhs);
+              case EXPR_LESS_EQUAL:    return builder->CreateICmpULE (lhs, rhs);
+              case EXPR_LESS_THAN:     return builder->CreateICmpULT (lhs, rhs);
+              case EXPR_NOT_EQUAL:     return builder->CreateICmpNE (lhs, rhs);
+              default: assert (!"bug: missing case");
+              }
 
           default:
 

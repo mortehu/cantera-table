@@ -2,6 +2,8 @@
 #  include "config.h"
 #endif
 
+#include <stdarg.h>
+
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Analysis/Verifier.h>
 #include <llvm/DerivedTypes.h>
@@ -47,7 +49,6 @@ namespace ca_llvm
   llvm::Function *f_CA_output_time_float4;
 
   llvm::Function *f_ca_compare_like;
-  llvm::Function *f_ca_skip_time_float4;
   llvm::Function *f_strcmp;
   llvm::Function *f_strchr;
 
@@ -146,11 +147,37 @@ namespace ca_llvm
 
 using namespace ca_llvm;
 
+
+llvm::Function *
+CA_compiler_function (const char *name, void *pointer,
+                      LLVM_TYPE *return_type, ...)
+{
+  va_list args;
+  LLVM_TYPE *arg_type;
+  std::vector<LLVM_TYPE *> arg_types;
+
+  llvm::Function *result;
+
+  va_start (args, return_type);
+
+  while (NULL != (arg_type = va_arg (args, LLVM_TYPE *)))
+    arg_types.push_back (arg_type);
+
+  va_end (args);
+
+  result
+    = llvm::Function::Create (llvm::FunctionType::get (return_type, arg_types, false),
+                              llvm::Function::ExternalLinkage,
+                              name, module);
+
+  engine->addGlobalMapping (result, pointer);
+
+  return result;
+}
+
 int
 CA_compiler_init (void)
 {
-  std::vector<LLVM_TYPE *> argument_types;
-
   llvm::InitializeNativeTarget();
 
   module = new llvm::Module ("ca-table JIT module", llvm::getGlobalContext ());
@@ -169,81 +196,44 @@ CA_compiler_init (void)
 
   initialize_types (engine->getDataLayout ());
 
-  argument_types.clear ();
-  argument_types.push_back (t_int32);
-
   f_CA_output_char
-    = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
-                              llvm::Function::ExternalLinkage,
-                              "CA_output_char", module);
-
-  argument_types.clear ();
-  argument_types.push_back (t_pointer);
+    = CA_compiler_function ("CA_output_char", (void *) CA_output_char,
+                            t_void, t_int32, NULL);
 
   f_CA_output_string
-    = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
-                              llvm::Function::ExternalLinkage,
-                              "CA_output_string", module);
+    = CA_compiler_function ("CA_output_string", (void *) CA_output_string,
+                            t_void, t_pointer, NULL);
 
   f_CA_output_json_string
-    = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
-                              llvm::Function::ExternalLinkage,
-                              "CA_output_json_string", module);
-
-  argument_types.clear ();
-  argument_types.push_back (t_float);
+    = CA_compiler_function ("CA_output_json_string",
+                            (void *) CA_output_json_string,
+                            t_void, t_pointer, NULL);
 
   f_CA_output_float4
-    = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
-                              llvm::Function::ExternalLinkage,
-                              "CA_output_float4", module);
-
-  argument_types.clear ();
-  argument_types.push_back (t_int64);
+    = CA_compiler_function ("CA_output_float", (void *) CA_output_float4,
+                            t_void, t_float, NULL);
 
   f_CA_output_uint64
-    = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
-                              llvm::Function::ExternalLinkage,
-                              "CA_output_uint64", module);
-
-  argument_types.clear ();
-  argument_types.push_back (t_iovec_pointer);
+    = CA_compiler_function ("CA_output_uint64", (void *) CA_output_uint64,
+                            t_void, t_int64, NULL);
 
   f_CA_output_time_float4
-    = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
-                              llvm::Function::ExternalLinkage,
-                              "CA_output_time_float4", module);
-
-  argument_types.clear ();
-  argument_types.push_back (t_pointer);
-  argument_types.push_back (t_pointer);
+    = CA_compiler_function ("CA_output_time_float4",
+                            (void *) CA_output_time_float4,
+                            t_void, t_iovec_pointer, NULL);
 
   f_ca_compare_like
-    = llvm::Function::Create (llvm::FunctionType::get (t_int1, argument_types, false),
-                              llvm::Function::ExternalLinkage,
-                              "CA_compare_like", module);
+    = CA_compiler_function ("CA_compare_like", (void *) CA_compare_like,
+                            t_int1, t_pointer, t_pointer, NULL);
 
   f_strcmp
-    = llvm::Function::Create (llvm::FunctionType::get (t_int32, argument_types, false),
-                              llvm::Function::ExternalLinkage,
-                              "strcmp", module);
-
-  argument_types.clear ();
-  argument_types.push_back (t_pointer);
-
-  f_ca_skip_time_float4
-    = llvm::Function::Create (llvm::FunctionType::get (t_pointer, argument_types, false),
-                              llvm::Function::ExternalLinkage,
-                              "ca_skip_time_float4", module);
-
-  argument_types.clear ();
-  argument_types.push_back (t_pointer);
-  argument_types.push_back (t_int32);
+    = CA_compiler_function ("strcmp", (void *) std::strcmp,
+                            t_int32, t_pointer, t_pointer, NULL);
 
   f_strchr
-    = llvm::Function::Create (llvm::FunctionType::get (t_pointer, argument_types, false),
-                              llvm::Function::ExternalLinkage,
-                              "strchr", module);
+    = CA_compiler_function ("strchr",
+                            (void *) (const char * (*)(const char*, int)) std::strchr,
+                            t_pointer, t_pointer, t_int32, NULL);
 
   return 0;
 }

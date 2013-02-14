@@ -112,68 +112,73 @@ CA_collect_field_values (struct iovec *output,
 
       output->iov_base = (void *) begin;
 
-      switch (fields[field_index].type)
+      if (field_index + 1 < field_count)
         {
-        case CA_TEXT:
-
-          /* XXX: Too many casts */
-
-          begin = (const uint8_t *) strchr ((const char *) begin, 0) + 1;
-
-          break;
-
-        case CA_TIME_FLOAT4:
-
-          do
+          switch (fields[field_index].type)
             {
-              uint64_t start_time;
-              uint32_t interval, sample_count;
-              const float *sample_values;
+            case CA_TEXT:
 
-              ca_parse_time_float4 (&begin,
-                                    &start_time, &interval,
-                                    &sample_values, &sample_count);
+              /* XXX: Too many casts */
+
+              begin = (const uint8_t *) strchr ((const char *) begin, 0) + 1;
+
+              break;
+
+            case CA_TIME_FLOAT4:
+
+              do
+                {
+                  uint64_t start_time;
+                  uint32_t interval, sample_count;
+                  const float *sample_values;
+
+                  ca_parse_time_float4 (&begin,
+                                        &start_time, &interval,
+                                        &sample_values, &sample_count);
+                }
+              while (begin != end);
+
+              break;
+
+            case CA_BOOLEAN:
+            case CA_INT8:
+            case CA_UINT8:
+
+              ++begin;
+
+              break;
+
+            case CA_INT16:
+            case CA_UINT16:
+
+              begin += 2;
+
+              break;
+
+            case CA_FLOAT4:
+            case CA_INT32:
+            case CA_UINT32:
+
+              begin += 4;
+
+              break;
+
+            case CA_FLOAT8:
+            case CA_INT64:
+            case CA_UINT64:
+            case CA_TIMESTAMPTZ:
+
+              begin += 8;
+
+              break;
+
+            default:
+
+              assert (!"unhandled data type");
             }
-          while (begin != end);
-
-          break;
-
-        case CA_BOOLEAN:
-        case CA_INT8:
-        case CA_UINT8:
-
-          ++begin;
-
-          break;
-
-        case CA_INT16:
-        case CA_UINT16:
-
-          begin += 2;
-
-          break;
-
-        case CA_FLOAT4:
-        case CA_INT32:
-        case CA_UINT32:
-
-          begin += 4;
-
-          break;
-
-        case CA_FLOAT8:
-        case CA_INT64:
-        case CA_UINT64:
-        case CA_TIMESTAMPTZ:
-
-          begin += 8;
-
-          break;
-
-        default:
-
-          assert (!"unhandled data type");
         }
+      else
+        begin = end;
 
       output->iov_len = begin - (const uint8_t *) output->iov_base;
 

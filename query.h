@@ -252,11 +252,6 @@ CA_cast_to_text (struct ca_query_parse_context *context,
 /*****************************************************************************/
 
 int
-CA_compare_equal (struct expression_value *result,
-                  const struct expression_value *lhs,
-                  const struct expression_value *rhs);
-
-int
 CA_compare_like (const char *subject, const char *pattern);
 
 int

@@ -277,8 +277,7 @@ typedef int (*ca_expression_function) (struct ca_query_parse_context *context,
 #define CA_EXPRESSION_RETURN_BOOL 0x0002
 
 ca_expression_function
-CA_expression_compile (struct ca_query_parse_context *context,
-                       const char *name,
+CA_expression_compile (const char *name,
                        struct expression *expr,
                        const struct ca_field *fields,
                        size_t field_count,

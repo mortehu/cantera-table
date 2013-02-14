@@ -20,12 +20,8 @@
 namespace ca_llvm
 {
   llvm::Value *
-  subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
-                         struct expression *expr,
-                         const struct ca_field *fields,
-                         llvm::Value *arena,
-                         llvm::Value *field_values,
-                         enum ca_type *return_type)
+  context::subexpression_compile (struct expression *expr,
+                                  enum ca_type *return_type)
   {
     enum ca_type lhs_type, rhs_type;
     llvm::Value *lhs = NULL, *rhs = NULL;
@@ -53,16 +49,10 @@ namespace ca_llvm
         lhs = builder->CreateAlloca (t_expression_value);
         rhs = builder->CreateAlloca (t_expression_value);
 
-        if (!(lhs = subexpression_compile (builder, module, expr->lhs,
-                                           fields, arena,
-                                           field_values,
-                                           &lhs_type)))
+        if (!(lhs = subexpression_compile (expr->lhs, &lhs_type)))
           return NULL;
 
-        if (!(rhs = subexpression_compile (builder, module, expr->rhs,
-                                           fields, arena,
-                                           field_values,
-                                           &rhs_type)))
+        if (!(rhs = subexpression_compile (expr->rhs, &rhs_type)))
           return NULL;
 
         break;

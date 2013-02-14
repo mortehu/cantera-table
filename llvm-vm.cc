@@ -267,8 +267,7 @@ CA_generate_output (llvm::IRBuilder<> *builder,
 }
 
 ca_expression_function
-CA_expression_compile (struct ca_query_parse_context *context,
-                       const char *name,
+CA_expression_compile (const char *name,
                        struct expression *expr,
                        const struct ca_field *fields,
                        size_t field_count,
@@ -327,6 +326,13 @@ CA_expression_compile (struct ca_query_parse_context *context,
         ++item_count;
     }
 
+  context ctx;
+  ctx.builder = builder;
+  ctx.module = module;
+  ctx.fields = fields;
+  ctx.arena = arena;
+  ctx.field_values = field_values;
+
   for (; expr; expr = expr->next)
     {
       struct select_item *si;
@@ -345,14 +351,8 @@ CA_expression_compile (struct ca_query_parse_context *context,
               tmp_expr.value.type = (enum ca_type) fields[i].type;
               tmp_expr.value.d.field_index = i;
 
-              if (!(return_value = subexpression_compile (builder, module,
-                                                          &tmp_expr, fields,
-                                                          arena,
-                                                          field_values,
-                                                          &return_type)))
-                {
-                  return NULL;
-                }
+              if (!(return_value = ctx.subexpression_compile (&tmp_expr, &return_type)))
+                return NULL;
 
               if (0 != (flags & CA_EXPRESSION_PRINT))
                 {
@@ -384,14 +384,8 @@ CA_expression_compile (struct ca_query_parse_context *context,
         }
       else
         {
-          if (!(return_value = subexpression_compile (builder, module,
-                                                      expr, fields,
-                                                      arena,
-                                                      field_values,
-                                                      &return_type)))
-            {
-              return NULL;
-            }
+          if (!(return_value = ctx.subexpression_compile (expr, &return_type)))
+            return NULL;
 
           if (0 != (flags & CA_EXPRESSION_PRINT))
             {

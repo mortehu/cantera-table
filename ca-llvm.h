@@ -44,11 +44,15 @@ namespace ca_llvm
    * t_size */
   extern LLVM_TYPE *t_iovec;
 
-  llvm::Value *
-  subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
-                         struct expression *expr,
-                         const struct ca_field *fields,
-                         llvm::Value *arena,
-                         llvm::Value *field_values,
-                         enum ca_type *return_type);
+  struct context
+    {
+      llvm::IRBuilder<> *builder;
+      llvm::Module *module;
+      llvm::Value *arena;
+      llvm::Value *field_values;
+      const struct ca_field *fields;
+
+      llvm::Value *
+      subexpression_compile (struct expression *expr, enum ca_type *return_type);
+    };
 };

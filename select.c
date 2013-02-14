@@ -348,8 +348,7 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
         si->alias = "?column?";
     }
 
-  if (!(output = CA_expression_compile (context,
-                                        "output",
+  if (!(output = CA_expression_compile ("output",
                                         &stmt->list->expression,
                                         declaration->fields,
                                         declaration->field_count,
@@ -365,8 +364,7 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
       if (-1 == CA_query_resolve_variables (stmt->where, variables, &is_constant))
         goto done;
 
-      if (!(where = CA_expression_compile (context,
-                                           "where",
+      if (!(where = CA_expression_compile ("where",
                                            stmt->where,
                                            declaration->fields,
                                            declaration->field_count,

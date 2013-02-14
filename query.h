@@ -107,13 +107,9 @@ struct expression
 
   struct expression_value value;
 
-  int _not;
-  /* char *identifier2; */
-
   struct expression *lhs, *rhs;
 
   struct expression *next;
-  struct expression *last;
 };
 
 struct select_item

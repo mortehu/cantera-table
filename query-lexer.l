@@ -64,6 +64,7 @@ Z [zZ]
 {C}{O}{M}{M}{I}{T}                 { character += yyleng; return COMMIT; }
 {C}{R}{E}{A}{T}{E}                 { character += yyleng; return CREATE; }
 {C}{S}{V}                          { character += yyleng; return CSV; }
+{D}{E}{S}{C}{R}{I}{B}{E}           { character += yyleng; return DESCRIBE; }
 {D}{R}{O}{P}                       { character += yyleng; return DROP; }
 {F}{E}{T}{C}{H}                    { character += yyleng; return FETCH; }
 {F}{A}{L}{S}{E}                    { character += yyleng; return FALSE; }

@@ -45,6 +45,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token DROP
 %token SET OUTPUT FORMAT CSV JSON
 %token BEGIN_ COMMIT LOCK
+%token DESCRIBE
 
 %token Identifier
 %token Integer
@@ -229,6 +230,38 @@ statement
         select->list = list;
         select->from = "ca_catalog.ca_tables";
         select->limit = -1;
+
+        $$ = stmt;
+      }
+    | DESCRIBE Identifier
+      {
+        struct statement *stmt;
+        struct select_statement *select;
+        struct select_item *list;
+
+        /* This statement maps directly to SELECT * FROM ca_catalog.ca_columns WHERE table_name = $2 */
+
+        ALLOC(list);
+        list->expression.type = EXPR_ASTERISK;
+
+        ALLOC(stmt);
+        stmt->type = CA_SQL_SELECT;
+        select = &stmt->u.select;
+        select->list = list;
+        select->from = "ca_catalog.ca_columns";
+        select->limit = -1;
+
+        ALLOC(select->where);
+        select->where->type = EXPR_EQUAL;
+
+        ALLOC(select->where->lhs);
+        select->where->lhs->type = EXPR_IDENTIFIER;
+        select->where->lhs->value.d.identifier = "table_name";
+
+        ALLOC(select->where->rhs);
+        select->where->rhs->type = EXPR_CONSTANT;
+        select->where->rhs->value.type = CA_TEXT;
+        select->where->rhs->value.d.identifier = $2;
 
         $$ = stmt;
       }

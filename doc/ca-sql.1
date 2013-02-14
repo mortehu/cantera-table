@@ -13,6 +13,9 @@ Removes the table with the given name from the schema.  The backing file is not 
 \fBSHOW TABLES\fR
 An alias for \fBSELECT * FROM ca_catalog.ca_tables\fR
 .TP
+\fBDESCRIBE\fR table
+An alias for \fBSELECT * FROM ca_catalog.ca_columns WHERE table_name =\fR table
+.TP
 \fBSELECT\fR expression \fB[,\fR expression\fB...]\fR \fBFROM\fR table \fB[WHERE\fR expression\fB] [OFFSET\fR integer\fB] [LIMIT\fR integer\fB]\fR
 Retrieves rows from the specified table, and prints the value of the listed expressions as in the context of each row.
 

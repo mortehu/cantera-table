@@ -31,7 +31,9 @@ namespace ca_llvm
   extern LLVM_TYPE *t_size;
 
   extern LLVM_TYPE *t_float;
+  extern LLVM_TYPE *t_float_pointer;
   extern LLVM_TYPE *t_double;
+  extern LLVM_TYPE *t_double_pointer;
 
   /* t_int32    header
    * t_int8[4]  padding

@@ -70,9 +70,36 @@ namespace ca_llvm
 
         switch (expr->value.type)
           {
+          case CA_INVALID:
+
+            assert (!"Got constant of type CA_INVALID");
+
+            return NULL;
+
           case CA_BOOLEAN:
 
             return llvm::ConstantInt::get (t_int1, expr->value.d.integer);
+
+          case CA_TIME_FLOAT4:
+          case CA_OFFSET_SCORE:
+
+              {
+                llvm::Value *result, *base, *length;
+
+                result = builder->CreateAlloca (t_iovec);
+                base = builder->CreateStructGEP (result, 0);
+                length = builder->CreateStructGEP (result, 1);
+
+                builder->CreateStore (llvm::ConstantInt::get (t_pointer, (uintptr_t) expr->value.d.iov.iov_base),
+                                      base);
+
+                builder->CreateStore (llvm::ConstantInt::get (t_size, expr->value.d.iov.iov_len),
+                                      length);
+
+                return result;
+              }
+
+            break;
 
           case CA_INT8:
           case CA_UINT8:
@@ -98,12 +125,6 @@ namespace ca_llvm
           case CA_NUMERIC:
 
             return llvm::ConstantInt::get (t_pointer, (ptrdiff_t) expr->value.d.string_literal);
-
-          default:
-
-            ca_set_error ("subexpression_compile: Unhandled constant value type %d", expr->value.type);
-
-            return NULL;
           }
 
         break;
@@ -112,10 +133,9 @@ namespace ca_llvm
 
           {
             llvm::Value *field_iov, *field_ptr;
-            unsigned int field_index, type;
+            unsigned int field_index;
 
             field_index = expr->value.d.field_index;
-            type = fields[field_index].type;
 
             field_iov = builder->CreateGEP (field_values, llvm::ConstantInt::get(t_int32, field_index));
             field_ptr = builder->CreateStructGEP (field_iov, 0);
@@ -124,10 +144,17 @@ namespace ca_llvm
 
             switch (fields[field_index].type)
               {
+              case CA_INVALID:
+
+                assert (!"Got field of type CA_INVALID");
+                return NULL;
+
               case CA_TIME_FLOAT4:
+              case CA_OFFSET_SCORE:
 
                 return field_iov;
 
+              case CA_NUMERIC:
               case CA_TEXT:
 
                 return builder->CreateLoad (field_ptr);
@@ -185,11 +212,25 @@ namespace ca_llvm
 
                 break;
 
-              default:
+              case CA_FLOAT4:
 
-                ca_set_error ("subexpression_compile: Unhandled field value type %d", type);
+                  {
+                    llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
 
-                return NULL;
+                    return builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_float_pointer));
+                  }
+
+                break;
+
+              case CA_FLOAT8:
+
+                  {
+                    llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
+
+                    return builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_double_pointer));
+                  }
+
+                break;
               }
           }
 

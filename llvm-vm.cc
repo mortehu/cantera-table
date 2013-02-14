@@ -67,7 +67,9 @@ namespace ca_llvm
   LLVM_TYPE *t_size;
 
   LLVM_TYPE *t_float;
+  LLVM_TYPE *t_float_pointer;
   LLVM_TYPE *t_double;
+  LLVM_TYPE *t_double_pointer;
 
   /* t_int32  header
    * t_int64  data0
@@ -116,6 +118,9 @@ namespace ca_llvm
 
     t_float = llvm::Type::getFloatTy (llvm::getGlobalContext ());
     t_double = llvm::Type::getDoubleTy (llvm::getGlobalContext ());
+
+    t_float_pointer = llvm::PointerType::get (t_float, 0);
+    t_double_pointer = llvm::PointerType::get (t_double, 0);
 
     types.clear ();
     types.push_back (t_int32);

@@ -30,6 +30,7 @@
 #include <unistd.h>
 
 #include "ca-table.h"
+#include "query.h"
 
 struct schema_table
 {
@@ -154,6 +155,9 @@ ca_schema_load (const char *path)
     }
 
   if (-1 == ca_lock_init (path))
+    return NULL;
+
+  if (-1 == CA_compiler_init ())
     return NULL;
 
   if (!(result = ca_malloc (sizeof (*result))))

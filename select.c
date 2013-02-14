@@ -99,97 +99,6 @@ expr_primary_key_filter (struct expression *expr, unsigned int primary_key_field
     }
 }
 
-static size_t
-CA_collect_field_values (struct iovec *output,
-                         const struct ca_field *fields, size_t field_count,
-                         const uint8_t *begin, const uint8_t *end)
-{
-  size_t field_index;
-
-  for (field_index = 0; field_index < field_count && begin != end; ++field_index)
-    {
-      assert (begin < end);
-
-      output->iov_base = (void *) begin;
-
-      if (field_index + 1 < field_count)
-        {
-          switch (fields[field_index].type)
-            {
-            case CA_TEXT:
-
-              /* XXX: Too many casts */
-
-              begin = (const uint8_t *) strchr ((const char *) begin, 0) + 1;
-
-              break;
-
-            case CA_TIME_FLOAT4:
-
-              do
-                {
-                  uint64_t start_time;
-                  uint32_t interval, sample_count;
-                  const float *sample_values;
-
-                  ca_parse_time_float4 (&begin,
-                                        &start_time, &interval,
-                                        &sample_values, &sample_count);
-                }
-              while (begin != end);
-
-              break;
-
-            case CA_BOOLEAN:
-            case CA_INT8:
-            case CA_UINT8:
-
-              ++begin;
-
-              break;
-
-            case CA_INT16:
-            case CA_UINT16:
-
-              begin += 2;
-
-              break;
-
-            case CA_FLOAT4:
-            case CA_INT32:
-            case CA_UINT32:
-
-              begin += 4;
-
-              break;
-
-            case CA_FLOAT8:
-            case CA_INT64:
-            case CA_UINT64:
-            case CA_TIMESTAMPTZ:
-
-              begin += 8;
-
-              break;
-
-            default:
-
-              assert (!"unhandled data type");
-            }
-        }
-      else
-        begin = end;
-
-      output->iov_len = begin - (const uint8_t *) output->iov_base;
-
-      ++output;
-    }
-
-  assert (begin == end);
-
-  return field_index;
-}
-
 static int
 CA_query_resolve_variables (struct expression *expression,
                             const struct ca_hashmap *variables,
@@ -283,6 +192,7 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
   struct select_item *si;
 
   ca_expression_function output = NULL, where = NULL;
+  ca_collect_function collect = NULL;
 
   size_t i;
 
@@ -303,6 +213,8 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
 
   if (!(table = ca_schema_table (schema, stmt->from, &declaration)))
     goto done;
+
+  collect = CA_collect_compile (declaration->fields, declaration->field_count);
 
   /*** Replace identifiers with pointers to the table field ***/
 
@@ -403,7 +315,6 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
     goto done;
 
   const char *primary_key_filter;
-  size_t field_index = 0;
 
   if (CA_output_format == CA_PARAM_VALUE_JSON)
     putchar ('[');
@@ -426,11 +337,8 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
           goto done;
         }
 
-      CA_collect_field_values (field_values + field_index,
-                               declaration->fields,
-                               declaration->field_count,
-                               value.iov_base,
-                               (const uint8_t *) value.iov_base + value.iov_len);
+      collect (field_values, value.iov_base,
+               (const uint8_t *) value.iov_base + value.iov_len);
 
       if (!where || where (context, field_values))
         {
@@ -447,13 +355,8 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
 
       while (0 < (ret = ca_table_read_row (table, &value)))
         {
-          field_index = 0;
-
-          CA_collect_field_values (field_values,
-                                   declaration->fields,
-                                   declaration->field_count,
-                                   value.iov_base,
-                                   (const uint8_t *) value.iov_base + value.iov_len);
+          collect (field_values, value.iov_base,
+                   (const uint8_t *) value.iov_base + value.iov_len);
 
           if (where && !where (context, field_values))
             continue;

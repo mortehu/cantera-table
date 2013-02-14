@@ -258,6 +258,19 @@ int
 CA_select (struct ca_query_parse_context *context,
            struct select_statement *stmt);
 
+int
+CA_compiler_init (void);
+
+void
+CA_compiler_dump (void);
+
+typedef int (*ca_collect_function) (struct iovec *result,
+                                    const uint8_t *begin,
+                                    const uint8_t *end);
+
+ca_collect_function
+CA_collect_compile (const struct ca_field *fields, size_t field_count);
+
 typedef int (*ca_expression_function) (struct ca_query_parse_context *context,
                                        const struct iovec *field_values);
 

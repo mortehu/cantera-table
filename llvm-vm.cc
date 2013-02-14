@@ -36,8 +36,6 @@
 
 namespace ca_llvm
 {
-  bool initialize_done;
-
   llvm::Module *module;
   llvm::ExecutionEngine *engine;
 
@@ -48,7 +46,9 @@ namespace ca_llvm
   llvm::Function *f_CA_output_time_float4;
 
   llvm::Function *f_ca_compare_like;
+  llvm::Function *f_ca_skip_time_float4;
   llvm::Function *f_strcmp;
+  llvm::Function *f_strchr;
 
   LLVM_TYPE *t_void;
 
@@ -141,85 +141,109 @@ namespace ca_llvm
     assert (sizeof (struct iovec) == data_layout->getTypeAllocSize (t_iovec));
   }
 
-  bool
-  initialize ()
-  {
-    std::vector<LLVM_TYPE *> argument_types;
-
-    llvm::InitializeNativeTarget();
-
-    module = new llvm::Module ("ca-table JIT module", llvm::getGlobalContext ());
-
-    llvm::EngineBuilder engine_builder(module);
-    std::string error_string;
-
-    engine_builder.setErrorStr (&error_string);
-
-    if (!(engine = engine_builder.create ()))
-      {
-        ca_set_error ("Failed to create execution engine: %s", error_string.c_str ());
-
-        return false;
-      }
-
-    initialize_types (engine->getDataLayout ());
-
-    argument_types.clear ();
-    argument_types.push_back (t_int32);
-
-    f_CA_output_char
-      = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
-                                llvm::Function::ExternalLinkage,
-                                "CA_output_char", module);
-
-    argument_types.clear ();
-    argument_types.push_back (t_pointer);
-
-    f_CA_output_string
-      = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
-                                llvm::Function::ExternalLinkage,
-                                "CA_output_string", module);
-
-    f_CA_output_json_string
-      = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
-                                llvm::Function::ExternalLinkage,
-                                "CA_output_json_string", module);
-
-    argument_types.clear ();
-    argument_types.push_back (t_int64);
-
-    f_CA_output_uint64
-      = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
-                                llvm::Function::ExternalLinkage,
-                                "CA_output_uint64", module);
-
-    argument_types.clear ();
-    argument_types.push_back (t_iovec_pointer);
-
-    f_CA_output_time_float4
-      = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
-                                llvm::Function::ExternalLinkage,
-                                "CA_output_time_float4", module);
-
-    argument_types.clear ();
-    argument_types.push_back (t_pointer);
-    argument_types.push_back (t_pointer);
-
-    f_ca_compare_like
-      = llvm::Function::Create (llvm::FunctionType::get (t_int1, argument_types, false),
-                                llvm::Function::ExternalLinkage,
-                                "CA_compare_like", module);
-
-    f_strcmp
-      = llvm::Function::Create (llvm::FunctionType::get (t_int32, argument_types, false),
-                                llvm::Function::ExternalLinkage,
-                                "strcmp", module);
-
-    initialize_done = true;
-
-    return true;
-  }
 } /* namespace ca_llvm */
+
+using namespace ca_llvm;
+
+int
+CA_compiler_init (void)
+{
+  std::vector<LLVM_TYPE *> argument_types;
+
+  llvm::InitializeNativeTarget();
+
+  module = new llvm::Module ("ca-table JIT module", llvm::getGlobalContext ());
+
+  llvm::EngineBuilder engine_builder(module);
+  std::string error_string;
+
+  engine_builder.setErrorStr (&error_string);
+
+  if (!(engine = engine_builder.create ()))
+    {
+      ca_set_error ("Failed to create execution engine: %s", error_string.c_str ());
+
+      return -1;
+    }
+
+  initialize_types (engine->getDataLayout ());
+
+  argument_types.clear ();
+  argument_types.push_back (t_int32);
+
+  f_CA_output_char
+    = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
+                              llvm::Function::ExternalLinkage,
+                              "CA_output_char", module);
+
+  argument_types.clear ();
+  argument_types.push_back (t_pointer);
+
+  f_CA_output_string
+    = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
+                              llvm::Function::ExternalLinkage,
+                              "CA_output_string", module);
+
+  f_CA_output_json_string
+    = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
+                              llvm::Function::ExternalLinkage,
+                              "CA_output_json_string", module);
+
+  argument_types.clear ();
+  argument_types.push_back (t_int64);
+
+  f_CA_output_uint64
+    = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
+                              llvm::Function::ExternalLinkage,
+                              "CA_output_uint64", module);
+
+  argument_types.clear ();
+  argument_types.push_back (t_iovec_pointer);
+
+  f_CA_output_time_float4
+    = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
+                              llvm::Function::ExternalLinkage,
+                              "CA_output_time_float4", module);
+
+  argument_types.clear ();
+  argument_types.push_back (t_pointer);
+  argument_types.push_back (t_pointer);
+
+  f_ca_compare_like
+    = llvm::Function::Create (llvm::FunctionType::get (t_int1, argument_types, false),
+                              llvm::Function::ExternalLinkage,
+                              "CA_compare_like", module);
+
+  f_strcmp
+    = llvm::Function::Create (llvm::FunctionType::get (t_int32, argument_types, false),
+                              llvm::Function::ExternalLinkage,
+                              "strcmp", module);
+
+  argument_types.clear ();
+  argument_types.push_back (t_pointer);
+
+  f_ca_skip_time_float4
+    = llvm::Function::Create (llvm::FunctionType::get (t_pointer, argument_types, false),
+                              llvm::Function::ExternalLinkage,
+                              "ca_skip_time_float4", module);
+
+  argument_types.clear ();
+  argument_types.push_back (t_pointer);
+  argument_types.push_back (t_int32);
+
+  f_strchr
+    = llvm::Function::Create (llvm::FunctionType::get (t_pointer, argument_types, false),
+                              llvm::Function::ExternalLinkage,
+                              "strchr", module);
+
+  return 0;
+}
+
+void
+CA_compiler_dump (void)
+{
+  module->dump ();
+}
 
 static int
 CA_generate_output (llvm::IRBuilder<> *builder,
@@ -227,8 +251,6 @@ CA_generate_output (llvm::IRBuilder<> *builder,
                     llvm::Value *value, enum ca_type type,
                     enum ca_param_value output_format)
 {
-  using namespace ca_llvm;
-
   switch (type)
     {
     case CA_BOOLEAN:
@@ -271,6 +293,156 @@ CA_generate_output (llvm::IRBuilder<> *builder,
   return 0;
 }
 
+static void
+CA_post_process_function (llvm::Function *function)
+{
+  llvm::FunctionPassManager *fpm;
+
+  llvm::verifyFunction (*function);
+
+  fpm = new llvm::FunctionPassManager (module);
+
+  fpm->add (new llvm::DataLayout (*engine->getDataLayout ())); /* Freed by fpm */
+  fpm->add (llvm::createBasicAliasAnalysisPass ());
+  fpm->add (llvm::createInstructionCombiningPass ());
+  fpm->add (llvm::createReassociatePass ());
+  fpm->add (llvm::createGVNPass ());
+  fpm->add (llvm::createCFGSimplificationPass ());
+  fpm->doInitialization ();
+  fpm->run (*function);
+
+  delete fpm;
+}
+
+ca_collect_function
+CA_collect_compile (const struct ca_field *fields, size_t field_count)
+{
+  llvm::IRBuilder<> *builder;
+
+  std::vector<LLVM_TYPE *> argument_types;
+  llvm::Value *result, *begin, *end;
+  llvm::Function *function;
+
+  size_t i;
+
+  assert (field_count);
+
+  builder = new llvm::IRBuilder<> (llvm::getGlobalContext ());
+
+  argument_types.push_back (t_iovec_pointer);
+  argument_types.push_back (t_pointer);
+  argument_types.push_back (t_pointer);
+
+  function = llvm::Function::Create (llvm::FunctionType::get (t_int32, argument_types, false),
+                                     llvm::Function::InternalLinkage, "collect", module);
+
+  auto arg_iterator = function->arg_begin ();
+
+  result = arg_iterator++;
+  begin = arg_iterator++;
+  end = arg_iterator++;
+
+  assert (arg_iterator == function->arg_end ());
+
+  builder->SetInsertPoint (llvm::BasicBlock::Create (llvm::getGlobalContext (), "entry", function));
+
+  for (i = 0; i < field_count; ++i)
+    {
+      llvm::Value *base, *iov, *base_pointer, *length_pointer;
+      size_t skip_extra = 0;
+
+      iov = builder->CreateGEP (result, llvm::ConstantInt::get(t_int32, i));
+      base_pointer = builder->CreateStructGEP (iov, 0);
+      length_pointer = builder->CreateStructGEP (iov, 1);
+
+      base = begin;
+      builder->CreateStore (base, base_pointer);
+
+      if (i + 1 == field_count)
+        begin = end;
+      else
+        {
+          switch (fields[i].type)
+            {
+            case CA_INVALID:
+
+              assert (!"Got field of type CA_INVALID");
+
+              break;
+
+            case CA_OFFSET_SCORE:
+
+              assert (!"Bug: offset_score only supported in last column");
+
+              break;
+
+            case CA_NUMERIC:
+            case CA_TEXT:
+
+              /* Skip to end of string */
+              begin = builder->CreateCall2 (f_strchr,
+                                            begin,
+                                            llvm::ConstantInt::get(t_int32, 0));
+
+              /* Skip terminating NUL */
+              skip_extra = 1;
+
+              break;
+
+            case CA_TIME_FLOAT4:
+
+              assert (!"Bug: time_float4 only supported in last column");
+
+              break;
+
+            case CA_BOOLEAN:
+            case CA_INT8:
+            case CA_UINT8:
+
+              skip_extra = 1;
+
+              break;
+
+            case CA_INT16:
+            case CA_UINT16:
+
+              skip_extra = 2;
+
+              break;
+
+            case CA_FLOAT4:
+            case CA_INT32:
+            case CA_UINT32:
+
+              skip_extra = 4;
+
+              break;
+
+            case CA_FLOAT8:
+            case CA_INT64:
+            case CA_UINT64:
+            case CA_TIMESTAMPTZ:
+
+              skip_extra += 8;
+
+              break;
+            }
+        }
+
+      begin = builder->CreateAdd (begin,
+                                  llvm::ConstantInt::get(t_pointer, skip_extra));
+
+      builder->CreateStore (builder->CreateSub (begin, base),
+                            length_pointer);
+    }
+
+  builder->CreateRet (llvm::ConstantInt::get (t_int32, 0));
+
+  CA_post_process_function (function);
+
+  return (ca_collect_function) engine->getPointerToFunction (function);
+}
+
 ca_expression_function
 CA_expression_compile (const char *name,
                        struct expression *expr,
@@ -278,8 +450,6 @@ CA_expression_compile (const char *name,
                        size_t field_count,
                        int flags)
 {
-  using namespace ca_llvm;
-
   enum ca_type return_type;
   llvm::Value *return_value = NULL;
 
@@ -288,9 +458,6 @@ CA_expression_compile (const char *name,
   llvm::Value *delimiter = NULL, *key_separator = NULL;
 
   std::vector<LLVM_TYPE *> argument_types;
-
-  if (!initialize_done && !initialize ())
-    return NULL;
 
   auto builder = new llvm::IRBuilder<> (llvm::getGlobalContext ());
 
@@ -443,20 +610,7 @@ CA_expression_compile (const char *name,
   else
     builder->CreateRet (llvm::ConstantInt::get (t_int32, 0));
 
-  llvm::verifyFunction (*function);
-
-  auto fpm = new llvm::FunctionPassManager (module);
-
-  fpm->add (new llvm::DataLayout (*engine->getDataLayout ())); /* Freed by fpm */
-  fpm->add (llvm::createBasicAliasAnalysisPass ());
-  fpm->add (llvm::createInstructionCombiningPass ());
-  fpm->add (llvm::createReassociatePass ());
-  fpm->add (llvm::createGVNPass ());
-  fpm->add (llvm::createCFGSimplificationPass ());
-  fpm->doInitialization ();
-  fpm->run (*function);
-
-  delete fpm;
+  CA_post_process_function (function);
 
   return (ca_expression_function) engine->getPointerToFunction (function);
 }

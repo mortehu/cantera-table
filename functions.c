@@ -15,20 +15,20 @@ int
 CA_compare_like (const char *haystack, const char *filter)
 {
   /* Process everything up to the first '%' */
-  while (*haystack && *filter)
+  for (;;)
     {
+      if (!*filter)
+        return !*haystack;
+
       if (*filter == '%')
         break;
 
-      if (*haystack != *filter && *filter != '_')
+      if (*haystack != *filter && (*filter != '_' || !*haystack))
         return 0;
 
       ++haystack;
       ++filter;
     }
-
-  if (!*filter)
-    return !*haystack;
 
   if (filter[0] == '%' && !filter[1])
     return 1;

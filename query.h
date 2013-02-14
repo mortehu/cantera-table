@@ -239,6 +239,9 @@ void
 CA_output_json_string (const char *string);
 
 void
+CA_output_float4 (float number);
+
+void
 CA_output_uint64 (uint64_t number);
 
 void

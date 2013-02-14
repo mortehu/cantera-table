@@ -42,6 +42,7 @@ namespace ca_llvm
   llvm::Function *f_CA_output_char;
   llvm::Function *f_CA_output_string;
   llvm::Function *f_CA_output_json_string;
+  llvm::Function *f_CA_output_float4;
   llvm::Function *f_CA_output_uint64;
   llvm::Function *f_CA_output_time_float4;
 
@@ -190,6 +191,14 @@ CA_compiler_init (void)
                               "CA_output_json_string", module);
 
   argument_types.clear ();
+  argument_types.push_back (t_float);
+
+  f_CA_output_float4
+    = llvm::Function::Create (llvm::FunctionType::get (t_void, argument_types, false),
+                              llvm::Function::ExternalLinkage,
+                              "CA_output_float4", module);
+
+  argument_types.clear ();
   argument_types.push_back (t_int64);
 
   f_CA_output_uint64
@@ -271,7 +280,21 @@ CA_generate_output (llvm::IRBuilder<> *builder,
 
       break;
 
+    case CA_FLOAT4:
+
+      builder->CreateCall (f_CA_output_float4, value);
+
+      break;
+
+    case CA_INT32:
+    case CA_UINT32:
+
+      builder->CreateCall (f_CA_output_uint64, builder->CreateIntCast (value, t_int64, false));
+
+      break;
+
     case CA_INT64:
+    case CA_UINT64:
 
       builder->CreateCall (f_CA_output_uint64, value);
 

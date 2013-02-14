@@ -248,13 +248,6 @@ const char *
 CA_cast_to_text (struct ca_query_parse_context *context,
                  const struct expression_value *value);
 
-const char *
-CA_cast_to_json (struct ca_query_parse_context *context,
-                 const struct expression_value *value);
-
-int
-CA_output_json (const char *field_name, const char *value,
-                uint32_t field_index, uint32_t field_count);
 
 /*****************************************************************************/
 

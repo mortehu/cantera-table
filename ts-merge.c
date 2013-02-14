@@ -34,6 +34,7 @@ static int do_debug;
 static int do_ignore_missing;
 static int do_no_fsync;
 static int do_update;
+static int do_unlink;
 static int print_version;
 static int print_help;
 
@@ -44,6 +45,7 @@ static struct option long_options[] =
     { "ignore-missing", no_argument,       &do_ignore_missing, 1 },
     { "no-fsync",       no_argument,       &do_no_fsync,       1 },
     { "update",         no_argument,       &do_update,         1 },
+    { "unlink",         no_argument,       &do_unlink,         1 },
     { "version",        no_argument,       &print_version,     1 },
     { "help",           no_argument,       &print_help,        1 },
     { NULL, 0, NULL, 0 }
@@ -602,6 +604,7 @@ main (int argc, char **argv)
              "      --no-fsync             do not use fsync on new tables\n"
              "      --update               only run if any source file is newer than the\n"
              "                             target file\n"
+             "      --unlink               unlink input files after processing\n"
              "      --help     display this help and exit\n"
              "      --version  display version information\n"
              "\n"
@@ -745,6 +748,14 @@ main (int argc, char **argv)
 
   if (-1 == ca_table_sync (output))
     goto done;
+
+  for (i = 0; i < input_count; ++i)
+    {
+      if (!strcmp (input_paths[i], output_path))
+        continue;
+
+      unlink (input_paths[i]);
+    }
 
   result = EXIT_SUCCESS;
 

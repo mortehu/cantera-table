@@ -519,7 +519,7 @@ ca_schema_drop_table (struct ca_schema *schema,
       --schema->table_count;
 
       memmove (&schema->tables[i],
-               &schema->tables[i - 1],
+               &schema->tables[i + 1],
                sizeof (*schema->tables) * (schema->table_count - i));
 
       /* XXX: Defer until COMMIT */

@@ -43,8 +43,9 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token TRUE FALSE
 %token INSERT INTO VALUES
 %token DROP
-%token SET OUTPUT FORMAT CSV
+%token SET OUTPUT FORMAT CSV JSON
 %token BEGIN_ COMMIT LOCK
+%token DESCRIBE
 
 %token Identifier
 %token Integer
@@ -59,14 +60,14 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %type<p> expressionList
 %type<p> selectItem
 %type<p> selectList
-%type<p> statements
+%type<p> topStatements
 %type<p> statement
 %type<p> whereClause
 
 %type<l> Integer
+%type<l> binaryOperator
 %type<l> columnType
 %type<l> fetchClause
-%type<l> limitClause
 %type<l> notNull
 %type<l> offsetClause
 %type<l> primaryKey
@@ -77,103 +78,24 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 
 %%
 document
-    : bom statements
+    : bom topStatements
+    ;
+
+topStatements
+    : topStatements statement ';'
       {
-        struct statement *stmt;
-
-        for (stmt = $2; !context->error && stmt; stmt = stmt->next)
-          {
-            switch (stmt->type)
-              {
-              case CA_SQL_BEGIN:
-
-                break;
-
-              case CA_SQL_COMMIT:
-
-                if (-1 == ca_lock_release ())
-                  context->error = 1;
-
-                break;
-
-              case CA_SQL_CREATE_TABLE:
-
-                if (-1 == ca_schema_create_table (context->schema, stmt->u.create_table.name, &stmt->u.create_table.declaration))
-                  context->error = 1;
-
-                break;
-
-              case CA_SQL_DROP_TABLE:
-
-                if (-1 == ca_schema_drop_table (context->schema, stmt->u.drop_table.name))
-                  context->error = 1;
-
-                break;
-
-              case CA_SQL_INSERT:
-
-                ca_set_error ("INSERT is not yet supported");
-                context->error = 1;
-
-                break;
-
-              case CA_SQL_LOCK:
-
-                ca_lock_grab_global ();
-
-                break;
-
-              case CA_SQL_SELECT:
-
-                if (-1 == CA_select (context, &stmt->u.select))
-                  context->error = 1;
-
-                break;
-
-              case CA_SQL_SET:
-
-                switch (stmt->u.set.parameter)
-                  {
-                  case CA_PARAM_OUTPUT_FORMAT:
-
-                    context->output_format = stmt->u.set.value;
-
-                    break;
-                  }
-
-                break;
-
-              case CA_SQL_QUERY:
-
-                if (-1 == ca_schema_query (context->schema,
-                                           stmt->u.query.query,
-                                           stmt->u.query.index_table_name,
-                                           stmt->u.query.summary_table_name,
-                                           stmt->u.query.limit))
-                  context->error = 1;
-
-                break;
-              }
-          }
+        CA_process_statement (context, $2);
+        fflush (stdout);
+      }
+    | statement ';'
+      {
+        CA_process_statement (context, $1);
+        fflush (stdout);
       }
     ;
 
 bom : UTF8BOM
     |
-    ;
-
-statements
-    : statement ';' statements
-      {
-        struct statement *stmt;
-        stmt = $1;
-        stmt->next = $3;
-        $$ = stmt;
-      }
-    | statement ';'
-      {
-        $$ = $1;
-      }
     ;
 
 statement
@@ -254,7 +176,7 @@ statement
 
         $$ = stmt;
       }
-    | QUERY StringLiteral WITH '(' INDEX '=' Identifier ',' SUMMARY '=' Identifier ')' limitClause
+    | QUERY StringLiteral WITH '(' INDEX '=' Identifier ',' SUMMARY '=' Identifier ')' fetchClause
       {
         struct statement *stmt;
         struct query_statement *query;
@@ -311,6 +233,38 @@ statement
 
         $$ = stmt;
       }
+    | DESCRIBE Identifier
+      {
+        struct statement *stmt;
+        struct select_statement *select;
+        struct select_item *list;
+
+        /* This statement maps directly to SELECT * FROM ca_catalog.ca_columns WHERE table_name = $2 */
+
+        ALLOC(list);
+        list->expression.type = EXPR_ASTERISK;
+
+        ALLOC(stmt);
+        stmt->type = CA_SQL_SELECT;
+        select = &stmt->u.select;
+        select->list = list;
+        select->from = "ca_catalog.ca_columns";
+        select->limit = -1;
+
+        ALLOC(select->where);
+        select->where->type = EXPR_EQUAL;
+
+        ALLOC(select->where->lhs);
+        select->where->lhs->type = EXPR_IDENTIFIER;
+        select->where->lhs->value.d.identifier = "table_name";
+
+        ALLOC(select->where->rhs);
+        select->where->rhs->type = EXPR_CONSTANT;
+        select->where->rhs->value.type = CA_TEXT;
+        select->where->rhs->value.d.identifier = $2;
+
+        $$ = stmt;
+      }
     | SELECT selectList FROM Identifier whereClause offsetClause fetchClause
       {
         struct statement *stmt;
@@ -336,7 +290,20 @@ statement
         stmt->type = CA_SQL_SET;
         set = &stmt->u.set;
         set->parameter = $2;
-        set->value = $3;
+        set->v.enum_value = $3;
+
+        $$ = stmt;
+      }
+    | SET TIME FORMAT StringLiteral
+      {
+        struct statement *stmt;
+        struct set_statement *set;
+
+        ALLOC (stmt);
+        stmt->type = CA_SQL_SET;
+        set = &stmt->u.set;
+        set->parameter = CA_PARAM_TIME_FORMAT;
+        set->v.string_value = $4;
 
         $$ = stmt;
       }
@@ -348,6 +315,7 @@ runtimeParameter
 
 runtimeParameterValue
     : CSV           { $$ = CA_PARAM_VALUE_CSV; }
+    | JSON          { $$ = CA_PARAM_VALUE_JSON; }
     ;
 
 createTableArgs
@@ -487,29 +455,11 @@ expression
         expr->value.d.identifier = $1;
         $$ = expr;
       }
-    | expression '=' expression
+    | expression binaryOperator expression
       {
         struct expression *expr;
         ALLOC(expr);
-        expr->type = EXPR_EQUAL;
-        expr->lhs = $1;
-        expr->rhs = $3;
-        $$ = expr;
-      }
-    | expression LIKE expression
-      {
-        struct expression *expr;
-        ALLOC(expr);
-        expr->type = EXPR_LIKE;
-        expr->lhs = $1;
-        expr->rhs = $3;
-        $$ = expr;
-      }
-    | expression AND expression
-      {
-        struct expression *expr;
-        ALLOC(expr);
-        expr->type = EXPR_AND;
+        expr->type = $2;
         expr->lhs = $1;
         expr->rhs = $3;
         $$ = expr;
@@ -537,14 +487,21 @@ expression
       }
     ;
 
+binaryOperator
+    : '='     { $$ = EXPR_EQUAL; }
+    | '<' '=' { $$ = EXPR_LESS_EQUAL; }
+    | '<'     { $$ = EXPR_LESS_THAN; }
+    | '>' '=' { $$ = EXPR_GREATER_EQUAL; }
+    | '>'     { $$ = EXPR_GREATER_THAN; }
+    | '!' '=' { $$ = EXPR_NOT_EQUAL; }
+    | AND     { $$ = EXPR_AND; }
+    | LIKE    { $$ = EXPR_LIKE; }
+    | OR      { $$ = EXPR_OR; }
+    ;
+
 whereClause
     :                  { $$ = 0; }
     | WHERE expression { $$ = $2; }
-    ;
-
-limitClause
-    :               { $$ = -1; }
-    | LIMIT Integer { $$ = $2; }
     ;
 
 rows
@@ -566,6 +523,7 @@ offsetClause
 fetchClause
     :                                     { $$ = -1; }
     | FETCH firstOrNext Integer rows ONLY { $$ = $3; }
+    | LIMIT Integer                       { $$ = $2; }
     ;
 %%
 #include <stdio.h>

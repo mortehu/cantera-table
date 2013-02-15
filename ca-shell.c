@@ -65,22 +65,33 @@ static int print_help;
 
 static struct option long_options[] =
 {
-    { "version",        no_argument,       &print_version, 1 },
-    { "help",           no_argument,       &print_help,    1 },
+    { "command",  required_argument,  NULL,           'c' },
+    { "version",        no_argument,  &print_version, 1 },
+    { "help",           no_argument,  &print_help,    1 },
     { 0, 0, 0, 0 }
 };
 
 int
 main (int argc, char **argv)
 {
-  struct ca_schema *schema;
+  struct ca_query_parse_context context;
+  const char *command = NULL;
   int i;
 
-  while ((i = getopt_long (argc, argv, "", long_options, 0)) != -1)
+  memset (&context, 0, sizeof (context));
+  strcpy (CA_time_format, "%Y-%m-%dT%H:%M:%S");
+
+  while ((i = getopt_long (argc, argv, "c:", long_options, 0)) != -1)
     {
       switch (i)
         {
         case 0:
+
+          break;
+
+        case 'c':
+
+          command = optarg;
 
           break;
 
@@ -94,8 +105,9 @@ main (int argc, char **argv)
     {
       printf ("Usage: %s [OPTION]...\n"
              "\n"
+             "  -c, --command=STRING       execute commands in STRING and exit\n"
              "      --help     display this help and exit\n"
-             "      --version  display version information\n"
+             "      --version  display version information and exit\n"
              "\n"
              "Report bugs to <morten.hustveit@gmail.com>\n",
              argv[0]);
@@ -113,10 +125,24 @@ main (int argc, char **argv)
   if (optind != argc)
     errx (EX_USAGE, "Usage: %s [OPTION]...", argv[0]);
 
-  if (!(schema = ca_schema_load (schema_path)))
+  if (!(context.schema = ca_schema_load (schema_path)))
     errx (EXIT_FAILURE, "Failed to load schema: %s", ca_last_error ());
 
-  if (isatty (STDIN_FILENO))
+  if (command)
+    {
+      FILE *file;
+
+      ca_clear_error ();
+
+      if (!(file = fmemopen ((void *) command, strlen (command), "r")))
+        fprintf (stderr, "fmemopen failed: %s\n", strerror (errno));
+
+      if (-1 == CA_parse_script (&context, file))
+        fprintf (stderr, "Error: %s\n", ca_last_error ());
+
+      fclose (file);
+    }
+  else if (isatty (STDIN_FILENO))
     {
       char *home, *history_path = NULL;
 
@@ -179,11 +205,12 @@ main (int argc, char **argv)
 #endif
 
           ca_clear_error ();
+          context.error = 0;
 
           if (!(file = fmemopen ((void *) line, strlen (line), "r")))
             fprintf (stderr, "fmemopen failed: %s\n", strerror (errno));
 
-          if (-1 == ca_schema_parse_script (schema, file))
+          if (-1 == CA_parse_script (&context, file))
             fprintf (stderr, "Error: %s\n", ca_last_error ());
 
           fclose (file);
@@ -202,13 +229,13 @@ main (int argc, char **argv)
 
       setvbuf (stdout, buf, _IOFBF, sizeof buf);
 
-      if (-1 == ca_schema_parse_script (schema, stdin))
+      if (-1 == CA_parse_script (&context, stdin))
         fprintf (stderr, "Error: %s\n", ca_last_error ());
 
       fflush (stdout);
     }
 
-  ca_schema_close (schema);
+  ca_schema_close (context.schema);
 
   return EXIT_SUCCESS;
 }

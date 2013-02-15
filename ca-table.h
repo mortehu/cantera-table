@@ -97,11 +97,9 @@ enum ca_field_flag
 
 struct ca_field
 {
+  enum ca_type type;
   char name[CA_NAMEDATALEN];
   uint32_t flags;
-  uint16_t pad0;
-  uint8_t pad1;
-  uint8_t type; /* enum ca_type */
 };
 
 struct ca_table_declaration
@@ -303,9 +301,6 @@ ca_schema_drop_table (struct ca_schema *schema,
 struct ca_table *
 ca_schema_table (struct ca_schema *schema, const char *table_name,
                  struct ca_table_declaration **declaration) CA_USE_RESULT;
-
-int
-ca_schema_parse_script (struct ca_schema *schema, FILE *input);
 
 int
 ca_schema_query (struct ca_schema *schema, const char *query,

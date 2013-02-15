@@ -64,6 +64,7 @@ Z [zZ]
 {C}{O}{M}{M}{I}{T}                 { character += yyleng; return COMMIT; }
 {C}{R}{E}{A}{T}{E}                 { character += yyleng; return CREATE; }
 {C}{S}{V}                          { character += yyleng; return CSV; }
+{D}{E}{S}{C}{R}{I}{B}{E}           { character += yyleng; return DESCRIBE; }
 {D}{R}{O}{P}                       { character += yyleng; return DROP; }
 {F}{E}{T}{C}{H}                    { character += yyleng; return FETCH; }
 {F}{A}{L}{S}{E}                    { character += yyleng; return FALSE; }
@@ -73,6 +74,7 @@ Z [zZ]
 {I}{N}{D}{E}{X}                    { character += yyleng; return INDEX; }
 {I}{N}{S}{E}{R}{T}                 { character += yyleng; return INSERT; }
 {I}{N}{T}{O}                       { character += yyleng; return INTO; }
+{J}{S}{O}{N}                       { character += yyleng; return JSON; }
 {K}{E}{Y}                          { character += yyleng; return KEY; }
 {L}{I}{K}{E}                       { character += yyleng; return LIKE; }
 {L}{I}{M}{I}{T}                    { character += yyleng; return LIMIT; }
@@ -205,35 +207,32 @@ strtolower(char *c)
 }
 
 int
-ca_schema_parse_script(struct ca_schema *schema, FILE *input)
+CA_parse_script(struct ca_query_parse_context *context, FILE *input)
 {
-  struct ca_query_parse_context context;
   YY_BUFFER_STATE buf;
   int result = -1;
 
-  memset (&context, 0, sizeof (context));
-  context.schema = schema;
-  context.output_format = CA_PARAM_VALUE_PLAIN;
+  yylex_init (&context->scanner);
 
-  yylex_init (&context.scanner);
+  ca_arena_init (&context->arena);
 
-  ca_arena_init (&context.arena);
-
-  if (0 != (buf = yy_create_buffer (input, YY_BUF_SIZE, context.scanner)))
+  if (NULL != (buf = yy_create_buffer (input, YY_BUF_SIZE, context->scanner)))
   {
+    buf->yy_is_interactive = 1;
+
     character = 1;
     line = 1;
 
-    yy_switch_to_buffer (buf, context.scanner);
-    yyset_extra (&context.arena, context.scanner);
-    result = yyparse (&context);
-    yy_delete_buffer (buf, context.scanner);
+    yy_switch_to_buffer (buf, context->scanner);
+    yyset_extra (&context->arena, context->scanner);
+    result = yyparse (context);
+    yy_delete_buffer (buf, context->scanner);
   }
 
-  ca_arena_free (&context.arena);
-  yylex_destroy (context.scanner);
+  ca_arena_free (&context->arena);
+  yylex_destroy (context->scanner);
 
-  if (result >= 0 && context.error)
+  if (result >= 0 && context->error)
     result = -1;
 
   return result;

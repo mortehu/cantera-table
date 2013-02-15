@@ -99,95 +99,10 @@ expr_primary_key_filter (struct expression *expr, unsigned int primary_key_field
     }
 }
 
-static size_t
-collect_field_values (struct iovec *output,
-                      const struct ca_field *fields, size_t field_count,
-                      const uint8_t *begin, const uint8_t *end)
-{
-  size_t field_index;
-
-  for (field_index = 0; field_index < field_count && begin != end; ++field_index)
-    {
-      assert (begin < end);
-
-      output->iov_base = (void *) begin;
-
-      switch (fields[field_index].type)
-        {
-        case CA_TEXT:
-
-          /* XXX: Too many casts */
-
-          begin = (const uint8_t *) strchr ((const char *) begin, 0) + 1;
-
-          break;
-
-        case CA_TIME_FLOAT4:
-
-          do
-            {
-              uint64_t start_time;
-              uint32_t interval, sample_count;
-              const float *sample_values;
-
-              ca_parse_time_float4 (&begin,
-                                    &start_time, &interval,
-                                    &sample_values, &sample_count);
-            }
-          while (begin != end);
-
-          break;
-
-        case CA_BOOLEAN:
-        case CA_INT8:
-        case CA_UINT8:
-
-          ++begin;
-
-          break;
-
-        case CA_INT16:
-        case CA_UINT16:
-
-          begin += 2;
-
-          break;
-
-        case CA_FLOAT4:
-        case CA_INT32:
-        case CA_UINT32:
-
-          begin += 4;
-
-          break;
-
-        case CA_FLOAT8:
-        case CA_INT64:
-        case CA_UINT64:
-        case CA_TIMESTAMPTZ:
-
-          begin += 8;
-
-          break;
-
-        default:
-
-          assert (!"unhandled data type");
-        }
-
-      output->iov_len = begin - (const uint8_t *) output->iov_base;
-
-      ++output;
-    }
-
-  assert (begin == end);
-
-  return field_index;
-}
-
 static int
 CA_query_resolve_variables (struct expression *expression,
-                            const struct ca_hashmap *variables)
+                            const struct ca_hashmap *variables,
+                            int *is_constant)
 {
   struct select_variable *variable;
 
@@ -208,6 +123,9 @@ CA_query_resolve_variables (struct expression *expression,
           expression->value.type = variable->type;
           expression->value.d.field_index = variable->field_index;
 
+          if (is_constant)
+            *is_constant = 0;
+
           break;
 
         case EXPR_ADD:
@@ -225,7 +143,8 @@ CA_query_resolve_variables (struct expression *expression,
         case EXPR_OR:
         case EXPR_SUB:
 
-          if (-1 == CA_query_resolve_variables (expression->rhs, variables))
+          if (-1 == CA_query_resolve_variables (expression->rhs, variables,
+                                                is_constant))
             return -1;
 
           /* Fall through */
@@ -233,7 +152,8 @@ CA_query_resolve_variables (struct expression *expression,
         case EXPR_DISTINCT:
         case EXPR_NEGATIVE:
 
-          if (-1 == CA_query_resolve_variables (expression->lhs, variables))
+          if (-1 == CA_query_resolve_variables (expression->lhs, variables,
+                                                is_constant))
             return -1;
 
           break;
@@ -256,327 +176,9 @@ CA_query_resolve_variables (struct expression *expression,
   return 0;
 }
 
-void
-ca_format_uint64 (char **output,
-                  uint64_t number,
-                  unsigned int min_width)
-{
-  char *begin, *o;
-
-  begin = o = *output;
-
-  while (number > 0)
-    {
-      *o++ = '0' + (number % 10);
-      number /= 10;
-    }
-
-  while (o - begin < min_width)
-    *o++ = '0';
-
-  *output = o--;
-
-  while (begin < o)
-    {
-      char tmp;
-
-      tmp = *o;
-      *o = *begin;
-      *begin = tmp;
-
-      --o;
-      ++begin;
-    }
-}
-
-const char *
-ca_cast_to_text (struct ca_arena_info *arena,
-                 const struct expression_value *value)
-{
-  char *result = NULL;
-  size_t result_alloc = 0, result_size = 0;
-
-  switch (value->type)
-    {
-    case CA_BOOLEAN:
-
-      return value->d.integer ? "TRUE" : "FALSE";
-
-    case CA_FLOAT4:
-
-      return ca_arena_sprintf (arena, "%.7g", value->d.float4);
-
-    case CA_FLOAT8:
-
-      return ca_arena_sprintf (arena, "%.7g", value->d.float8);
-
-    case CA_INT8:
-    case CA_INT16:
-    case CA_INT32:
-    case CA_INT64:
-
-      return ca_arena_sprintf (arena, "%lld", (long long) value->d.integer);
-
-    case CA_UINT8:
-    case CA_UINT16:
-    case CA_UINT32:
-    case CA_UINT64:
-
-      return ca_arena_sprintf (arena, "%llu", (long long) value->d.integer);
-
-    case CA_NUMERIC:
-
-      return value->d.numeric;
-
-    case CA_TEXT:
-
-      return value->d.string_literal;
-
-    case CA_TIMESTAMPTZ:
-
-        {
-          time_t t;
-
-          result = ca_arena_alloc (arena, 24);
-
-          t = value->d.integer;
-
-          strftime (result, 24, "%Y-%m-%dT%H:%M:%S", gmtime (&t));
-        }
-
-      break;
-
-    case CA_TIME_FLOAT4:
-
-        {
-          const uint8_t *begin, *end;
-          size_t i;
-          int first = 1;
-
-          begin = value->d.iov.iov_base;
-          end = begin + value->d.iov.iov_len;
-
-          assert (value->d.iov.iov_len > 0);
-
-          while (begin != end)
-            {
-              uint64_t start_time;
-              uint32_t interval, sample_count;
-              const float *sample_values;
-
-              ca_parse_time_float4 (&begin,
-                                    &start_time, &interval,
-                                    &sample_values, &sample_count);
-
-              for (i = 0; i < sample_count; ++i)
-                {
-                  time_t time;
-                  struct tm tm;
-                  char *o;
-
-                  /*   13 bytes %.7g formatted -FLT_MAX
-                   * + 19 bytes for ISO 8601 date/time
-                   * + 1 byte for LF
-                   * + 1 byte for TAB
-                   */
-                  if (result_size + 34 >= result_alloc
-                      && -1 == CA_ARRAY_GROW_N (&result, &result_alloc, 34))
-                    return NULL;
-
-                  if (!first)
-                    result[result_size++] = '\n';
-
-                  time = start_time + i * interval;
-
-                  gmtime_r (&time, &tm);
-
-                  o = result + result_size;
-
-                  ca_format_uint64 (&o, tm.tm_year + 1900, 4);
-                  *o++ = '-';
-                  ca_format_uint64 (&o, tm.tm_mon + 1, 2);
-                  *o++ = '-';
-                  ca_format_uint64 (&o, tm.tm_mday, 2);
-                  *o++ = 'T';
-                  ca_format_uint64 (&o, tm.tm_hour, 2);
-                  *o++ = ':';
-                  ca_format_uint64 (&o, tm.tm_min, 2);
-                  *o++ = ':';
-                  ca_format_uint64 (&o, tm.tm_sec, 2);
-                  *o++ = '\t';
-
-                  o += sprintf (o, "%.7g", sample_values[i]);
-
-                  result_size = o - result;
-
-                  first = 0;
-                }
-            }
-
-          if (result_size == result_alloc
-              && -1 == CA_ARRAY_GROW_N (&result, &result_alloc, 1))
-            return NULL;
-
-          result[result_size] = 0;
-
-          if (-1 == ca_arena_add_pointer (arena, result))
-            {
-              free (result);
-              result = NULL;
-            }
-        }
-
-      break;
-
-    default:
-
-      ca_set_error ("Unsupported type %d", value->type);
-
-      break;
-    }
-
-  return result;
-}
-
-int
-ca_compare_equal (struct expression_value *result,
-                  const struct expression_value *lhs,
-                  const struct expression_value *rhs)
-{
-  result->type = CA_BOOLEAN;
-
-  if (lhs->type != rhs->type)
-    {
-      ca_set_error ("Attempt to compare values of different types");
-
-      return -1;
-    }
-
-  switch (lhs->type)
-    {
-    case CA_TEXT:
-
-      result->d.integer = !strcmp (lhs->d.string_literal, rhs->d.string_literal);
-
-      return 0;
-
-    default:
-
-      ca_set_error ("Comparing values of type %d is not yet supported", lhs->type);
-
-      return -1;
-    }
-}
-
-int
-ca_compare_like (struct expression_value *result,
-                 const struct expression_value *lhs,
-                 const struct expression_value *rhs)
-{
-  const char *haystack, *filter;
-
-  result->type = CA_BOOLEAN;
-
-  if (lhs->type != CA_TEXT || rhs->type != CA_TEXT)
-    {
-      ca_set_error ("Both operands to LIKE must be of type TEXT");
-
-      return -1;
-    }
-
-  haystack = lhs->d.string_literal;
-  filter = rhs->d.string_literal;
-
-  result->d.integer = 0;
-
-  /* Process everything up to the first '%' */
-  while (*haystack && *filter)
-    {
-      if (*filter == '%')
-        break;
-
-      if (*haystack != *filter && *filter != '_')
-        return 0;
-
-      ++haystack;
-      ++filter;
-    }
-
-  if (!*filter)
-    {
-      result->d.integer = !*haystack;
-
-      return 0;
-    }
-
-  if (filter[0] == '%' && !filter[1])
-    {
-      result->d.integer = 1;
-
-      return 0;
-    }
-
-  ca_set_error ("LIKE expression is too complex");
-
-  return -1;
-}
-
-static int
-output_plain (uint32_t field_index, const char *value)
-{
-  if (field_index)
-    putchar ('\t');
-
-  fwrite (value, 1, strlen (value), stdout);
-
-  return 0;
-}
-
-static int
-output_csv (uint32_t field_index, const char *value)
-{
-  if (field_index)
-    putchar ('\t');
-
-  for (; *value; ++value)
-    {
-      switch (*value)
-        {
-        case '\t':
-
-          putchar ('\\');
-          putchar ('t');
-
-          break;
-
-        case '\r':
-
-          putchar ('\\');
-          putchar ('r');
-
-          break;
-
-        case '\n':
-
-          putchar ('\\');
-          putchar ('n');
-
-          break;
-
-        default:
-
-          putchar (*value);
-        }
-    }
-
-  return 0;
-}
-
 int
 CA_select (struct ca_query_parse_context *context, struct select_statement *stmt)
 {
-  ca_output_function output_function;
-
   struct ca_schema *schema;
   struct ca_table *table;
   struct ca_table_declaration *declaration;
@@ -587,7 +189,10 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
   struct select_variable **last_variable = &first_variable;
   struct ca_hashmap *variables = NULL;
 
+  struct select_item *si;
+
   ca_expression_function output = NULL, where = NULL;
+  ca_collect_function collect = NULL;
 
   size_t i;
 
@@ -609,21 +214,7 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
   if (!(table = ca_schema_table (schema, stmt->from, &declaration)))
     goto done;
 
-  switch (context->output_format)
-    {
-    case CA_PARAM_VALUE_CSV:
-
-      output_function = output_csv;
-
-      break;
-
-    default:
-    case CA_PARAM_VALUE_PLAIN:
-
-      output_function = output_plain;
-
-      break;
-    }
+  collect = CA_collect_compile (declaration->fields, declaration->field_count);
 
   /*** Replace identifiers with pointers to the table field ***/
 
@@ -658,33 +249,63 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
       last_variable = &new_variable->next;
     }
 
-  if (-1 == CA_query_resolve_variables (&stmt->list->expression, variables))
+  if (-1 == CA_query_resolve_variables (&stmt->list->expression, variables, NULL))
     goto done;
 
-  if (!(output = ca_expression_compile ("output",
+  /*** Resolve names of columns ***/
+
+  for (si = stmt->list; si; si = (struct select_item *) si->expression.next)
+    {
+      if (si->alias)
+        continue;
+
+      if (si->expression.type == EXPR_FIELD)
+        si->alias = declaration->fields[si->expression.value.d.field_index].name;
+      else
+        si->alias = "?column?";
+    }
+
+  if (!(output = CA_expression_compile ("output",
                                         &stmt->list->expression,
                                         declaration->fields,
                                         declaration->field_count,
-                                        output_function)))
+                                        CA_EXPRESSION_PRINT)))
     {
       goto done;
     }
 
   if (stmt->where)
     {
-      if (-1 == CA_query_resolve_variables (stmt->where, variables))
+      int is_constant = 1;
+
+      if (-1 == CA_query_resolve_variables (stmt->where, variables, &is_constant))
         goto done;
 
-      if (!(where = ca_expression_compile ("where",
+      if (!(where = CA_expression_compile ("where",
                                            stmt->where,
                                            declaration->fields,
                                            declaration->field_count,
-                                           NULL)))
-        goto done;
+                                           CA_EXPRESSION_RETURN_BOOL)))
+        {
+          ca_set_error ("Failed to compile WHERE expression: %s", ca_last_error ());
+
+          goto done;
+        }
+
+      if (is_constant)
+        {
+          if (!where (context, NULL))
+            stmt->limit = 0;
+
+          where = NULL;
+        }
     }
 
   if (!stmt->limit)
     {
+      if (CA_output_format == CA_PARAM_VALUE_JSON)
+        printf ("[]\n");
+
       result = 0;
 
       goto done;
@@ -694,13 +315,13 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
     goto done;
 
   const char *primary_key_filter;
-  size_t field_index = 0;
+
+  if (CA_output_format == CA_PARAM_VALUE_JSON)
+    putchar ('[');
 
   if (1 == has_unique_primary_key
       && NULL != (primary_key_filter = expr_primary_key_filter (stmt->where, primary_key_index)))
     {
-      struct expression_value tmp_value;
-
       if (-1 == (ret = ca_table_seek_to_key (table, primary_key_filter)))
         goto done;
 
@@ -716,83 +337,53 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
           goto done;
         }
 
-      collect_field_values (field_values + field_index,
-                            declaration->fields,
-                            declaration->field_count,
-                            value.iov_base,
-                            (const uint8_t *) value.iov_base + value.iov_len);
+      collect (field_values, value.iov_base,
+               (const uint8_t *) value.iov_base + value.iov_len);
 
-      if (where)
+      if (!where || where (context, field_values))
         {
-          if (-1 == where (&tmp_value, &arena, field_values))
+          if (-1 == output (context, field_values))
             goto done;
-
-          if (tmp_value.type != CA_BOOLEAN)
-            {
-              ca_set_error ("WHERE expression is not boolean");
-
-              goto done;
-            }
-        }
-
-      if (!where || tmp_value.d.integer)
-        {
-          if (-1 == output (&tmp_value, &arena, field_values))
-            goto done;
-
-          putchar ('\n');
         }
     }
   else
     {
+      int first = 1;
+
       if (-1 == (ret = ca_table_seek (table, 0, SEEK_SET)))
         goto done;
 
       while (0 < (ret = ca_table_read_row (table, &value)))
         {
-          struct expression_value tmp_value;
+          collect (field_values, value.iov_base,
+                   (const uint8_t *) value.iov_base + value.iov_len);
 
-          field_index = 0;
-
-          collect_field_values (field_values,
-                                declaration->fields,
-                                declaration->field_count,
-                                value.iov_base,
-                                (const uint8_t *) value.iov_base + value.iov_len);
-
-          if (where)
-            {
-              if (-1 == where (&tmp_value, &arena, field_values))
-                goto done;
-
-              if (tmp_value.type != CA_BOOLEAN)
-                {
-                  ca_set_error ("WHERE expression is not boolean");
-
-                  goto done;
-                }
-
-              if (!tmp_value.d.integer)
-                continue;
-            }
+          if (where && !where (context, field_values))
+            continue;
 
           if (stmt->offset > 0 && stmt->offset--)
             continue;
 
-          if (-1 == output (&tmp_value, &arena, field_values))
-            goto done;
+          if (!first && CA_output_format == CA_PARAM_VALUE_JSON)
+            putchar (',');
 
-          putchar ('\n');
+          if (-1 == output (context, field_values))
+            goto done;
 
           if (stmt->limit > 0 && !--stmt->limit)
             break;
 
           ca_arena_reset (&arena);
+
+          first = 0;
         }
 
       if (ret == -1)
         goto done;
     }
+
+  if (CA_output_format == CA_PARAM_VALUE_JSON)
+    printf ("]\n");
 
   result = 0;
 

@@ -1,4 +1,5 @@
 BUILT_SOURCES = query-lexer.c query-parser.c
+man1_MANS = doc/ca-shell.1 doc/ca-sql.1
 
 AM_YFLAGS = -d
 
@@ -20,6 +21,7 @@ AM_CXXFLAGS = -Wall -Werror -g
 
 libca_table_la_SOURCES = \
   arena.c arena.h \
+  cast.c \
   crc32c.c crc32c.h \
   error.c error.h \
   fifo.c \
@@ -32,11 +34,13 @@ libca_table_la_SOURCES = \
   lock.c \
   memory.c memory.h \
   merge.c \
+  output.c \
   parse.c \
   query.c \
   schema.c schema.h \
   select.c \
   sort.c \
+  statement.c \
   table-backend-flexi.c \
   table-backend-log.c \
   table-backend-writeonce.c \

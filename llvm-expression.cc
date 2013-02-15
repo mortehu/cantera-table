@@ -17,71 +17,114 @@
 #include "ca-llvm.h"
 #include "query.h"
 
-namespace ca_llvm {
-
-llvm::Value *
-subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
-                       struct expression *expr,
-                       const struct ca_field *fields,
-                       llvm::Value *result,
-                       llvm::Value *arena,
-                       llvm::Value *field_values)
+namespace ca_llvm
+{
+  llvm::Value *
+  context::subexpression_compile (struct expression *expr,
+                                  enum ca_type *return_type)
   {
+    enum ca_type lhs_type, rhs_type;
+    llvm::Value *lhs = NULL, *rhs = NULL;
+
+    *return_type = CA_INVALID; /* Significes "any type" */
+
+    switch (expr->type)
+      {
+      case EXPR_ADD:
+      case EXPR_AND:
+      case EXPR_CAST:
+      case EXPR_DIV:
+      case EXPR_EQUAL:
+      case EXPR_GREATER_EQUAL:
+      case EXPR_GREATER_THAN:
+      case EXPR_LESS_EQUAL:
+      case EXPR_LESS_THAN:
+      case EXPR_LIKE:
+      case EXPR_NOT_LIKE:
+      case EXPR_MUL:
+      case EXPR_NOT_EQUAL:
+      case EXPR_OR:
+      case EXPR_SUB:
+
+        lhs = builder->CreateAlloca (t_expression_value);
+        rhs = builder->CreateAlloca (t_expression_value);
+
+        if (!(lhs = subexpression_compile (expr->lhs, &lhs_type)))
+          return NULL;
+
+        if (!(rhs = subexpression_compile (expr->rhs, &rhs_type)))
+          return NULL;
+
+        break;
+
+      default:
+
+        ;
+      }
+
     switch (expr->type)
       {
       case EXPR_CONSTANT:
 
+        *return_type = expr->value.type;
+
+        switch (expr->value.type)
           {
-            llvm::Value *type = builder->CreateStructGEP (result, 0);
-            llvm::Value *value0 = builder->CreateStructGEP (result, 1);
+          case CA_INVALID:
 
-            builder->CreateStore (llvm::ConstantInt::get (t_int32, expr->value.type), type);
+            assert (!"Got constant of type CA_INVALID");
 
-            switch (expr->value.type)
+            return NULL;
+
+          case CA_BOOLEAN:
+
+            return llvm::ConstantInt::get (t_int1, expr->value.d.integer);
+
+          case CA_TIME_FLOAT4:
+          case CA_OFFSET_SCORE:
+
               {
-              case CA_BOOLEAN:
-              case CA_INT8:
-              case CA_UINT8:
-              case CA_INT16:
-              case CA_UINT16:
-              case CA_INT32:
-              case CA_UINT32:
-              case CA_INT64:
-              case CA_UINT64:
-              case CA_TIMESTAMPTZ:
+                llvm::Value *result, *base, *length;
 
-                builder->CreateStore (llvm::ConstantInt::get (t_int64, expr->value.d.integer),
-                                      value0);
+                result = builder->CreateAlloca (t_iovec);
+                base = builder->CreateStructGEP (result, 0);
+                length = builder->CreateStructGEP (result, 1);
 
-                break;
+                builder->CreateStore (llvm::ConstantInt::get (t_pointer, (uintptr_t) expr->value.d.iov.iov_base),
+                                      base);
 
-              case CA_FLOAT4:
+                builder->CreateStore (llvm::ConstantInt::get (t_size, expr->value.d.iov.iov_len),
+                                      length);
 
-                builder->CreateStore (llvm::ConstantFP::get (t_float, expr->value.d.float4),
-                                      builder->CreateBitCast (value0, t_float));
-
-                break;
-
-              case CA_FLOAT8:
-
-                builder->CreateStore (llvm::ConstantFP::get (t_double, expr->value.d.float8),
-                                      builder->CreateBitCast (value0, t_double));
-
-                break;
-
-              case CA_TEXT:
-              case CA_NUMERIC:
-
-                builder->CreateStore (llvm::ConstantInt::get (t_pointer, (ptrdiff_t) expr->value.d.string_literal), value0);
-
-                break;
-
-              default:
-
-                ca_set_error ("subexpression_compile: Unhandled constant value type %d", expr->value.type);
-
-                return NULL;
+                return result;
               }
+
+            break;
+
+          case CA_INT8:
+          case CA_UINT8:
+          case CA_INT16:
+          case CA_UINT16:
+          case CA_INT32:
+          case CA_UINT32:
+          case CA_INT64:
+          case CA_UINT64:
+          case CA_TIMESTAMPTZ:
+
+            return llvm::ConstantInt::get (t_int64, expr->value.d.integer);
+
+          case CA_FLOAT4:
+
+            return llvm::ConstantFP::get (t_float, expr->value.d.float4);
+
+          case CA_FLOAT8:
+
+            return llvm::ConstantFP::get (t_double, expr->value.d.float8);
+
+          case CA_TEXT:
+          case CA_NUMERIC:
+
+            return llvm::ConstantInt::get (t_pointer, (ptrdiff_t) expr->value.d.string_literal);
           }
 
         break;
@@ -89,45 +132,70 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
       case EXPR_FIELD:
 
           {
-            llvm::Value *result_type, *field_iov, *field_ptr;
-            unsigned int field_index, type;
+            llvm::Value *field_iov, *field_ptr;
+            unsigned int field_index;
 
             field_index = expr->value.d.field_index;
-            type = fields[field_index].type;
 
-            result_type = builder->CreateStructGEP (result, 0);
             field_iov = builder->CreateGEP (field_values, llvm::ConstantInt::get(t_int32, field_index));
             field_ptr = builder->CreateStructGEP (field_iov, 0);
 
-            builder->CreateStore (llvm::ConstantInt::get (t_int32, type), result_type);
+            *return_type = fields[field_index].type;
 
             switch (fields[field_index].type)
               {
+              case CA_INVALID:
+
+                assert (!"Got field of type CA_INVALID");
+                return NULL;
+
               case CA_TIME_FLOAT4:
+              case CA_OFFSET_SCORE:
+
+                return field_iov;
+
+              case CA_NUMERIC:
+              case CA_TEXT:
+
+                return builder->CreateLoad (field_ptr);
+
+              case CA_BOOLEAN:
 
                   {
-                    llvm::Value *field_length;
+                    llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
 
-                    field_length = builder->CreateStructGEP (field_iov, 1);
+                    return builder->CreateIntCast (builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_int8_pointer)), t_int1, false);
+                  }
 
-                    llvm::Value *result_pointer = builder->CreateStructGEP (result, 1);
-                    llvm::Value *result_length = builder->CreateStructGEP (result, 2);
-                    llvm::Value *pointer = builder->CreateLoad (field_ptr);
-                    llvm::Value *length = builder->CreateLoad (field_length);
+              case CA_INT8:
+              case CA_UINT8:
 
-                    builder->CreateStore (pointer, result_pointer);
-                    builder->CreateStore (length, result_length);
+                  {
+                    llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
+
+                    return builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_int8_pointer));
                   }
 
                 break;
 
-              case CA_TEXT:
+              case CA_INT16:
+              case CA_UINT16:
 
                   {
-                    llvm::Value *result_text = builder->CreateStructGEP (result, 1);
-                    llvm::Value *text = builder->CreateLoad (field_ptr);
+                    llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
 
-                    builder->CreateStore (text, result_text);
+                    return builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_int16_pointer));
+                  }
+
+                break;
+
+              case CA_INT32:
+              case CA_UINT32:
+
+                  {
+                    llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
+
+                    return builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_int32_pointer));
                   }
 
                 break;
@@ -137,115 +205,152 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
               case CA_TIMESTAMPTZ:
 
                   {
-                    llvm::Value *result_int = builder->CreateStructGEP (result, 1);
                     llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
-                    llvm::Value *data_pointer = builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_int64_pointer));
 
-                    builder->CreateStore (data_pointer, result_int);
+                    return builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_int64_pointer));
                   }
 
                 break;
 
-              case CA_BOOLEAN:
+              case CA_FLOAT4:
 
                   {
-                    llvm::Value *result_int = builder->CreateStructGEP (result, 1);
                     llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
-                    llvm::Value *data_pointer = builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_int8_pointer));
-                    data_pointer = builder->CreateIntCast (data_pointer, t_int64, false);
 
-                    builder->CreateStore (data_pointer, result_int);
+                    return builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_float_pointer));
                   }
 
                 break;
 
-              default:
+              case CA_FLOAT8:
 
-                ca_set_error ("subexpression_compile: Unhandled field value type %d", type);
+                  {
+                    llvm::Value *data_pointer_pointer = builder->CreateLoad (field_ptr);
 
-                return NULL;
+                    return builder->CreateLoad (builder->CreateIntToPtr (data_pointer_pointer, t_double_pointer));
+                  }
+
+                break;
               }
           }
 
         break;
 
       case EXPR_EQUAL:
+      case EXPR_GREATER_EQUAL:
+      case EXPR_GREATER_THAN:
+      case EXPR_LESS_EQUAL:
+      case EXPR_LESS_THAN:
+      case EXPR_NOT_EQUAL:
 
+        if (lhs_type != rhs_type)
           {
-            llvm::Value *lhs, *rhs;
+            ca_set_error ("Arguments to the equality operator must be of equal types");
 
-            lhs = builder->CreateAlloca (t_expression_value);
-            rhs = builder->CreateAlloca (t_expression_value);
-
-            /* XXX: Check return values */
-
-            subexpression_compile (builder, module, expr->lhs,
-                                   fields, lhs, arena,
-                                   field_values);
-
-            subexpression_compile (builder, module, expr->rhs,
-                                   fields, rhs, arena,
-                                   field_values);
-
-            builder->CreateCall3 (f_ca_compare_equal, result, lhs, rhs);
+            return NULL;
           }
 
-        break;
+        *return_type = CA_BOOLEAN;
+
+        switch (lhs_type)
+          {
+          case CA_TEXT:
+
+              {
+                llvm::Value *cmp, *zero;
+
+                cmp = builder->CreateCall2 (f_strcmp, lhs, rhs);
+                zero = llvm::ConstantInt::get (t_int32, 0);
+
+                switch (expr->type)
+                  {
+                  case EXPR_EQUAL:         return builder->CreateICmpEQ (cmp, zero);
+                  case EXPR_GREATER_EQUAL: return builder->CreateICmpSGE (cmp, zero);
+                  case EXPR_GREATER_THAN:  return builder->CreateICmpSGT (cmp, zero);
+                  case EXPR_LESS_EQUAL:    return builder->CreateICmpSLE (cmp, zero);
+                  case EXPR_LESS_THAN:     return builder->CreateICmpSLT (cmp, zero);
+                  case EXPR_NOT_EQUAL:     return builder->CreateICmpNE (cmp, zero);
+                  default: assert (!"bug: missing case");
+                  }
+              }
+
+          case CA_INT8:
+          case CA_INT16:
+          case CA_INT32:
+          case CA_INT64:
+
+            switch (expr->type)
+              {
+              case EXPR_EQUAL:         return builder->CreateICmpEQ (lhs, rhs);
+              case EXPR_GREATER_EQUAL: return builder->CreateICmpSGE (lhs, rhs);
+              case EXPR_GREATER_THAN:  return builder->CreateICmpSGT (lhs, rhs);
+              case EXPR_LESS_EQUAL:    return builder->CreateICmpSLE (lhs, rhs);
+              case EXPR_LESS_THAN:     return builder->CreateICmpSLT (lhs, rhs);
+              case EXPR_NOT_EQUAL:     return builder->CreateICmpNE (lhs, rhs);
+              default: assert (!"bug: missing case");
+              }
+
+          case CA_UINT8:
+          case CA_UINT16:
+          case CA_UINT32:
+          case CA_UINT64:
+
+            switch (expr->type)
+              {
+              case EXPR_EQUAL:         return builder->CreateICmpEQ (lhs, rhs);
+              case EXPR_GREATER_EQUAL: return builder->CreateICmpUGE (lhs, rhs);
+              case EXPR_GREATER_THAN:  return builder->CreateICmpUGT (lhs, rhs);
+              case EXPR_LESS_EQUAL:    return builder->CreateICmpULE (lhs, rhs);
+              case EXPR_LESS_THAN:     return builder->CreateICmpULT (lhs, rhs);
+              case EXPR_NOT_EQUAL:     return builder->CreateICmpNE (lhs, rhs);
+              default: assert (!"bug: missing case");
+              }
+
+          default:
+
+            ca_set_error ("Don't know how to compare variables of type %u", lhs_type);
+
+            return NULL;
+          }
 
       case EXPR_LIKE:
 
+        if (lhs_type != CA_TEXT || rhs_type != CA_TEXT)
           {
-            llvm::Value *lhs, *rhs;
+            ca_set_error ("Arguments to LIKE must be of type TEXT");
 
-            lhs = builder->CreateAlloca (t_expression_value);
-            rhs = builder->CreateAlloca (t_expression_value);
-
-            /* XXX: Check return values */
-
-            subexpression_compile (builder, module, expr->lhs,
-                                   fields, lhs, arena,
-                                   field_values);
-
-            subexpression_compile (builder, module, expr->rhs,
-                                   fields, rhs, arena,
-                                   field_values);
-
-            /* XXX: Check that lhs and rhs can be text */
-
-            builder->CreateCall3 (f_ca_compare_like, result, lhs, rhs);
+            return NULL;
           }
 
-        break;
+        *return_type = CA_BOOLEAN;
+
+        return builder->CreateCall2 (f_ca_compare_like, lhs, rhs);
 
       case EXPR_AND:
 
+        if (lhs_type != CA_BOOLEAN || rhs_type != CA_BOOLEAN)
           {
-            llvm::Value *result_int = builder->CreateStructGEP (result, 1);
-            llvm::Value *lhs, *rhs;
+            ca_set_error ("Arguments to OR must be of type BOOLEAN");
 
-            lhs = builder->CreateAlloca (t_expression_value);
-            rhs = builder->CreateAlloca (t_expression_value);
-
-            /* XXX: Check return values */
-
-            subexpression_compile (builder, module, expr->lhs,
-                                   fields, lhs, arena,
-                                   field_values);
-
-            subexpression_compile (builder, module, expr->rhs,
-                                   fields, rhs, arena,
-                                   field_values);
-
-            /* XXX: Check that lhs and rhs are bools */
-
-            builder->CreateStore (llvm::ConstantInt::get (t_int32, CA_BOOLEAN), builder->CreateStructGEP (result, 0));
-            builder->CreateStore (builder->CreateAnd (builder->CreateLoad (builder->CreateStructGEP (lhs, 1)),
-                                                      builder->CreateLoad (builder->CreateStructGEP (rhs, 1))),
-                                  result_int);
-
+            return NULL;
           }
 
-        break;
+        *return_type = CA_BOOLEAN;
+
+        return builder->CreateAnd (lhs, rhs);
+
+      case EXPR_OR:
+
+        if (lhs_type != CA_BOOLEAN || rhs_type != CA_BOOLEAN)
+          {
+            ca_set_error ("Arguments to OR must be of type BOOLEAN");
+
+            return NULL;
+          }
+
+        *return_type = CA_BOOLEAN;
+
+        return builder->CreateOr (lhs, rhs);
 
       default:
 
@@ -254,6 +359,6 @@ subexpression_compile (llvm::IRBuilder<> *builder, llvm::Module *module,
         return NULL;
       }
 
-    return llvm::ConstantInt::get (t_int32, 0);
+    return NULL;
   }
 } /* namespace ca_llvm */

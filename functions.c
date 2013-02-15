@@ -5,8 +5,40 @@
 
 #include "ca-functions.h"
 #include "ca-table.h"
+#include "query.h"
 
 #define POW2(x) ((x) * (x))
+
+/*****************************************************************************/
+
+int
+CA_compare_like (const char *haystack, const char *filter)
+{
+  /* Process everything up to the first '%' */
+  for (;;)
+    {
+      if (!*filter)
+        return !*haystack;
+
+      if (*filter == '%')
+        break;
+
+      if (*haystack != *filter && (*filter != '_' || !*haystack))
+        return 0;
+
+      ++haystack;
+      ++filter;
+    }
+
+  if (filter[0] == '%' && !filter[1])
+    return 1;
+
+  ca_set_error ("LIKE expression is too complex");
+
+  return -1;
+}
+
+/*****************************************************************************/
 
 float
 ca_stats_correlation (const float *lhs,

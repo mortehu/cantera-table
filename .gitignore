@@ -44,6 +44,7 @@
 /tests/hashmap-00
 /tests/log-sort-00
 /tests/rank-correlation-00
+/tests/schema-00
 /tests/wo-sort-00
 /ts-correlate
 /ts-extract

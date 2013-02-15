@@ -749,12 +749,15 @@ main (int argc, char **argv)
   if (-1 == ca_table_sync (output))
     goto done;
 
-  for (i = 0; i < input_count; ++i)
+  if (do_unlink)
     {
-      if (!strcmp (input_paths[i], output_path))
-        continue;
+      for (i = 0; i < input_count; ++i)
+        {
+          if (!strcmp (input_paths[i], output_path))
+            continue;
 
-      unlink (input_paths[i]);
+          unlink (input_paths[i]);
+        }
     }
 
   result = EXIT_SUCCESS;

@@ -439,9 +439,6 @@ ca_schema_create_table (struct ca_schema *schema, const char *name,
   if (!(table->name = ca_strdup (name)))
     goto fail;
 
-  if (!(table->declaration.path = ca_strdup (declaration->path)))
-    goto fail;
-
   if (!(table->backend = ca_strdup ("write-once")))
     goto fail;
 
@@ -449,6 +446,34 @@ ca_schema_create_table (struct ca_schema *schema, const char *name,
 
   if (!(table->declaration.fields = ca_memdup (declaration->fields, sizeof (struct ca_field) * declaration->field_count)))
     goto fail;
+
+  if (!table->declaration.path)
+    {
+      if (-1 == asprintf (&table->declaration.path, "%s/table.%s.XXXXXX",
+                          schema->path, name))
+        goto fail;
+
+      if (-1 == mkstemp (table->declaration.path))
+        {
+          ca_set_error ("mkstemp failed on path %s: %s",
+                        table->declaration.path, strerror (errno));
+
+          goto fail;
+        }
+
+      if (!(table->handle = ca_table_open (table->backend,
+                                           table->declaration.path,
+                                           O_CREAT | O_TRUNC | O_RDWR, 0666)))
+        goto fail;
+
+      if (-1 == ca_table_sync (table->handle))
+        goto fail;
+    }
+  else
+    {
+      if (!(table->declaration.path = ca_strdup (declaration->path)))
+        goto fail;
+    }
 
   ++schema->table_count;
 
@@ -465,6 +490,7 @@ ca_schema_create_table (struct ca_schema *schema, const char *name,
 
 fail:
 
+  ca_table_close (table->handle);
   free (table->name);
   free (table->declaration.path);
   free (table->declaration.fields);

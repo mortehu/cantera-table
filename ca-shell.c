@@ -145,6 +145,7 @@ main (int argc, char **argv)
   else if (isatty (STDIN_FILENO))
     {
       char *home, *history_path = NULL;
+      char *prompt = NULL;
 
       if (NULL != (home = getenv ("HOME")))
         {
@@ -154,10 +155,10 @@ main (int argc, char **argv)
 
       for (;;)
         {
-          char *prompt;
           FILE *file;
           char *line = NULL;
 
+          free (prompt);
           if (-1 == asprintf (&prompt, "%s$ ", schema_path))
             err (EXIT_FAILURE, "asprintf failed");
 
@@ -198,8 +199,6 @@ main (int argc, char **argv)
           line[line_length] = 0;
 #endif
 
-          free (prompt);
-
 #if HAVE_READLINE_HISTORY
           add_history (line);
 #endif
@@ -218,8 +217,14 @@ main (int argc, char **argv)
           free (line);
         }
 
+      free (prompt);
+
       if (history_path)
-        write_history (history_path);
+        {
+          write_history (history_path);
+
+          free (history_path);
+        }
 
       printf ("\n");
     }

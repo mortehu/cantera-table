@@ -318,6 +318,8 @@ ca_schema_close (struct ca_schema *schema)
 
   for (i = 0; i < schema->table_count; ++i)
     {
+      ca_table_close (schema->tables[i].handle);
+
       free (schema->tables[i].declaration.path);
       free (schema->tables[i].declaration.fields);
       free (schema->tables[i].backend);
@@ -499,7 +501,11 @@ ca_schema_drop_table (struct ca_schema *schema,
           return -1;
         }
 
-      /* XXX: Free pointers of `backup' */
+      ca_table_close (backup.handle);
+      free (backup.name);
+      free (backup.backend);
+      free (backup.declaration.path);
+      free (backup.declaration.fields);
 
       return 0;
     }

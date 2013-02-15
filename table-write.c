@@ -87,9 +87,10 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
     {
       target_size = o - target;
 
+      /* 9 bytes integer + 4 bytes float + margin */
       if (target_size + 16 > target_alloc)
         {
-          if (-1 == CA_ARRAY_GROW (&target, &target_alloc))
+          if (-1 == CA_ARRAY_GROW_N (&target, &target_alloc, 16))
             goto done;
 
           o = target + target_size;

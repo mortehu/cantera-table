@@ -59,10 +59,11 @@ CA_schema_create (struct ca_schema *schema, const char *path)
 {
   int result = -1;
 
-  if (schema->table_count == schema->table_alloc
-      && -1 == CA_ARRAY_GROW (&schema->tables, &schema->table_alloc))
+  if (2 > schema->table_alloc
+      && -1 == CA_ARRAY_GROW_N (&schema->tables, &schema->table_alloc, 2))
     goto fail;
 
+  memset (schema->tables, 0, 2 * sizeof (*schema->tables));
   schema->table_count = 2;
 
   if (!(schema->tables[0].name = ca_strdup ("ca_catalog.ca_tables")))

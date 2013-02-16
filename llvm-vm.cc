@@ -46,6 +46,7 @@ namespace ca_llvm
   llvm::Function *f_CA_output_string;
   llvm::Function *f_CA_output_json_string;
   llvm::Function *f_CA_output_float4;
+  llvm::Function *f_CA_output_float8;
   llvm::Function *f_CA_output_uint64;
   llvm::Function *f_CA_output_time_float4;
 
@@ -268,6 +269,10 @@ CA_compiler_init (void)
     register_function (NULL, (void *) CA_output_float4,
                        CA_VOID, CA_FLOAT4, -1);
 
+  f_CA_output_float8 =
+    register_function (NULL, (void *) CA_output_float8,
+                       CA_VOID, CA_FLOAT8, -1);
+
   f_CA_output_uint64 =
     register_function (NULL, (void *) CA_output_uint64,
                        CA_VOID, CA_UINT64, -1);
@@ -339,6 +344,12 @@ CA_generate_output (llvm::IRBuilder<> *builder,
     case CA_FLOAT4:
 
       builder->CreateCall (f_CA_output_float4, value);
+
+      break;
+
+    case CA_FLOAT8:
+
+      builder->CreateCall (f_CA_output_float8, value);
 
       break;
 

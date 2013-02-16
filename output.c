@@ -84,6 +84,12 @@ CA_output_float4 (float number)
 }
 
 void
+CA_output_float8 (double number)
+{
+  printf ("%.17g", number);
+}
+
+void
 CA_output_uint64 (uint64_t number)
 {
   char buffer[20];

@@ -242,6 +242,9 @@ void
 CA_output_float4 (float number);
 
 void
+CA_output_float8 (double number);
+
+void
 CA_output_uint64 (uint64_t number);
 
 void

@@ -213,7 +213,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
       goto done;
     }
 
-  if (summary_declaration->field_count != 3)
+  if (summary_declaration->field_count != 2)
     {
       ca_set_error ("Incorrect field count in summary table");
 
@@ -234,14 +234,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
       goto done;
     }
 
-  if (summary_declaration->fields[1].type != CA_TIMESTAMPTZ)
-    {
-      ca_set_error ("Second field in summary table must be TIMESTAMP WITH TIME ZONE");
-
-      goto done;
-    }
-
-  if (summary_declaration->fields[2].type != CA_TEXT)
+  if (summary_declaration->fields[1].type != CA_TEXT)
     {
       ca_set_error ("Second field in summary table must be TEXT");
 
@@ -351,7 +344,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
           goto done;
         }
 
-      printf ("%s", (const char *) strchr (data_iov.iov_base, 0) + 9);
+      printf ("%s", (const char *) strchr (data_iov.iov_base, 0) + 1);
     }
 
   printf ("]\n");

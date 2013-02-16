@@ -296,6 +296,33 @@ CA_compiler_init (void)
   register_function ("ts_sample", (void *) ca_sql_ts_sample,
                      CA_FLOAT4, CA_TIME_FLOAT4, CA_TIMESTAMPTZ, -1);
 
+#define C_FLOAT_FUNCTION(name) \
+  register_function (#name,   (void *) name,      CA_FLOAT8, CA_FLOAT8, -1); \
+  register_function (#name,   (void *) name ## f, CA_FLOAT4, CA_FLOAT4, -1); \
+
+  C_FLOAT_FUNCTION(acos)
+  C_FLOAT_FUNCTION(asin)
+  C_FLOAT_FUNCTION(atan)
+  C_FLOAT_FUNCTION(cbrt)
+  C_FLOAT_FUNCTION(ceil)
+  C_FLOAT_FUNCTION(cos)
+  C_FLOAT_FUNCTION(cosh)
+  C_FLOAT_FUNCTION(exp)
+  C_FLOAT_FUNCTION(floor)
+  C_FLOAT_FUNCTION(log)
+  C_FLOAT_FUNCTION(log10)
+  C_FLOAT_FUNCTION(round)
+  C_FLOAT_FUNCTION(sin)
+  C_FLOAT_FUNCTION(sinh)
+  C_FLOAT_FUNCTION(sqrt)
+  C_FLOAT_FUNCTION(tan)
+  C_FLOAT_FUNCTION(tanh)
+  C_FLOAT_FUNCTION(trunc)
+
+  /* Can't use the above macro since "fabs" != "abs" */
+  register_function ("abs",   (void *) fabs,   CA_FLOAT8, CA_FLOAT8, -1);
+  register_function ("abs",   (void *) fabsf,  CA_FLOAT4, CA_FLOAT4, -1);
+
   casts[cast_signature (CA_FLOAT4, CA_TEXT)] =
   casts[cast_signature (CA_FLOAT4, CA_NUMERIC)] =
     register_function (NULL, (void *) ca_cast_text_to_float4,

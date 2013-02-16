@@ -451,7 +451,7 @@ ca_schema_create_table (struct ca_schema *schema, const char *name,
   if (!(table->declaration.fields = ca_memdup (declaration->fields, sizeof (struct ca_field) * declaration->field_count)))
     goto fail;
 
-  if (!table->declaration.path)
+  if (!declaration->path)
     {
       if (-1 == asprintf (&table->declaration.path, "%s/table.%s.XXXXXX",
                           schema->path, name))

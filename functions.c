@@ -136,10 +136,11 @@ float
 ca_stats_rank_correlation (const float *values, size_t count)
 {
   struct float_rank *sorted_values = NULL;
-  unsigned int *ranks = NULL;
+  float *ranks = NULL;
   size_t i;
 
-  uint64_t sum_lhs = 0, sum_rhs = 0;
+  double sum_lhs = 0;
+  double sum_rhs = 0;
   double sum_sqerr_lhs = 0, sum_sqerr_rhs = 0;
   double sum_prod = 0;
   double sample_stdev_lhs, sample_stdev_rhs;
@@ -161,25 +162,24 @@ ca_stats_rank_correlation (const float *values, size_t count)
 
   quicksort (sorted_values, count);
 
-  /* XXX: Tiebreaker does not match Wikipedia description */
-
   for (i = 0; i < count; )
     {
-      size_t first_rank;
-      float value;
+      size_t end, sum;
+      float value, average_rank;
 
-      first_rank = i;
       value = sorted_values[i].value;
 
-      do
-        {
-          ranks[sorted_values[i].rank] = first_rank;
+      sum = i;
+      end = i + 1;
 
-          sum_rhs += first_rank;
+      while (end < count && sorted_values[end].value == value)
+        sum += end++;
 
-          ++i;
-        }
-      while (i < count && sorted_values[i].value == value);
+      average_rank = (float) sum / (end - i);
+      sum_rhs += (end - i) * average_rank;
+
+      while (i != end)
+        ranks[sorted_values[i++].rank] = average_rank;
     }
 
   sum_lhs = count * (count - 1) / 2; /* \sum_{x=1}^{count-1} x */

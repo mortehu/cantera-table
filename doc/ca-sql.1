@@ -16,8 +16,8 @@ An alias for \fBSELECT * FROM ca_catalog.ca_tables\fR
 \fBDESCRIBE\fR table
 An alias for \fBSELECT * FROM ca_catalog.ca_columns WHERE table_name =\fR table
 .TP
-\fBSELECT\fR expression \fB[,\fR expression\fB...]\fR \fBFROM\fR table \fB[WHERE\fR expression\fB] [OFFSET\fR integer\fB] [LIMIT\fR integer\fB]\fR
-Retrieves rows from the specified table, and prints the value of the listed expressions as in the context of each row.
+\fBSELECT\fR expression \fB[,\fR expression\fB...]\fR \fB[FROM\fR table\fB] [WHERE\fR expression\fB] [OFFSET\fR integer\fB] [LIMIT\fR integer\fB]\fR
+Retrieves rows from the specified table, and prints the value of the listed expressions in the context of each row.  If the \fBFROM\fR keyword is not used, the expressions are evaluated exactly once, as if you were selecting from a 1 row table with no columns.
 
 If the \fBWHERE\fR keyword is used, only rows where its parameter expression evaluates to \fBTRUE\fR will be retrieved.  Note that this expression MUST be boolean.
 .TP

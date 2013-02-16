@@ -182,9 +182,11 @@ int
 CA_select (struct ca_query_parse_context *context, struct select_statement *stmt)
 {
   struct ca_schema *schema;
-  struct ca_table *table;
-  struct ca_table_declaration *declaration;
+  struct ca_table *table = NULL;
+  struct ca_table_declaration *declaration = NULL;
 
+  struct ca_field *fields = NULL;
+  size_t field_count = 0;
   struct iovec *field_values = NULL;
 
   struct select_variable *first_variable = NULL;
@@ -213,64 +215,69 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
 
   schema = context->schema;
 
-  if (!(table = ca_schema_table (schema, stmt->from, &declaration)))
-    goto done;
-
-  collect = CA_collect_compile (declaration->fields, declaration->field_count);
-
-  /*** Replace identifiers with pointers to the table field ***/
-
-  variables = ca_hashmap_create (63);
-
-  for (i = 0; i < declaration->field_count; ++i)
+  if (stmt->from)
     {
-      struct select_variable *new_variable;
-
-      /* XXX: Use arena allocator */
-
-      new_variable = calloc (1, sizeof (*new_variable));
-      new_variable->name = declaration->fields[i].name;
-      new_variable->field_index = i;
-      new_variable->type = declaration->fields[i].type;
-
-      if (declaration->fields[i].flags & CA_FIELD_PRIMARY_KEY)
-        {
-          if (has_unique_primary_key == -1)
-            {
-              has_unique_primary_key = 1;
-              primary_key_index = i;
-            }
-          else
-            has_unique_primary_key = 0;
-        }
-
-      if (-1 == ca_hashmap_insert (variables, declaration->fields[i].name, new_variable))
+      if (!(table = ca_schema_table (schema, stmt->from, &declaration)))
         goto done;
 
-      *last_variable = new_variable;
-      last_variable = &new_variable->next;
-    }
+      fields = declaration->fields;
+      field_count = declaration->field_count;
 
-  if (-1 == CA_query_resolve_variables (&stmt->list->expression, variables, NULL))
-    goto done;
+      collect = CA_collect_compile (fields, field_count);
 
-  /*** Resolve names of columns ***/
+      /*** Replace identifiers with pointers to the table field ***/
 
-  for (si = stmt->list; si; si = (struct select_item *) si->expression.next)
-    {
-      if (si->alias)
-        continue;
+      variables = ca_hashmap_create (63);
 
-      if (si->expression.type == EXPR_FIELD)
-        si->alias = declaration->fields[si->expression.value.d.field_index].name;
-      else
-        si->alias = "?column?";
+      for (i = 0; i < field_count; ++i)
+        {
+          struct select_variable *new_variable;
+
+          /* XXX: Use arena allocator */
+
+          new_variable = calloc (1, sizeof (*new_variable));
+          new_variable->name = fields[i].name;
+          new_variable->field_index = i;
+          new_variable->type = fields[i].type;
+
+          if (fields[i].flags & CA_FIELD_PRIMARY_KEY)
+            {
+              if (has_unique_primary_key == -1)
+                {
+                  has_unique_primary_key = 1;
+                  primary_key_index = i;
+                }
+              else
+                has_unique_primary_key = 0;
+            }
+
+          if (-1 == ca_hashmap_insert (variables, fields[i].name, new_variable))
+            goto done;
+
+          *last_variable = new_variable;
+          last_variable = &new_variable->next;
+        }
+
+      if (-1 == CA_query_resolve_variables (&stmt->list->expression, variables, NULL))
+        goto done;
+
+      /*** Resolve names of columns ***/
+
+      for (si = stmt->list; si; si = (struct select_item *) si->expression.next)
+        {
+          if (si->alias)
+            continue;
+
+          if (si->expression.type == EXPR_FIELD)
+            si->alias = fields[si->expression.value.d.field_index].name;
+          else
+            si->alias = "?column?";
+        }
     }
 
   if (!(output = CA_expression_compile ("output",
                                         &stmt->list->expression,
-                                        declaration->fields,
-                                        declaration->field_count,
+                                        fields, field_count,
                                         CA_EXPRESSION_PRINT)))
     {
       goto done;
@@ -285,8 +292,7 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
 
       if (!(where = CA_expression_compile ("where",
                                            stmt->where,
-                                           declaration->fields,
-                                           declaration->field_count,
+                                           fields, field_count,
                                            CA_EXPRESSION_RETURN_BOOL)))
         {
           ca_set_error ("Failed to compile WHERE expression: %s", ca_last_error ());
@@ -313,7 +319,8 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
       goto done;
     }
 
-  if (!(field_values = ca_malloc (sizeof (*field_values) * declaration->field_count)))
+  if (field_count
+      && !(field_values = ca_malloc (sizeof (*field_values) * field_count)))
     goto done;
 
   const char *primary_key_filter;
@@ -321,8 +328,16 @@ CA_select (struct ca_query_parse_context *context, struct select_statement *stmt
   if (CA_output_format == CA_PARAM_VALUE_JSON)
     putchar ('[');
 
-  if (1 == has_unique_primary_key
-      && NULL != (primary_key_filter = expr_primary_key_filter (stmt->where, primary_key_index)))
+  if (!stmt->from)
+    {
+      if (!where || where (context, NULL))
+        {
+          if (-1 == output (context, NULL))
+            goto done;
+        }
+    }
+  else if (1 == has_unique_primary_key
+           && NULL != (primary_key_filter = expr_primary_key_filter (stmt->where, primary_key_index)))
     {
       if (-1 == (ret = ca_table_seek_to_key (table, primary_key_filter)))
         goto done;

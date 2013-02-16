@@ -59,10 +59,11 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %type<p> createTableArgs
 %type<p> expression
 %type<p> expressionList
+%type<p> fromList
 %type<p> selectItem
 %type<p> selectList
-%type<p> topStatements
 %type<p> statement
+%type<p> topStatements
 %type<p> whereClause
 
 %type<l> Integer
@@ -266,7 +267,7 @@ statement
 
         $$ = stmt;
       }
-    | SELECT selectList FROM Identifier whereClause offsetClause fetchClause
+    | SELECT selectList fromList whereClause offsetClause fetchClause
       {
         struct statement *stmt;
         struct select_statement *select;
@@ -275,10 +276,10 @@ statement
         stmt->type = CA_SQL_SELECT;
         select = &stmt->u.select;
         select->list = $2;
-        select->from = $4;
-        select->where = $5;
-        select->offset = $6;
-        select->limit = $7;
+        select->from = $3;
+        select->where = $4;
+        select->offset = $5;
+        select->limit = $6;
 
         $$ = stmt;
       }
@@ -527,6 +528,11 @@ binaryOperator
     | AND     { $$ = EXPR_AND; }
     | LIKE    { $$ = EXPR_LIKE; }
     | OR      { $$ = EXPR_OR; }
+    ;
+
+fromList
+    :                  { $$ = NULL; }
+    | FROM Identifier  { $$ = $2; }
     ;
 
 whereClause

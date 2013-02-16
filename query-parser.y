@@ -410,7 +410,8 @@ selectItem
     ;
 
 expressionList
-    : expression
+    : { $$ = NULL; }
+    | expression
       {
         $$ = $1;
       }
@@ -490,6 +491,15 @@ expression
         ALLOC(expr);
         expr->type = EXPR_CONSTANT;
         expr->value.type = CA_BOOLEAN;
+        $$ = expr;
+      }
+    | Identifier '(' expressionList ')'
+      {
+        struct expression *expr;
+        ALLOC(expr);
+        expr->type = EXPR_FUNCTION_CALL;
+        expr->value.d.identifier = $1;
+        expr->lhs = $3;
         $$ = expr;
       }
     | expression ':' ':' type

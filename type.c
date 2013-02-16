@@ -29,7 +29,8 @@ static struct
     { "UINT16",       CA_UINT16 },
     { "UINT32",       CA_UINT32 },
     { "UINT64",       CA_UINT64 },
-    { "UINT8",        CA_UINT8 }
+    { "UINT8",        CA_UINT8 },
+    { "VOID",         CA_VOID }
 };
 
 enum ca_type

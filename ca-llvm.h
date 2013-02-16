@@ -2,6 +2,7 @@
 #  include "config.h"
 #endif
 
+#include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/Function.h>
 
 #include "query.h"
@@ -45,17 +46,36 @@ namespace ca_llvm
   /* t_pointer
    * t_size */
   extern LLVM_TYPE *t_iovec;
+  extern LLVM_TYPE *t_iovec_pointer;
+
+  typedef std::pair<std::string, std::vector<enum ca_type>> function_signature;
+
+  struct function
+    {
+      enum ca_type return_type;
+      llvm::Function *handle;
+    };
+
+  extern std::map<function_signature, function> functions;
 
   LLVM_TYPE *
   llvm_type_for_ca_type (enum ca_type type);
 
+  llvm::Function *
+  register_function (const char *name, void *pointer,
+                     enum ca_type return_type, ...);
+
   struct context
     {
+      llvm::ExecutionEngine *engine;
       llvm::IRBuilder<> *builder;
       llvm::Module *module;
       llvm::Value *arena;
       llvm::Value *field_values;
       const struct ca_field *fields;
+
+      void
+      function_init (void);
 
       llvm::Value *
       subexpression_compile (struct expression *expr, enum ca_type *return_type);

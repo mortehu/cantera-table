@@ -84,6 +84,8 @@ namespace ca_llvm
   LLVM_TYPE *t_iovec;
   LLVM_TYPE *t_iovec_pointer;
 
+  std::map<function_signature, function> functions;
+
   void
   initialize_types (const llvm::DataLayout *data_layout)
   {
@@ -164,6 +166,7 @@ namespace ca_llvm
       case CA_INT8: return t_int8;
       case CA_FLOAT4: return t_float;
       case CA_FLOAT8: return t_double;
+      case CA_VOID: return t_void;
       case CA_INVALID:
         ;
       }
@@ -172,37 +175,56 @@ namespace ca_llvm
 
     return NULL;
   }
+
+  llvm::Function *
+  register_function (const char *name, void *pointer,
+                     enum ca_type ca_return_type, ...)
+  {
+    va_list args;
+
+    enum ca_type ca_arg_type;
+    std::vector<enum ca_type> ca_arg_types;
+    std::vector<LLVM_TYPE *> llvm_arg_types;
+
+    va_start (args, ca_return_type);
+
+    while (CA_INVALID != (ca_arg_type = (enum ca_type) va_arg (args, int)))
+      {
+        ca_arg_types.push_back (ca_arg_type);
+        llvm_arg_types.push_back (llvm_type_for_ca_type (ca_arg_type));
+      }
+
+    va_end (args);
+
+    /*************************************************************************/
+
+    llvm::FunctionType *function_type;
+    llvm::Function *result;
+
+    function_type
+      = llvm::FunctionType::get (llvm_type_for_ca_type (ca_return_type),
+                                 llvm_arg_types, false);
+
+    result
+      = llvm::Function::Create (function_type, llvm::Function::ExternalLinkage,
+                                name, module);
+
+    engine->addGlobalMapping (result, pointer);
+
+    /*************************************************************************/
+
+    struct function function;
+
+    function.return_type = ca_return_type;
+    function.handle = result;
+
+    functions[function_signature (name, ca_arg_types)] = function;
+
+    return result;
+  }
 } /* namespace ca_llvm */
 
 using namespace ca_llvm;
-
-
-llvm::Function *
-CA_compiler_function (const char *name, void *pointer,
-                      LLVM_TYPE *return_type, ...)
-{
-  va_list args;
-  LLVM_TYPE *arg_type;
-  std::vector<LLVM_TYPE *> arg_types;
-
-  llvm::Function *result;
-
-  va_start (args, return_type);
-
-  while (NULL != (arg_type = va_arg (args, LLVM_TYPE *)))
-    arg_types.push_back (arg_type);
-
-  va_end (args);
-
-  result
-    = llvm::Function::Create (llvm::FunctionType::get (return_type, arg_types, false),
-                              llvm::Function::ExternalLinkage,
-                              name, module);
-
-  engine->addGlobalMapping (result, pointer);
-
-  return result;
-}
 
 int
 CA_compiler_init (void)
@@ -226,43 +248,43 @@ CA_compiler_init (void)
   initialize_types (engine->getDataLayout ());
 
   f_CA_output_char
-    = CA_compiler_function ("CA_output_char", (void *) CA_output_char,
-                            t_void, t_int32, NULL);
+    = register_function ("CA_output_char", (void *) CA_output_char,
+                         CA_VOID, CA_INT32, -1);
 
   f_CA_output_string
-    = CA_compiler_function ("CA_output_string", (void *) CA_output_string,
-                            t_void, t_pointer, NULL);
+    = register_function ("CA_output_string", (void *) CA_output_string,
+                         CA_VOID, CA_TEXT, -1);
 
   f_CA_output_json_string
-    = CA_compiler_function ("CA_output_json_string",
-                            (void *) CA_output_json_string,
-                            t_void, t_pointer, NULL);
+    = register_function ("CA_output_json_string",
+                         (void *) CA_output_json_string,
+                         CA_VOID, CA_TEXT, -1);
 
   f_CA_output_float4
-    = CA_compiler_function ("CA_output_float", (void *) CA_output_float4,
-                            t_void, t_float, NULL);
+    = register_function ("CA_output_float", (void *) CA_output_float4,
+                         CA_VOID, CA_FLOAT4, -1);
 
   f_CA_output_uint64
-    = CA_compiler_function ("CA_output_uint64", (void *) CA_output_uint64,
-                            t_void, t_int64, NULL);
+    = register_function ("CA_output_uint64", (void *) CA_output_uint64,
+                         CA_VOID, CA_UINT64, -1);
 
   f_CA_output_time_float4
-    = CA_compiler_function ("CA_output_time_float4",
-                            (void *) CA_output_time_float4,
-                            t_void, t_iovec_pointer, NULL);
+    = register_function ("CA_output_time_float4",
+                         (void *) CA_output_time_float4,
+                         CA_VOID, CA_TIME_FLOAT4, -1);
 
   f_ca_compare_like
-    = CA_compiler_function ("CA_compare_like", (void *) CA_compare_like,
-                            t_int1, t_pointer, t_pointer, NULL);
+    = register_function ("CA_compare_like", (void *) CA_compare_like,
+                         CA_BOOLEAN, CA_TEXT, CA_TEXT, -1);
 
   f_strcmp
-    = CA_compiler_function ("strcmp", (void *) std::strcmp,
-                            t_int32, t_pointer, t_pointer, NULL);
+    = register_function ("strcmp", (void *) std::strcmp,
+                         CA_INT32, CA_TEXT, CA_TEXT, -1);
 
   f_strchr
-    = CA_compiler_function ("strchr",
-                            (void *) (const char * (*)(const char*, int)) std::strchr,
-                            t_pointer, t_pointer, t_int32, NULL);
+    = register_function ("strchr",
+                         (void *) (const char * (*)(const char*, int)) std::strchr,
+                         CA_TEXT, CA_TEXT, CA_INT32, -1);
 
   return 0;
 }
@@ -468,6 +490,12 @@ CA_collect_compile (const struct ca_field *fields, size_t field_count)
               skip_extra += 8;
 
               break;
+
+            case CA_VOID:
+
+              /* 0 bytes */
+
+              break;
             }
         }
 
@@ -541,6 +569,7 @@ CA_expression_compile (const char *name,
     }
 
   context ctx;
+  ctx.engine = engine;
   ctx.builder = builder;
   ctx.module = module;
   ctx.fields = fields;

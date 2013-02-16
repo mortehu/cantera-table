@@ -68,7 +68,8 @@ enum ca_type
   CA_UINT8             = 12,
   CA_INT8              = 13,
   CA_FLOAT4            = 14,
-  CA_FLOAT8            = 15
+  CA_FLOAT8            = 15,
+  CA_VOID              = 16
 };
 
 enum ca_type

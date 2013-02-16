@@ -152,6 +152,7 @@ CA_query_resolve_variables (struct expression *expression,
         case EXPR_CAST:
         case EXPR_DISTINCT:
         case EXPR_NEGATIVE:
+        case EXPR_FUNCTION_CALL:
 
           if (-1 == CA_query_resolve_variables (expression->lhs, variables,
                                                 is_constant))

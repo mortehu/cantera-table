@@ -121,6 +121,12 @@ namespace ca_llvm
 
             return NULL;
 
+          case CA_VOID:
+
+            assert (!"Got constant of type CA_VOID");
+
+            return NULL;
+
           case CA_BOOLEAN:
 
             return llvm::ConstantInt::get (t_int1, expr->value.d.integer);
@@ -192,6 +198,7 @@ namespace ca_llvm
               case CA_INVALID:
 
                 assert (!"Got field of type CA_INVALID");
+
                 return NULL;
 
               case CA_TIME_FLOAT4:
@@ -276,6 +283,13 @@ namespace ca_llvm
                   }
 
                 break;
+
+              case CA_VOID:
+
+                /* This is certainly a weird case, but we need this here to
+                 * silence compiler warnings */
+
+                return NULL;
               }
           }
 
@@ -370,6 +384,55 @@ namespace ca_llvm
         *return_type = CA_BOOLEAN;
 
         return builder->CreateCall2 (f_ca_compare_like, lhs, rhs);
+
+      case EXPR_FUNCTION_CALL:
+
+          {
+            function_signature signature;
+            std::string pretty_signature;
+
+            std::vector<llvm::Value *> arguments;
+            struct expression *arg;
+
+            /* Build signature */
+
+            signature.first = expr->value.d.identifier;
+            pretty_signature = signature.first + '(';
+
+            for (arg = expr->lhs; arg; arg = arg->next)
+              {
+                llvm::Value *arg_value;
+                enum ca_type arg_type;
+
+                if (!(arg_value = subexpression_compile (arg, &arg_type)))
+                  return NULL;
+
+                signature.second.push_back (arg_type);
+
+                arguments.push_back (arg_value);
+
+                if (arg != expr->lhs)
+                  pretty_signature += ", ";
+                pretty_signature += ca_type_to_string (arg_type);
+              }
+
+            pretty_signature += ')';
+
+            /* Search for function */
+
+            auto i = functions.find (signature);
+
+            if (i != functions.end ())
+              {
+                *return_type = i->second.return_type;
+
+                return builder->CreateCall (i->second.handle, arguments);
+              }
+
+            ca_set_error ("Function %s not found", pretty_signature.c_str ());
+
+            return NULL;
+          }
 
       case EXPR_AND:
 

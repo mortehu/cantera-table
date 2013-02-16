@@ -145,14 +145,6 @@ namespace ca_llvm
 
     assert (sizeof (struct expression_value) == data_layout->getTypeAllocSize (t_expression_value));
     assert (sizeof (struct iovec) == data_layout->getTypeAllocSize (t_iovec));
-
-    register_function ("ts_sample", (void *) ca_sql_ts_sample,
-                       CA_FLOAT4, CA_TIME_FLOAT4, CA_TIMESTAMPTZ, -1);
-
-    casts[cast_signature (CA_FLOAT4, CA_TEXT)] =
-    casts[cast_signature (CA_FLOAT4, CA_NUMERIC)] =
-      register_function (NULL, (void *) ca_cast_text_to_float4,
-                         CA_FLOAT4, CA_TEXT, -1);
   }
 
   LLVM_TYPE *
@@ -260,41 +252,49 @@ CA_compiler_init (void)
 
   initialize_types (engine->getDataLayout ());
 
-  f_CA_output_char
-    = register_function (NULL, (void *) CA_output_char,
-                         CA_VOID, CA_INT32, -1);
+  f_CA_output_char =
+    register_function (NULL, (void *) CA_output_char,
+                       CA_VOID, CA_INT32, -1);
 
-  f_CA_output_string
-    = register_function (NULL, (void *) CA_output_string,
-                         CA_VOID, CA_TEXT, -1);
+  f_CA_output_string =
+    register_function (NULL, (void *) CA_output_string,
+                       CA_VOID, CA_TEXT, -1);
 
-  f_CA_output_json_string
-    = register_function (NULL, (void *) CA_output_json_string,
-                         CA_VOID, CA_TEXT, -1);
+  f_CA_output_json_string =
+    register_function (NULL, (void *) CA_output_json_string,
+                       CA_VOID, CA_TEXT, -1);
 
-  f_CA_output_float4
-    = register_function (NULL, (void *) CA_output_float4,
-                         CA_VOID, CA_FLOAT4, -1);
+  f_CA_output_float4 =
+    register_function (NULL, (void *) CA_output_float4,
+                       CA_VOID, CA_FLOAT4, -1);
 
-  f_CA_output_uint64
-    = register_function (NULL, (void *) CA_output_uint64,
-                         CA_VOID, CA_UINT64, -1);
+  f_CA_output_uint64 =
+    register_function (NULL, (void *) CA_output_uint64,
+                       CA_VOID, CA_UINT64, -1);
 
-  f_CA_output_time_float4
-    = register_function (NULL, (void *) CA_output_time_float4,
-                         CA_VOID, CA_TIME_FLOAT4, -1);
+  f_CA_output_time_float4 =
+    register_function (NULL, (void *) CA_output_time_float4,
+                       CA_VOID, CA_TIME_FLOAT4, -1);
 
-  f_ca_compare_like
-    = register_function (NULL, (void *) CA_compare_like,
-                         CA_BOOLEAN, CA_TEXT, CA_TEXT, -1);
+  f_ca_compare_like =
+    register_function (NULL, (void *) CA_compare_like,
+                       CA_BOOLEAN, CA_TEXT, CA_TEXT, -1);
 
-  f_strcmp
-    = register_function (NULL, (void *) std::strcmp,
-                         CA_INT32, CA_TEXT, CA_TEXT, -1);
+  f_strcmp =
+    register_function (NULL, (void *) std::strcmp,
+                       CA_INT32, CA_TEXT, CA_TEXT, -1);
 
-  f_strchr
-    = register_function (NULL, (void *) (const char * (*)(const char*, int)) std::strchr,
-                         CA_TEXT, CA_TEXT, CA_INT32, -1);
+  f_strchr =
+    register_function (NULL, (void *) (const char * (*)(const char*, int)) std::strchr,
+                       CA_TEXT, CA_TEXT, CA_INT32, -1);
+
+  register_function ("ts_sample", (void *) ca_sql_ts_sample,
+                     CA_FLOAT4, CA_TIME_FLOAT4, CA_TIMESTAMPTZ, -1);
+
+  casts[cast_signature (CA_FLOAT4, CA_TEXT)] =
+  casts[cast_signature (CA_FLOAT4, CA_NUMERIC)] =
+    register_function (NULL, (void *) ca_cast_text_to_float4,
+                       CA_FLOAT4, CA_TEXT, -1);
 
   return 0;
 }

@@ -77,44 +77,65 @@ ca_stats_correlation (const float *lhs,
 
 /*****************************************************************************/
 
-static int
-float_compare (const void *vlhs, const void *vrhs)
+struct float_rank
 {
-  const float *lhs = vlhs;
-  const float *rhs = vrhs;
-
-  if (*lhs != *rhs)
-    return (*lhs < *rhs) ? -1 : 1;
-
-  return 0;
-}
+  float value;
+  unsigned int rank;
+};
 
 static size_t
-float_lower_bound (float value, const float *array, size_t count)
+partition (struct float_rank *data, size_t count, size_t pivot_index)
 {
-  size_t first = 0, middle, half;
+  size_t i, store_index;
+  struct float_rank pivot, tmp;
 
-  while (count > 0)
+  store_index = 0;
+
+  pivot = data[pivot_index];
+
+  data[pivot_index] = data[count - 1];
+  data[count - 1] = pivot;
+
+  for (i = 0; i < count - 1; ++i)
     {
-      half = count >> 1;
-      middle = first + half;
-
-      if (array[middle] < value)
+      if (data[i].value < pivot.value)
         {
-          first = middle + 1;
-          count -= half + 1;
+          tmp = data[store_index];
+          data[store_index] = data[i];
+          data[i] = tmp;
+
+          ++store_index;
         }
-      else
-        count = half;
     }
 
-  return first;
+  data[count - 1] = data[store_index];
+  data[store_index] = pivot;
+
+  return store_index;
+}
+
+void
+quicksort (struct float_rank *data, size_t count)
+{
+  size_t pivot_index;
+
+  while (count >= 2)
+    {
+      pivot_index = count / 2;
+
+      pivot_index = partition (data, count, pivot_index);
+
+      quicksort (data, pivot_index);
+
+      data += pivot_index + 1;
+      count -= pivot_index + 1;
+    }
 }
 
 float
 ca_stats_rank_correlation (const float *values, size_t count)
 {
-  float *sorted_values = NULL;
+  struct float_rank *sorted_values = NULL;
   unsigned int *ranks = NULL;
   size_t i;
 
@@ -132,17 +153,33 @@ ca_stats_rank_correlation (const float *values, size_t count)
   if (!(ranks = ca_malloc (sizeof (*ranks) * count)))
     goto fail;
 
-  /* XXX: The rank can be stored directly into an array instead of being looked
-   *      up once per item.  If so, we also need a tie-finder */
-
-  memcpy (sorted_values, values, sizeof (*sorted_values) * count);
-
-  qsort (sorted_values, count, sizeof (*sorted_values), float_compare);
-
   for (i = 0; i < count; ++i)
     {
-      ranks[i] = float_lower_bound (values[i], sorted_values, count);
-      sum_rhs += ranks[i];
+      sorted_values[i].value = values[i];
+      sorted_values[i].rank = i;
+    }
+
+  quicksort (sorted_values, count);
+
+  /* XXX: Tiebreaker does not match Wikipedia description */
+
+  for (i = 0; i < count; )
+    {
+      size_t first_rank;
+      float value;
+
+      first_rank = i;
+      value = sorted_values[i].value;
+
+      do
+        {
+          ranks[sorted_values[i].rank] = first_rank;
+
+          sum_rhs += first_rank;
+
+          ++i;
+        }
+      while (i < count && sorted_values[i].value == value);
     }
 
   sum_lhs = count * (count - 1) / 2; /* \sum_{x=1}^{count-1} x */

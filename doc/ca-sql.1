@@ -54,9 +54,23 @@ to the entire subject, not just a substring.  A \fB_\fR character in the
 pattern matches any character in the subject.  A \fB%\fR character in the
 pattern matches any number of any character in the subject.
 .TP
+function\fB([\fRexpression\fB, ...])\fR
+Call \fBfunction\fR with the supplied arguments.  The arguments need to be
+exactly the same type as required by the function signature; no implicit
+casting is performed.
+.TP
+expression\fB::\fRtype
+Cast \fBexpression\fR to \fBtype\fR, possibly through a lossy process if no
+lossless process exists, e.g. converting from \fBUINT64\fR to \fBUINT8\fB.
+.TP
 \fB(\fRexpr\fB)\fR
 Returns the value of \fBexpr\fR.  The parantheses instruct the parser about the
 order in which operators take precedence.
+.SH "FUNCTIONS"
+.TP
+FLOAT4 \fBTS_SAMPLE\fR(TIME_FLOAT4, TIMESTAMP WITH TIME ZONE)
+Returns a value from a timestamped float4 array for a given timestamp, or NaN
+if no value was found.
 .SH "AUTHOR"
 .PP
 This manual page was written by Morten Hustveit <morten.hustveit@gmail.com>.

@@ -223,9 +223,6 @@ sample_aggregate_time_float4 (struct time_float4_sample *samples, size_t count)
         {
           if (tmp != samples[i].value)
             {
-              for (i = 0; i < count; ++i)
-                fprintf (stderr, " %.4g", samples[i].value);
-              fprintf (stderr, "\n");
               ca_set_error ("Aggregate \"equal\" used, but not all samples are equal");
 
               return -1;

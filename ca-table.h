@@ -390,6 +390,11 @@ ca_parse_offset_score (const uint8_t **input,
 
 /*****************************************************************************/
 
+float
+ca_cast_text_to_float4 (const char *text);
+
+/*****************************************************************************/
+
 int
 ca_table_sort (struct ca_table *output, struct ca_table *input) CA_USE_RESULT;
 

@@ -49,6 +49,7 @@ namespace ca_llvm
   extern LLVM_TYPE *t_iovec_pointer;
 
   typedef std::pair<std::string, std::vector<enum ca_type>> function_signature;
+  typedef std::pair<enum ca_type, enum ca_type> cast_signature;
 
   struct function
     {
@@ -57,6 +58,7 @@ namespace ca_llvm
     };
 
   extern std::map<function_signature, function> functions;
+  extern std::map<cast_signature, llvm::Function *> casts;
 
   LLVM_TYPE *
   llvm_type_for_ca_type (enum ca_type type);
@@ -76,6 +78,10 @@ namespace ca_llvm
 
       void
       function_init (void);
+
+      llvm::Value *
+      cast_compile (llvm::Value *input, enum ca_type input_type,
+                    enum ca_type output_type);
 
       llvm::Value *
       subexpression_compile (struct expression *expr, enum ca_type *return_type);

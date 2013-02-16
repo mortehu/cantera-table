@@ -86,6 +86,7 @@ namespace ca_llvm
   LLVM_TYPE *t_iovec_pointer;
 
   std::map<function_signature, function> functions;
+  std::map<cast_signature, llvm::Function *> casts;
 
   void
   initialize_types (const llvm::DataLayout *data_layout)
@@ -147,6 +148,11 @@ namespace ca_llvm
 
     register_function ("ts_sample", (void *) ca_sql_ts_sample,
                        CA_FLOAT4, CA_TIME_FLOAT4, CA_TIMESTAMPTZ, -1);
+
+    casts[cast_signature (CA_FLOAT4, CA_TEXT)] =
+    casts[cast_signature (CA_FLOAT4, CA_NUMERIC)] =
+      register_function (NULL, (void *) ca_cast_text_to_float4,
+                         CA_FLOAT4, CA_TEXT, -1);
   }
 
   LLVM_TYPE *

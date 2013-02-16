@@ -31,6 +31,49 @@ namespace ca_llvm
   case CA_TIMESTAMPTZ:
 
   llvm::Value *
+  context::cast_compile (llvm::Value *input,
+                         enum ca_type input_type,
+                         enum ca_type output_type)
+  {
+    LLVM_TYPE *llvm_output_type;
+    std::map<cast_signature, llvm::Function *>::iterator i;
+
+    if (input_type == output_type)
+      return input;
+
+    llvm_output_type = llvm_type_for_ca_type (output_type);
+
+    switch (output_type)
+      {
+      CASE_INTEGER_TYPE
+
+        switch (input_type)
+          {
+          CASE_INTEGER_TYPE
+
+            return builder->CreateIntCast (input, llvm_output_type, false);
+
+          default:;
+          }
+
+        break;
+
+        break;
+
+      default:;
+      }
+
+    if (casts.end() != (i = casts.find (cast_signature (output_type, input_type))))
+      return builder->CreateCall (i->second, input);
+
+    ca_set_error ("Unsupported cast from %s to %s",
+                  ca_type_to_string (input_type),
+                  ca_type_to_string (output_type));
+
+    return NULL;
+  }
+
+  llvm::Value *
   context::subexpression_compile (struct expression *expr,
                                   enum ca_type *return_type)
   {
@@ -83,31 +126,7 @@ namespace ca_llvm
 
         *return_type = expr->value.type;
 
-        switch (expr->value.type)
-          {
-          CASE_INTEGER_TYPE
-
-            switch (lhs_type)
-              {
-              CASE_INTEGER_TYPE
-
-                return builder->CreateIntCast (lhs,
-                                               llvm_type_for_ca_type (*return_type),
-                                               false);
-
-              default:;
-              }
-
-            break;
-
-          default:;
-          }
-
-        ca_set_error ("Unsupported cast from %s to %s",
-                      ca_type_to_string (lhs_type),
-                      ca_type_to_string (*return_type));
-
-        return NULL;
+        return cast_compile (lhs, lhs_type, *return_type);
 
       case EXPR_CONSTANT:
 

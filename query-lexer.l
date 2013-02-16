@@ -70,6 +70,8 @@ Z [zZ]
 {F}{A}{L}{S}{E}                    { character += yyleng; return FALSE; }
 {F}{E}{T}{C}{H}                    { character += yyleng; return FETCH; }
 {F}{I}{R}{S}{T}                    { character += yyleng; return FIRST; }
+{F}{L}{O}{A}{T}4                   { character += yyleng; return FLOAT4; }
+{F}{L}{O}{A}{T}8                   { character += yyleng; return FLOAT8; }
 {F}{O}{R}{M}{A}{T}                 { character += yyleng; return FORMAT; }
 {F}{R}{O}{M}                       { character += yyleng; return FROM; }
 {I}{N}{D}{E}{X}                    { character += yyleng; return INDEX; }

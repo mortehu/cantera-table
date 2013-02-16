@@ -3,6 +3,20 @@
 
 #include "query.h"
 
+float
+ca_cast_text_to_float4 (const char *text)
+{
+  char *endptr;
+  float result;
+
+  result = strtof (text, &endptr);
+
+  if (*endptr)
+    ca_set_error ("Invalid floating point value '%s'", text);
+
+  return result;
+}
+
 const char *
 CA_cast_to_text (struct ca_query_parse_context *context,
                  const struct expression_value *value)

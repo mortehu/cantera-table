@@ -47,6 +47,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token BEGIN_ COMMIT LOCK
 %token DESCRIBE
 %token BOOLEAN INT8 INT16 INT32 INT64 UINT8 UINT16 UINT32 UINT64 TIMESTAMPTZ
+%token FLOAT4 FLOAT8
 
 %token Identifier
 %token Integer
@@ -336,6 +337,8 @@ createTableArgs
 
 type
     : BOOLEAN                  { $$ = CA_BOOLEAN; }
+    | FLOAT4                   { $$ = CA_FLOAT4; }
+    | FLOAT8                   { $$ = CA_FLOAT8; }
     | INT8                     { $$ = CA_INT8; }
     | INT16                    { $$ = CA_INT16; }
     | INT32                    { $$ = CA_INT32; }

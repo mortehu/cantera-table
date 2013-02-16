@@ -206,3 +206,39 @@ fail:
 
   return result;
 }
+
+/*****************************************************************************/
+
+float
+ca_sql_ts_sample (struct iovec *iov, int64_t timestamp)
+{
+  const uint8_t *begin, *end;
+  float result = NAN;
+
+  begin = (const uint8_t *) iov->iov_base;
+  end = begin + iov->iov_len;
+
+  while (begin != end)
+    {
+      uint64_t start_time;
+      uint32_t interval, sample_count;
+      const float *sample_values;
+      size_t i;
+
+      ca_parse_time_float4 (&begin,
+                            &start_time, &interval,
+                            &sample_values, &sample_count);
+
+      for (i = 0; i < sample_count; ++i)
+        {
+          time_t time;
+
+          time = start_time + i * interval;
+
+          if (time == timestamp)
+            result = sample_values[i];
+        }
+    }
+
+  return result;
+}

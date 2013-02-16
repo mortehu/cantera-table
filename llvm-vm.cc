@@ -32,6 +32,7 @@
 #  define LLVM_TYPE const llvm::Type
 #endif
 
+#include "ca-functions.h"
 #include "ca-table.h"
 #include "ca-llvm.h"
 #include "query.h"
@@ -143,6 +144,9 @@ namespace ca_llvm
 
     assert (sizeof (struct expression_value) == data_layout->getTypeAllocSize (t_expression_value));
     assert (sizeof (struct iovec) == data_layout->getTypeAllocSize (t_iovec));
+
+    register_function ("ts_sample", (void *) ca_sql_ts_sample,
+                       CA_FLOAT4, CA_TIME_FLOAT4, CA_TIMESTAMPTZ, -1);
   }
 
   LLVM_TYPE *

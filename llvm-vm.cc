@@ -211,18 +211,21 @@ namespace ca_llvm
 
     result
       = llvm::Function::Create (function_type, llvm::Function::ExternalLinkage,
-                                name, module);
+                                name ? name : "<anonymous>", module);
 
     engine->addGlobalMapping (result, pointer);
 
     /*************************************************************************/
 
-    struct function function;
+    if (name)
+      {
+        struct function function;
 
-    function.return_type = ca_return_type;
-    function.handle = result;
+        function.return_type = ca_return_type;
+        function.handle = result;
 
-    functions[function_signature (name, ca_arg_types)] = function;
+        functions[function_signature (name, ca_arg_types)] = function;
+      }
 
     return result;
   }
@@ -252,42 +255,39 @@ CA_compiler_init (void)
   initialize_types (engine->getDataLayout ());
 
   f_CA_output_char
-    = register_function ("CA_output_char", (void *) CA_output_char,
+    = register_function (NULL, (void *) CA_output_char,
                          CA_VOID, CA_INT32, -1);
 
   f_CA_output_string
-    = register_function ("CA_output_string", (void *) CA_output_string,
+    = register_function (NULL, (void *) CA_output_string,
                          CA_VOID, CA_TEXT, -1);
 
   f_CA_output_json_string
-    = register_function ("CA_output_json_string",
-                         (void *) CA_output_json_string,
+    = register_function (NULL, (void *) CA_output_json_string,
                          CA_VOID, CA_TEXT, -1);
 
   f_CA_output_float4
-    = register_function ("CA_output_float", (void *) CA_output_float4,
+    = register_function (NULL, (void *) CA_output_float4,
                          CA_VOID, CA_FLOAT4, -1);
 
   f_CA_output_uint64
-    = register_function ("CA_output_uint64", (void *) CA_output_uint64,
+    = register_function (NULL, (void *) CA_output_uint64,
                          CA_VOID, CA_UINT64, -1);
 
   f_CA_output_time_float4
-    = register_function ("CA_output_time_float4",
-                         (void *) CA_output_time_float4,
+    = register_function (NULL, (void *) CA_output_time_float4,
                          CA_VOID, CA_TIME_FLOAT4, -1);
 
   f_ca_compare_like
-    = register_function ("CA_compare_like", (void *) CA_compare_like,
+    = register_function (NULL, (void *) CA_compare_like,
                          CA_BOOLEAN, CA_TEXT, CA_TEXT, -1);
 
   f_strcmp
-    = register_function ("strcmp", (void *) std::strcmp,
+    = register_function (NULL, (void *) std::strcmp,
                          CA_INT32, CA_TEXT, CA_TEXT, -1);
 
   f_strchr
-    = register_function ("strchr",
-                         (void *) (const char * (*)(const char*, int)) std::strchr,
+    = register_function (NULL, (void *) (const char * (*)(const char*, int)) std::strchr,
                          CA_TEXT, CA_TEXT, CA_INT32, -1);
 
   return 0;

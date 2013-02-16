@@ -33,6 +33,8 @@ static struct lock *lock_buffer;
 
 static char *lock_path;
 
+static size_t client_count;
+
 static void
 process_pending_locks (void)
 {
@@ -149,6 +151,14 @@ release_locks (int fd)
 }
 
 static void
+cleanup_and_exit (void)
+{
+  unlink (lock_path);
+
+  exit (EXIT_SUCCESS);
+}
+
+static void
 process_client (int fd)
 {
   struct msghdr msghdr;
@@ -192,14 +202,15 @@ fail:
   close (fd);
 
   release_locks (fd);
+
+  if (!--client_count)
+    cleanup_and_exit ();
 }
 
 static void
 sighandler (int signal)
 {
-  unlink (lock_path);
-
-  exit (EXIT_SUCCESS);
+  cleanup_and_exit ();
 }
 
 int
@@ -279,6 +290,8 @@ main (int argc, char **argv)
 
           if (-1 == epoll_ctl (epollfd, EPOLL_CTL_ADD, fd, &ev))
             close (fd);
+          else
+            ++client_count;
         }
       else
         process_client (ev.data.fd);

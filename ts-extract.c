@@ -132,7 +132,7 @@ main (int argc, char **argv)
 
           for (i = 0; i < count; ++i)
             {
-              printf ("%llu\t%.7g\n",
+              printf ("%llu\t%.9g\n",
                       (unsigned long long) (start_time + i * interval),
                       sample_values[i]);
             }

@@ -18,11 +18,11 @@ CA_cast_to_text (struct ca_query_parse_context *context,
 
     case CA_FLOAT4:
 
-      return ca_arena_sprintf (&context->arena, "%.7g", value->d.float4);
+      return ca_arena_sprintf (&context->arena, "%.9g", value->d.float4);
 
     case CA_FLOAT8:
 
-      return ca_arena_sprintf (&context->arena, "%.7g", value->d.float8);
+      return ca_arena_sprintf (&context->arena, "%.9g", value->d.float8);
 
     case CA_INT8:
     case CA_INT16:
@@ -88,13 +88,13 @@ CA_cast_to_text (struct ca_query_parse_context *context,
                   struct tm tm;
                   char *o;
 
-                  /*   13 bytes %.7g formatted -FLT_MAX
+                  /*   15 bytes %.9g formatted -FLT_MAX
                    * + 19 bytes for ISO 8601 date/time
                    * + 1 byte for LF
                    * + 1 byte for TAB
                    */
-                  if (result_size + 34 >= result_alloc
-                      && -1 == CA_ARRAY_GROW_N (&result, &result_alloc, 34))
+                  if (result_size + 36 >= result_alloc
+                      && -1 == CA_ARRAY_GROW_N (&result, &result_alloc, 36))
                     return NULL;
 
                   if (!first)
@@ -112,7 +112,7 @@ CA_cast_to_text (struct ca_query_parse_context *context,
 
                   *o++ = '\t';
 
-                  o += sprintf (o, "%.7g", sample_values[i]);
+                  o += sprintf (o, "%.9g", sample_values[i]);
 
                   result_size = o - result;
 

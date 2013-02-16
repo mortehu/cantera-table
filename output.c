@@ -80,7 +80,7 @@ CA_output_json_string (const char *string)
 void
 CA_output_float4 (float number)
 {
-  printf ("%.7g", number);
+  printf ("%.9g", number);
 }
 
 void
@@ -127,7 +127,7 @@ CA_output_time_float4 (struct iovec *iov)
   const uint8_t *begin, *end;
   size_t i;
   int first = 1, delimiter = '\n';
-  const char *format = "%s\t%.7g";
+  const char *format = "%s\t%.9g";
 
   begin = iov->iov_base;
   end = begin + iov->iov_len;
@@ -137,7 +137,7 @@ CA_output_time_float4 (struct iovec *iov)
       putchar ('[');
 
       delimiter = ',';
-      format = "{\"time\":\"%s\",\"value\":%.7g}";
+      format = "{\"time\":\"%s\",\"value\":%.9g}";
     }
 
   while (begin != end)

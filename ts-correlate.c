@@ -143,9 +143,9 @@ data_callback (const char *key, const void *value, size_t value_size,
       float high_estimate = tanh (mean + error);
 
       if (low_estimate > 0.0)
-        printf ("%.6g\t%s\n", low_estimate, key);
+        printf ("%.9g\t%s\n", low_estimate, key);
       else if (high_estimate < -0.0)
-        printf ("%.6g\t%s\n", high_estimate, key);
+        printf ("%.9g\t%s\n", high_estimate, key);
     }
 }
 

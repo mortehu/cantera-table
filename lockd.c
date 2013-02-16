@@ -13,6 +13,8 @@
 
 #include "ca-table.h"
 
+#define LOCK_FILENAME "lock"
+
 /* We allocate these with constant size to avoid heap fragmentation, even if
  * the data may vary in length */
 struct lock
@@ -30,8 +32,6 @@ static struct lock *first_pending_lock;
 static struct lock **last_pending_lock_pointer = &first_pending_lock;
 
 static struct lock *lock_buffer;
-
-static char *lock_path;
 
 static size_t client_count;
 
@@ -153,7 +153,7 @@ release_locks (int fd)
 static void
 cleanup_and_exit (void)
 {
-  unlink (lock_path);
+  unlink (LOCK_FILENAME);
 
   exit (EXIT_SUCCESS);
 }
@@ -222,25 +222,20 @@ main (int argc, char **argv)
   if (argc != 2)
     errx (EX_USAGE, "Usage: %s SCHEMA_PATH", argv[0]);
 
-  if (-1 == (unixfd = socket (PF_UNIX, SOCK_STREAM, 0)))
-    {
-      fprintf (stderr, "Failed to create UNIX socket: %s\n", strerror (errno));
+  if (-1 == chdir (argv[1]))
+    errx (EXIT_FAILURE, "Unable to change directory to '%s': %s",
+          argv[1], strerror (errno));
 
-      return EXIT_FAILURE;
-    }
+  if (-1 == (unixfd = socket (PF_UNIX, SOCK_STREAM, 0)))
+    errx (EXIT_FAILURE, "Failed to create UNIX socket: %s", strerror (errno));
 
   struct sockaddr_un unixaddr;
   memset (&unixaddr, 0, sizeof (unixaddr));
   unixaddr.sun_family = AF_UNIX;
-  snprintf (unixaddr.sun_path,
-            sizeof (unixaddr.sun_path) - 1,
-            "%s/lock", argv[1]);
+  strcpy (unixaddr.sun_path, LOCK_FILENAME);
 
   /* Make ps output prettier */
   memset (argv[1], 0, strlen (argv[1]));
-
-  if (!(lock_path = strdup (unixaddr.sun_path)))
-    err (EXIT_FAILURE, "Failed to duplicate string");
 
   if (-1 == bind (unixfd, (struct sockaddr*) &unixaddr, sizeof (unixaddr)))
     err (EXIT_FAILURE, "Failed to bind UNIX socket to address");
@@ -260,7 +255,7 @@ main (int argc, char **argv)
   if (-1 == epoll_ctl (epollfd, EPOLL_CTL_ADD, unixfd, &ev))
     err (EXIT_FAILURE, "Failed to add UNIX socket to epoll");
 
-  if (-1 == daemon (0, 0))
+  if (-1 == daemon (1 /* nochdir */, 0))
     err (EXIT_FAILURE, "Failed to become a daemon");
 
   for (;;)

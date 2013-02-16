@@ -46,6 +46,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token SET OUTPUT FORMAT CSV JSON
 %token BEGIN_ COMMIT LOCK
 %token DESCRIBE
+%token BOOLEAN INT8 INT16 INT32 INT64 UINT8 UINT16 UINT32 UINT64 TIMESTAMPTZ
 
 %token Identifier
 %token Integer
@@ -66,7 +67,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 
 %type<l> Integer
 %type<l> binaryOperator
-%type<l> columnType
+%type<l> type
 %type<l> fetchClause
 %type<l> notNull
 %type<l> offsetClause
@@ -332,11 +333,21 @@ createTableArgs
       }
     ;
 
-columnType
-    : TEXT                     { $$ = CA_TEXT; }
-    | TIMESTAMP WITH TIME ZONE { $$ = CA_TIMESTAMPTZ; }
-    | TIME_FLOAT4              { $$ = CA_TIME_FLOAT4; }
+type
+    : BOOLEAN                  { $$ = CA_BOOLEAN; }
+    | INT8                     { $$ = CA_INT8; }
+    | INT16                    { $$ = CA_INT16; }
+    | INT32                    { $$ = CA_INT32; }
+    | INT64                    { $$ = CA_INT64; }
     | OFFSET_SCORE             { $$ = CA_OFFSET_SCORE; }
+    | TEXT                     { $$ = CA_TEXT; }
+    | TIMESTAMP WITH TIME ZONE { $$ = CA_TIMESTAMPTZ; }
+    | TIMESTAMPTZ              { $$ = CA_TIMESTAMPTZ; }
+    | TIME_FLOAT4              { $$ = CA_TIME_FLOAT4; }
+    | UINT8                    { $$ = CA_UINT8; }
+    | UINT16                   { $$ = CA_UINT16; }
+    | UINT32                   { $$ = CA_UINT32; }
+    | UINT64                   { $$ = CA_UINT64; }
     ;
 
 notNull
@@ -351,7 +362,7 @@ primaryKey
     ;
 
 columnDefinition
-    : Identifier columnType notNull primaryKey
+    : Identifier type notNull primaryKey
       {
         struct column_definition *col;
         ALLOC(col);
@@ -479,6 +490,15 @@ expression
         ALLOC(expr);
         expr->type = EXPR_CONSTANT;
         expr->value.type = CA_BOOLEAN;
+        $$ = expr;
+      }
+    | expression ':' ':' type
+      {
+        struct expression *expr;
+        ALLOC(expr);
+        expr->type = EXPR_CAST;
+        expr->lhs = $1;
+        expr->value.type = $4;
         $$ = expr;
       }
     | '(' expression ')'

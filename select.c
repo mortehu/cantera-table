@@ -149,6 +149,7 @@ CA_query_resolve_variables (struct expression *expression,
 
           /* Fall through */
 
+        case EXPR_CAST:
         case EXPR_DISTINCT:
         case EXPR_NEGATIVE:
 

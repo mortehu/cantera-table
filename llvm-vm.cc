@@ -143,6 +143,35 @@ namespace ca_llvm
     assert (sizeof (struct iovec) == data_layout->getTypeAllocSize (t_iovec));
   }
 
+  LLVM_TYPE *
+  llvm_type_for_ca_type (enum ca_type type)
+  {
+    switch (type)
+      {
+      case CA_TEXT: return t_pointer;
+      case CA_TIME_FLOAT4: return t_iovec_pointer;
+      case CA_UINT64: return t_int64;
+      case CA_INT64: return t_int64;
+      case CA_NUMERIC: return t_pointer;
+      case CA_TIMESTAMPTZ: return t_int64;
+      case CA_OFFSET_SCORE: return t_iovec_pointer;
+      case CA_BOOLEAN: return t_int1;
+      case CA_UINT32: return t_int32;
+      case CA_INT32: return t_int32;
+      case CA_UINT16: return t_int16;
+      case CA_INT16: return t_int16;
+      case CA_UINT8: return t_int8;
+      case CA_INT8: return t_int8;
+      case CA_FLOAT4: return t_float;
+      case CA_FLOAT8: return t_double;
+      case CA_INVALID:
+        ;
+      }
+
+    assert (!"invalid type value");
+
+    return NULL;
+  }
 } /* namespace ca_llvm */
 
 using namespace ca_llvm;

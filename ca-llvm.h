@@ -46,6 +46,9 @@ namespace ca_llvm
    * t_size */
   extern LLVM_TYPE *t_iovec;
 
+  LLVM_TYPE *
+  llvm_type_for_ca_type (enum ca_type type);
+
   struct context
     {
       llvm::IRBuilder<> *builder;

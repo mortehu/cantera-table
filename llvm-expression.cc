@@ -19,6 +19,17 @@
 
 namespace ca_llvm
 {
+#define CASE_INTEGER_TYPE \
+  case CA_INT8: \
+  case CA_UINT8: \
+  case CA_INT16: \
+  case CA_UINT16: \
+  case CA_INT32: \
+  case CA_UINT32: \
+  case CA_INT64: \
+  case CA_UINT64: \
+  case CA_TIMESTAMPTZ:
+
   llvm::Value *
   context::subexpression_compile (struct expression *expr,
                                   enum ca_type *return_type)
@@ -32,7 +43,6 @@ namespace ca_llvm
       {
       case EXPR_ADD:
       case EXPR_AND:
-      case EXPR_CAST:
       case EXPR_DIV:
       case EXPR_EQUAL:
       case EXPR_GREATER_EQUAL:
@@ -46,13 +56,18 @@ namespace ca_llvm
       case EXPR_OR:
       case EXPR_SUB:
 
-        lhs = builder->CreateAlloca (t_expression_value);
         rhs = builder->CreateAlloca (t_expression_value);
 
-        if (!(lhs = subexpression_compile (expr->lhs, &lhs_type)))
+        if (!(rhs = subexpression_compile (expr->rhs, &rhs_type)))
           return NULL;
 
-        if (!(rhs = subexpression_compile (expr->rhs, &rhs_type)))
+        /* Fall through */
+
+      case EXPR_CAST:
+
+        lhs = builder->CreateAlloca (t_expression_value);
+
+        if (!(lhs = subexpression_compile (expr->lhs, &lhs_type)))
           return NULL;
 
         break;
@@ -64,6 +79,36 @@ namespace ca_llvm
 
     switch (expr->type)
       {
+      case EXPR_CAST:
+
+        *return_type = expr->value.type;
+
+        switch (expr->value.type)
+          {
+          CASE_INTEGER_TYPE
+
+            switch (lhs_type)
+              {
+              CASE_INTEGER_TYPE
+
+                return builder->CreateIntCast (lhs,
+                                               llvm_type_for_ca_type (*return_type),
+                                               false);
+
+              default:;
+              }
+
+            break;
+
+          default:;
+          }
+
+        ca_set_error ("Unsupported cast from %s to %s",
+                      ca_type_to_string (lhs_type),
+                      ca_type_to_string (*return_type));
+
+        return NULL;
+
       case EXPR_CONSTANT:
 
         *return_type = expr->value.type;

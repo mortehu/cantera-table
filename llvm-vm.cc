@@ -296,6 +296,11 @@ CA_compiler_init (void)
     register_function (NULL, (void *) ca_cast_text_to_float4,
                        CA_FLOAT4, CA_TEXT, -1);
 
+  casts[cast_signature (CA_FLOAT8, CA_TEXT)] =
+  casts[cast_signature (CA_FLOAT8, CA_NUMERIC)] =
+    register_function (NULL, (void *) ca_cast_text_to_float8,
+                       CA_FLOAT8, CA_TEXT, -1);
+
   return 0;
 }
 

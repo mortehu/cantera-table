@@ -393,6 +393,9 @@ ca_parse_offset_score (const uint8_t **input,
 float
 ca_cast_text_to_float4 (const char *text);
 
+double
+ca_cast_text_to_float8 (const char *text);
+
 /*****************************************************************************/
 
 int

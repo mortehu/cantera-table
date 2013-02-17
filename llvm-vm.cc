@@ -296,6 +296,7 @@ CA_compiler_init (void)
   register_function ("ts_sample", (void *) ca_sql_ts_sample,
                      CA_FLOAT4, CA_TIME_FLOAT4, CA_TIMESTAMPTZ, -1);
 
+  /* Unary math functions */
 #define C_FLOAT_FUNCTION(name) \
   register_function (#name,   (void *) name,      CA_FLOAT8, CA_FLOAT8, -1); \
   register_function (#name,   (void *) name ## f, CA_FLOAT4, CA_FLOAT4, -1); \
@@ -319,9 +320,19 @@ CA_compiler_init (void)
   C_FLOAT_FUNCTION(tanh)
   C_FLOAT_FUNCTION(trunc)
 
+#undef C_FLOAT_FUNCTION
+
   /* Can't use the above macro since "fabs" != "abs" */
   register_function ("abs",   (void *) fabs,   CA_FLOAT8, CA_FLOAT8, -1);
   register_function ("abs",   (void *) fabsf,  CA_FLOAT4, CA_FLOAT4, -1);
+
+  /* Binary <math.h> functions */
+  register_function ("atan2", (void *) atan2,  CA_FLOAT8, CA_FLOAT8, CA_FLOAT8, -1);
+  register_function ("atan2", (void *) atan2f, CA_FLOAT4, CA_FLOAT4, CA_FLOAT4, -1);
+  register_function ("fmod",  (void *) fmod,   CA_FLOAT8, CA_FLOAT8, CA_FLOAT8, -1);
+  register_function ("fmod",  (void *) fmodf,  CA_FLOAT4, CA_FLOAT4, CA_FLOAT4, -1);
+  register_function ("pow",   (void *) pow,    CA_FLOAT8, CA_FLOAT8, CA_FLOAT8, -1);
+  register_function ("pow",   (void *) powf,   CA_FLOAT4, CA_FLOAT4, CA_FLOAT4, -1);
 
   casts[cast_signature (CA_FLOAT4, CA_TEXT)] =
   casts[cast_signature (CA_FLOAT4, CA_NUMERIC)] =

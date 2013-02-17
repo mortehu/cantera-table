@@ -296,7 +296,7 @@ CA_compiler_init (void)
   register_function ("ts_sample", (void *) ca_sql_ts_sample,
                      CA_FLOAT4, CA_TIME_FLOAT4, CA_TIMESTAMPTZ, -1);
 
-  /* Unary math functions */
+  /* Unary <math.h> functions */
 #define C_FLOAT_FUNCTION(name) \
   register_function (#name,   (void *) name,      CA_FLOAT8, CA_FLOAT8, -1); \
   register_function (#name,   (void *) name ## f, CA_FLOAT4, CA_FLOAT4, -1); \

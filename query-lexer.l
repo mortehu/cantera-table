@@ -127,7 +127,7 @@ Z [zZ]
 \' { return stringliteral (yyscanner); }
 \" { return stringliteral (yyscanner); }
 
-[A-Za-z_#][A-za-z0-9_.]* { yylval->p = ca_arena_strdup (yyextra, yytext); strtolower (yylval->p); character += yyleng; return Identifier; }
+[A-Za-z_#][A-Za-z0-9_.]* { yylval->p = ca_arena_strdup (yyextra, yytext); strtolower (yylval->p); character += yyleng; return Identifier; }
 [ \t\r\026]+             { character += yyleng; }
 
 \n                       { ++line; character = 1; }

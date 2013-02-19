@@ -425,12 +425,23 @@ ca_schema_create_table (struct ca_schema *schema, const char *name,
                         struct ca_table_declaration *declaration)
 {
   struct schema_table *table;
+  size_t i;
 
   if (!declaration->field_count)
     {
       ca_set_error ("Table must have at least one column");
 
       return -1;
+    }
+
+  for (i = 0; i < schema->table_count; ++i)
+    {
+      if (!strcmp (schema->tables[i].name, name))
+        {
+          ca_set_error ("Table '%s' already exists", name);
+
+          return -1;
+        }
     }
 
   if (schema->table_count == schema->table_alloc

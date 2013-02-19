@@ -88,7 +88,7 @@ CA_cast_to_text (struct ca_query_parse_context *context,
 
       break;
 
-    case CA_TIME_FLOAT4:
+    case CA_TIME_FLOAT4_ARRAY:
 
         {
           const uint8_t *begin, *end;

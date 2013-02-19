@@ -154,12 +154,12 @@ namespace ca_llvm
     switch (type)
       {
       case CA_TEXT: return t_pointer;
-      case CA_TIME_FLOAT4: return t_iovec_pointer;
+      case CA_TIME_FLOAT4_ARRAY: return t_iovec_pointer;
       case CA_UINT64: return t_int64;
       case CA_INT64: return t_int64;
       case CA_NUMERIC: return t_pointer;
       case CA_TIMESTAMPTZ: return t_int64;
-      case CA_OFFSET_SCORE: return t_iovec_pointer;
+      case CA_OFFSET_SCORE_ARRAY: return t_iovec_pointer;
       case CA_BOOLEAN: return t_int1;
       case CA_UINT32: return t_int32;
       case CA_INT32: return t_int32;
@@ -279,7 +279,7 @@ CA_compiler_init (void)
 
   f_CA_output_time_float4 =
     register_function (NULL, (void *) CA_output_time_float4,
-                       CA_VOID, CA_TIME_FLOAT4, -1);
+                       CA_VOID, CA_TIME_FLOAT4_ARRAY, -1);
 
   f_ca_compare_like =
     register_function (NULL, (void *) CA_compare_like,
@@ -294,7 +294,7 @@ CA_compiler_init (void)
                        CA_TEXT, CA_TEXT, CA_INT32, -1);
 
   register_function ("ts_sample", (void *) ca_sql_ts_sample,
-                     CA_FLOAT4, CA_TIME_FLOAT4, CA_TIMESTAMPTZ, -1);
+                     CA_FLOAT4, CA_TIME_FLOAT4_ARRAY, CA_TIMESTAMPTZ, -1);
 
   /* Unary <math.h> functions */
 #define C_FLOAT_FUNCTION(name) \
@@ -405,7 +405,7 @@ CA_generate_output (llvm::IRBuilder<> *builder,
 
       break;
 
-    case CA_TIME_FLOAT4:
+    case CA_TIME_FLOAT4_ARRAY:
 
       builder->CreateCall (f_CA_output_time_float4, value);
 
@@ -498,9 +498,10 @@ CA_collect_compile (const struct ca_field *fields, size_t field_count)
 
               break;
 
-            case CA_OFFSET_SCORE:
+            case CA_OFFSET_SCORE_ARRAY:
+            case CA_TIME_FLOAT4_ARRAY:
 
-              assert (!"Bug: offset_score only supported in last column");
+              assert (!"Bug: Arrays only supported in last column");
 
               break;
 
@@ -514,12 +515,6 @@ CA_collect_compile (const struct ca_field *fields, size_t field_count)
 
               /* Skip terminating NUL */
               skip_extra = 1;
-
-              break;
-
-            case CA_TIME_FLOAT4:
-
-              assert (!"Bug: time_float4 only supported in last column");
 
               break;
 

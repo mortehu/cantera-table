@@ -460,7 +460,7 @@ data_callback (const struct iovec *value, void *opaque)
         return -1;
     }
 
-  if (column_count == 1 && column_types[0] == CA_TIME_FLOAT4)
+  if (column_count == 1 && column_types[0] == CA_TIME_FLOAT4_ARRAY)
     {
       sample_type = SAMPLE_TIME_FLOAT4;
 
@@ -486,7 +486,7 @@ data_callback (const struct iovec *value, void *opaque)
             }
         }
     }
-  else if (column_count == 1 && column_types[0] == CA_OFFSET_SCORE)
+  else if (column_count == 1 && column_types[0] == CA_OFFSET_SCORE_ARRAY)
     {
       sample_type = SAMPLE_OFFSET_SCORE;
 

@@ -227,9 +227,9 @@ ca_schema_query (struct ca_schema *schema, const char *query,
       goto done;
     }
 
-  if (index_declaration->fields[1].type != CA_OFFSET_SCORE)
+  if (index_declaration->fields[1].type != CA_OFFSET_SCORE_ARRAY)
     {
-      ca_set_error ("Second field in index table must be OFFSET_SCORE, is %s", ca_type_to_string (index_declaration->fields[1].type));
+      ca_set_error ("Second field in index table must be OFFSET_SCORE[], is %s", ca_type_to_string (index_declaration->fields[1].type));
 
       goto done;
     }

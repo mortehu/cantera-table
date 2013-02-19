@@ -71,7 +71,7 @@ data_callback (const char *key, const void *value, size_t value_size,
 
       switch (*begin++)
         {
-        case CA_TIME_FLOAT4:
+        case CA_TIME_FLOAT4_ARRAY:
 
           table_parse_time_series (&begin,
                                    &start_time, &interval,
@@ -214,7 +214,7 @@ main (int argc, char **argv)
 
       switch (*begin++)
         {
-        case CA_TIME_FLOAT4:
+        case CA_TIME_FLOAT4_ARRAY:
 
           table_parse_time_series (&begin,
                                    &start_time, &interval,

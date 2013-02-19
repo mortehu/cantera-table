@@ -343,11 +343,11 @@ type
     | INT16                    { $$ = CA_INT16; }
     | INT32                    { $$ = CA_INT32; }
     | INT64                    { $$ = CA_INT64; }
-    | OFFSET_SCORE             { $$ = CA_OFFSET_SCORE; }
+    | OFFSET_SCORE '[' ']'     { $$ = CA_OFFSET_SCORE_ARRAY; }
     | TEXT                     { $$ = CA_TEXT; }
     | TIMESTAMP WITH TIME ZONE { $$ = CA_TIMESTAMPTZ; }
     | TIMESTAMPTZ              { $$ = CA_TIMESTAMPTZ; }
-    | TIME_FLOAT4              { $$ = CA_TIME_FLOAT4; }
+    | TIME_FLOAT4 '[' ']'      { $$ = CA_TIME_FLOAT4_ARRAY; }
     | UINT8                    { $$ = CA_UINT8; }
     | UINT16                   { $$ = CA_UINT16; }
     | UINT32                   { $$ = CA_UINT32; }

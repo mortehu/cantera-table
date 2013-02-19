@@ -6,8 +6,8 @@
 #include "query-parser.h"
 #include "query.h"
 
-static unsigned int character;
-static unsigned int line = 0;
+unsigned int character;
+unsigned int line = 0;
 
 int
 yyparse();

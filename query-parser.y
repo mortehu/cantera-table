@@ -573,7 +573,7 @@ extern unsigned int line;
 void
 yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *message)
 {
-  ca_set_error ("%s", message);
+  ca_set_error ("%u:%u: %s", line, character, message);
 
   context->error = 1;
 }

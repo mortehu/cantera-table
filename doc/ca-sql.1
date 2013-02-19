@@ -71,6 +71,49 @@ order in which operators take precedence.
 FLOAT4 \fBTS_SAMPLE\fR(TIME_FLOAT4[], TIMESTAMP WITH TIME ZONE)
 Returns a value from a timestamped float4 array for a given timestamp, or NaN
 if no value was found.
+.TP
+FLOAT4 \fBABS\fR(FLOAT4), FLOAT8 \fBABS\fR(FLOAT8)
+Returns the absolute value of the argument.
+.TP
+\fBSIN\fR, \fBCOS\fR, \fBTAN\fR, \fBSINH\fR, \fBCOSH\fR, \fBTANH\fR, \fBASIN\fR, \fBACOS\fR, \fBATAN\fR
+The trigonometric functions operate on radians, and take either a \fBFLOAT4\fR
+or a \fBFLOAT8\fR as an argument, and returns the same type.
+.TP
+FLOAT4 \fBATAN2\fR(FLOAT4, FLOAT4), FLOAT8 \fBATAN2\fR(FLOAT8, FLOAT8)
+Returns the arc tangent of two variables, effectively calculating the angle of a 2D vector.  ATAN2(1.0::FLOAT4, 0.0::FLOAT4) returns π/2, which represents 90°.
+.TP
+FLOAT4 \fBSQRT\fR(FLOAT4), FLOAT8 \fBSQRT\fR(FLOAT8)
+Returns the square root of the argument.
+.TP
+FLOAT4 \fBCBRT\fR(FLOAT4), FLOAT8 \fBCBRT\fR(FLOAT8)
+Returns the cube root of the argument.
+.TP
+FLOAT4 \fBCEIL\fR(FLOAT4), FLOAT8 \fBCEIL\fR(FLOAT8)
+Returns the value of the argument rounded up to the nearest integer.
+.TP
+FLOAT4 \fBFLOOR\fR(FLOAT4), FLOAT8 \fBFLOOR\fR(FLOAT8)
+Returns the value of the argument rounded down to the nearest integer.
+.TP
+FLOAT4 \fBROUND\fR(FLOAT4), FLOAT8 \fBROUND\fR(FLOAT8)
+Returns the value of the argument rounded to the nearest integer.  ROUND(0.5) is 1.0 and ROUND(-0.5) is -1.0.
+.TP
+FLOAT4 \fBTRUNC\fR(FLOAT4), FLOAT8 \fBTRUNC\fR(FLOAT8)
+Returns the value of the argument to the nearest integer not larger in absolute value, i.e. towards zero.
+.TP
+FLOAT4 \fBEXP\fR(FLOAT4), FLOAT8 \fBEXP\fR(FLOAT8)
+Returns the mathematical constant \fBe\fR raised to the power of the argument.  EXP(1) returns approximately 2.71828.
+.TP
+FLOAT4 \fBLOG\fR(FLOAT4), FLOAT8 \fBLOG\fR(FLOAT8)
+Returns the natural logarithm of the argument.  LOG(2.718281828::FLOAT4) returns 1.  1828 is the birth year of Henrik Ibsen.
+.TP
+FLOAT4 \fBLOG10\fR(FLOAT4), FLOAT8 \fBLOG10\fR(FLOAT8)
+Returns the base 10 logarithm of the argument.  LOG(1000.0::FLOAT4) returns 3.
+.TP
+FLOAT4 \fBPOW\fR(FLOAT4, FLOAT4), FLOAT8 \fBPOW\fR(FLOAT8, FLOAT8)
+Returns the first argument raised to the power of the second.  POW(2.0::FLOAT4, 10.0::FLOAT4) returns 1024.
+.TP
+FLOAT4 \fBFMOD\fR(FLOAT4, FLOAT4), FLOAT8 \fBFMOD\fR(FLOAT8, FLOAT8)
+Returns the floating-point remainder of dividing the first argument with the second argument.
 .SH "AUTHOR"
 .PP
 This manual page was written by Morten Hustveit <morten.hustveit@gmail.com>.

@@ -32,7 +32,7 @@ struct CA_offset_score_compare
   bool operator()(const ca_offset_score &lhs,
                   const ca_offset_score &rhs) const
     {
-      return lhs.score < rhs.score;
+      return lhs.score > rhs.score;
     }
 };
 

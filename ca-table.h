@@ -15,7 +15,6 @@
 extern "C" {
 #endif
 
-
 #define CA_NAMEDATALEN 64
 
 #ifdef __GNUC__

@@ -49,6 +49,7 @@ namespace ca_llvm
   llvm::Function *f_CA_output_float8;
   llvm::Function *f_CA_output_uint64;
   llvm::Function *f_CA_output_time_float4;
+  llvm::Function *f_CA_output_offset_score_array;
 
   llvm::Function *f_ca_compare_like;
   llvm::Function *f_strcmp;
@@ -281,6 +282,10 @@ CA_compiler_init (void)
     register_function (NULL, (void *) CA_output_time_float4,
                        CA_VOID, CA_TIME_FLOAT4_ARRAY, -1);
 
+  f_CA_output_offset_score_array =
+    register_function (NULL, (void *) CA_output_offset_score_array,
+                       CA_VOID, CA_OFFSET_SCORE_ARRAY, -1);
+
   f_ca_compare_like =
     register_function (NULL, (void *) CA_compare_like,
                        CA_BOOLEAN, CA_TEXT, CA_TEXT, -1);
@@ -408,6 +413,12 @@ CA_generate_output (llvm::IRBuilder<> *builder,
     case CA_TIME_FLOAT4_ARRAY:
 
       builder->CreateCall (f_CA_output_time_float4, value);
+
+      break;
+
+    case CA_OFFSET_SCORE_ARRAY:
+
+      builder->CreateCall (f_CA_output_offset_score_array, value);
 
       break;
 

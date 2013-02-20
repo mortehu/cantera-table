@@ -92,9 +92,9 @@ ca_parse_time_float4 (const uint8_t **input,
 }
 
 int
-ca_parse_offset_score (const uint8_t **input,
-                            struct ca_offset_score **sample_values,
-                            uint32_t *count)
+ca_parse_offset_score_array (const uint8_t **input,
+                             struct ca_offset_score **sample_values,
+                             uint32_t *count)
 {
   enum ca_offset_score_type type;
   uint_fast32_t i;

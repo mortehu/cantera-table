@@ -282,7 +282,8 @@ ca_schema_query (struct ca_schema *schema, const char *query,
 
       data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
 
-      if (-1 == ca_parse_offset_score (&data, &token_offsets, &token_offset_count))
+      if (-1 == ca_parse_offset_score_array (&data, &token_offsets,
+                                             &token_offset_count))
         goto done;
 
       if (operator)

@@ -250,6 +250,9 @@ CA_output_uint64 (uint64_t number);
 void
 CA_output_time_float4 (struct iovec *iov);
 
+void
+CA_output_offset_score_array (struct iovec *iov);
+
 const char *
 CA_cast_to_text (struct ca_query_parse_context *context,
                  const struct expression_value *value);

@@ -179,3 +179,48 @@ CA_output_time_float4 (struct iovec *iov)
   if (CA_output_format == CA_PARAM_VALUE_JSON)
     putchar (']');
 }
+
+void
+CA_output_offset_score_array (struct iovec *iov)
+{
+  const uint8_t *begin, *end;
+  size_t i;
+  int first = 1, delimiter = '\n';
+  const char *format = "%llu\t%.9g";
+
+  begin = iov->iov_base;
+  end = begin + iov->iov_len;
+
+  if (CA_output_format == CA_PARAM_VALUE_JSON)
+    {
+      putchar ('[');
+
+      delimiter = ',';
+      format = "{\"offset\":\"%llu\",\"score\":%.9g}";
+    }
+
+  while (begin != end)
+    {
+      uint32_t sample_count;
+      struct ca_offset_score *sample_values;
+
+      if (-1 == ca_parse_offset_score_array (&begin,
+                                             &sample_values, &sample_count))
+        break;
+
+      for (i = 0; i < sample_count; ++i)
+        {
+          if (!first)
+            putchar (delimiter);
+
+          printf (format,
+                  (unsigned long long) sample_values[i].offset,
+                  sample_values[i].score);
+
+          first = 0;
+        }
+    }
+
+  if (CA_output_format == CA_PARAM_VALUE_JSON)
+    putchar (']');
+}

@@ -39,7 +39,8 @@ libca_table_la_SOURCES = \
   query.c \
   schema.c schema.h \
   select.c \
-  sort.c \
+  table-sort.c \
+  sort.cc \
   statement.c \
   table-backend-flexi.c \
   table-backend-log.c \

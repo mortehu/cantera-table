@@ -414,6 +414,11 @@ ca_crc32c (uint32_t input_crc32, const void *input_buffer, size_t length);
 
 /*****************************************************************************/
 
+void
+ca_sort_offset_score (struct ca_offset_score *data, size_t count);
+
+/*****************************************************************************/
+
 struct ca_hashmap_data
 {
   char *key;

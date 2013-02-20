@@ -23,55 +23,6 @@
 #include "ca-table.h"
 
 static size_t
-CA_partition (struct ca_offset_score *data, size_t count, size_t pivot_index)
-{
-  size_t i, store_index;
-  struct ca_offset_score pivot, tmp;
-
-  store_index = 0;
-
-  pivot = data[pivot_index];
-
-  data[pivot_index] = data[count - 1];
-  data[count - 1] = pivot;
-
-  for (i = 0; i < count - 1; ++i)
-    {
-      if (data[i].score > pivot.score)
-        {
-          tmp = data[store_index];
-          data[store_index] = data[i];
-          data[i] = tmp;
-
-          ++store_index;
-        }
-    }
-
-  data[count - 1] = data[store_index];
-  data[store_index] = pivot;
-
-  return store_index;
-}
-
-void
-ca_quicksort (struct ca_offset_score *data, size_t count)
-{
-  size_t pivot_index;
-
-  while (count >= 2)
-    {
-      pivot_index = count / 2;
-
-      pivot_index = CA_partition (data, count, pivot_index);
-
-      ca_quicksort (data, pivot_index);
-
-      data += pivot_index + 1;
-      count -= pivot_index + 1;
-    }
-}
-
-static size_t
 CA_subtract_offsets (struct ca_offset_score *lhs, size_t lhs_count,
                      const struct ca_offset_score *rhs, size_t rhs_count)
 {
@@ -323,7 +274,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
   if (offset_count < limit)
     limit = offset_count;
 
-  ca_quicksort (offsets, offset_count);
+  ca_sort_offset_score (offsets, offset_count);
 
   /* XXX: Fetch documents in phsyical order */
 

@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "ca-functions.h"
+#include "ca-internal.h"
 #include "ca-table.h"
 #include "query.h"
 
@@ -77,65 +78,10 @@ ca_stats_correlation (const float *lhs,
 
 /*****************************************************************************/
 
-struct float_rank
-{
-  float value;
-  unsigned int rank;
-};
-
-static size_t
-partition (struct float_rank *data, size_t count, size_t pivot_index)
-{
-  size_t i, store_index;
-  struct float_rank pivot, tmp;
-
-  store_index = 0;
-
-  pivot = data[pivot_index];
-
-  data[pivot_index] = data[count - 1];
-  data[count - 1] = pivot;
-
-  for (i = 0; i < count - 1; ++i)
-    {
-      if (data[i].value < pivot.value)
-        {
-          tmp = data[store_index];
-          data[store_index] = data[i];
-          data[i] = tmp;
-
-          ++store_index;
-        }
-    }
-
-  data[count - 1] = data[store_index];
-  data[store_index] = pivot;
-
-  return store_index;
-}
-
-void
-quicksort (struct float_rank *data, size_t count)
-{
-  size_t pivot_index;
-
-  while (count >= 2)
-    {
-      pivot_index = count / 2;
-
-      pivot_index = partition (data, count, pivot_index);
-
-      quicksort (data, pivot_index);
-
-      data += pivot_index + 1;
-      count -= pivot_index + 1;
-    }
-}
-
 float
 ca_stats_rank_correlation (const float *values, size_t count)
 {
-  struct float_rank *sorted_values = NULL;
+  struct CA_float_rank *sorted_values = NULL;
   float *ranks = NULL;
   size_t i;
 
@@ -160,7 +106,7 @@ ca_stats_rank_correlation (const float *values, size_t count)
       sorted_values[i].rank = i;
     }
 
-  quicksort (sorted_values, count);
+  CA_sort_float_rank (sorted_values, count);
 
   for (i = 0; i < count; )
     {

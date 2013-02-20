@@ -113,6 +113,13 @@ CA_filter_offsets (struct ca_offset_score *offsets, size_t count,
 
           break;
 
+        case '=':
+
+          if (offsets[i].score == operand)
+            offsets[result++] = offsets[i];
+
+          break;
+
         default:
 
           fprintf (stderr, "%c\n", operator);
@@ -208,7 +215,8 @@ ca_schema_query (struct ca_schema *schema, const char *query,
         ++token, invert_rank = 1;
 
       if (NULL != (ch = strchr (token, '>'))
-          || NULL != (ch = strchr (token, '<')))
+          || NULL != (ch = strchr (token, '<'))
+          || NULL != (ch = strchr (token, '=')))
         {
           operator = *ch;
           operand = strtod (ch + 1, NULL);

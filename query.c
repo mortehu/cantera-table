@@ -225,36 +225,39 @@ ca_schema_query (struct ca_schema *schema, const char *query,
 
       if (1 != (ret = ca_table_seek_to_key (index_table, token)))
         {
-          if (!ret) /* "Not found" is not an error */
-            result = 0;
+          if (ret == -1)
+            goto done;
 
-          goto done;
+          token_offsets = NULL;
+          token_offset_count = 0;
         }
-
-      if (1 != (ret = ca_table_read_row (index_table, &data_iov)))
+      else
         {
-          if (ret >= 0)
-            ca_set_error ("ca_table_read_row unexpectedly returned %d", (int) ret);
+          if (1 != (ret = ca_table_read_row (index_table, &data_iov)))
+            {
+              if (ret >= 0)
+                ca_set_error ("ca_table_read_row unexpectedly returned %d", (int) ret);
 
-          goto done;
-        }
+              goto done;
+            }
 
-      data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
+          data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
 
-      if (-1 == ca_parse_offset_score_array (&data, &token_offsets,
-                                             &token_offset_count))
-        goto done;
+          if (-1 == ca_parse_offset_score_array (&data, &token_offsets,
+                                                 &token_offset_count))
+            goto done;
 
-      if (operator)
-        {
-          token_offset_count =
-            CA_filter_offsets (token_offsets, token_offset_count, operator, operand);
-        }
+          if (operator)
+            {
+              token_offset_count =
+                CA_filter_offsets (token_offsets, token_offset_count, operator, operand);
+            }
 
-      if (invert_rank)
-        {
-          for (i = 0; i < token_offset_count; ++i)
-            token_offsets[i].score = -token_offsets[i].score;
+          if (invert_rank)
+            {
+              for (i = 0; i < token_offset_count; ++i)
+                token_offsets[i].score = -token_offsets[i].score;
+            }
         }
 
       if (!offsets)

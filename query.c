@@ -17,8 +17,13 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <assert.h>
 #include <string.h>
+#include <time.h>
 
 #include "ca-table.h"
 
@@ -218,9 +223,22 @@ ca_schema_query (struct ca_schema *schema, const char *query,
           || NULL != (ch = strchr (token, '<'))
           || NULL != (ch = strchr (token, '=')))
         {
+          char *endptr;
           operator = *ch;
-          operand = strtod (ch + 1, NULL);
           *ch = 0;
+
+          operand = strtod (ch + 1, &endptr);
+
+          if (*endptr == '-')
+            {
+              struct tm tm;
+
+              memset (&tm, 0, sizeof (tm));
+              endptr = strptime (ch + 1, "%Y-%m-%d", &tm);
+
+              if (!*endptr)
+                operand = timegm (&tm) / 86400;
+            }
         }
 
       if (1 != (ret = ca_table_seek_to_key (index_table, token)))

@@ -104,9 +104,23 @@ CA_filter_offsets (struct ca_offset_score *offsets, size_t count,
     {
       switch (operator)
         {
+        case L'≤':
+
+          if (offsets[i].score >= operand)
+            offsets[result++] = offsets[i];
+
+          break;
+
         case '<':
 
           if (offsets[i].score < operand)
+            offsets[result++] = offsets[i];
+
+          break;
+
+        case '=':
+
+          if (offsets[i].score == operand)
             offsets[result++] = offsets[i];
 
           break;
@@ -118,9 +132,9 @@ CA_filter_offsets (struct ca_offset_score *offsets, size_t count,
 
           break;
 
-        case '=':
+        case L'≥':
 
-          if (offsets[i].score == operand)
+          if (offsets[i].score >= operand)
             offsets[result++] = offsets[i];
 
           break;
@@ -225,16 +239,26 @@ ca_schema_query (struct ca_schema *schema, const char *query,
         {
           char *endptr;
           operator = *ch;
-          *ch = 0;
+          *ch++ = 0;
 
-          operand = strtod (ch + 1, &endptr);
+          if (*ch == '=')
+            {
+              if (operator == '>')
+                operator = L'≥';
+              else if (operator == '<')
+                operator = L'≤';
+
+              ++ch;
+            }
+
+          operand = strtod (ch, &endptr);
 
           if (*endptr == '-')
             {
               struct tm tm;
 
               memset (&tm, 0, sizeof (tm));
-              endptr = strptime (ch + 1, "%Y-%m-%d", &tm);
+              endptr = strptime (ch, "%Y-%m-%d", &tm);
 
               if (!*endptr)
                 operand = timegm (&tm) / 86400;

@@ -170,7 +170,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
   char *query_buf = NULL, *token, *ch;
 
   ssize_t ret;
-  int result = -1;
+  int first = 1, result = -1;
 
   ca_clear_error ();
 
@@ -302,7 +302,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
             }
         }
 
-      if (!offsets)
+      if (first)
         {
           offsets = token_offsets;
           offset_count = token_offset_count;
@@ -322,6 +322,8 @@ ca_schema_query (struct ca_schema *schema, const char *query,
 
           free (token_offsets);
         }
+
+      first = 0;
     }
 
   if (offset_count < limit)

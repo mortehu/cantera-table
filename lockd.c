@@ -1,8 +1,13 @@
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include <err.h>
+#include <getopt.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -14,6 +19,18 @@
 #include "ca-table.h"
 
 #define LOCK_FILENAME "lock"
+
+static int print_version;
+static int print_help;
+static int keep_running;
+
+static struct option long_options[] =
+{
+    { "keep-running",   no_argument,  &keep_running,     1 },
+    { "version",        no_argument,  &print_version, 1 },
+    { "help",           no_argument,  &print_help,    1 },
+    { 0, 0, 0, 0 }
+};
 
 /* We allocate these with constant size to avoid heap fragmentation, even if
  * the data may vary in length */
@@ -203,7 +220,7 @@ fail:
 
   release_locks (fd);
 
-  if (!--client_count)
+  if (!--client_count && !keep_running)
     cleanup_and_exit ();
 }
 
@@ -217,14 +234,49 @@ int
 main (int argc, char **argv)
 {
   struct epoll_event ev;
-  int unixfd, epollfd;
+  int i, unixfd, epollfd;
 
-  if (argc != 2)
-    errx (EX_USAGE, "Usage: %s SCHEMA_PATH", argv[0]);
+  while ((i = getopt_long (argc, argv, "c:", long_options, 0)) != -1)
+    {
+      switch (i)
+        {
+        case 0:
 
-  if (-1 == chdir (argv[1]))
+          break;
+
+        case '?':
+
+          errx (EX_USAGE, "Try '%s --help' for more information.", argv[0]);
+        }
+    }
+
+  if (print_help)
+    {
+      printf ("Usage: %s [OPTION]...\n"
+             "\n"
+             "      --keep-running              don't exit when last client disconnects\n"
+             "      --help     display this help and exit\n"
+             "      --version  display version information and exit\n"
+             "\n"
+             "Report bugs to <morten.hustveit@gmail.com>\n",
+             argv[0]);
+
+      return EXIT_SUCCESS;
+    }
+
+  if (print_version)
+    {
+      fprintf (stdout, "%s\n", PACKAGE_STRING);
+
+      return EXIT_SUCCESS;
+    }
+
+  if (optind + 1 != argc)
+    errx (EX_USAGE, "Usage: %s [OPTION]... SCHEMA_PATH", argv[0]);
+
+  if (-1 == chdir (argv[optind]))
     errx (EXIT_FAILURE, "Unable to change directory to '%s': %s",
-          argv[1], strerror (errno));
+          argv[optind], strerror (errno));
 
   if (-1 == (unixfd = socket (PF_UNIX, SOCK_STREAM, 0)))
     errx (EXIT_FAILURE, "Failed to create UNIX socket: %s", strerror (errno));
@@ -233,9 +285,6 @@ main (int argc, char **argv)
   memset (&unixaddr, 0, sizeof (unixaddr));
   unixaddr.sun_family = AF_UNIX;
   strcpy (unixaddr.sun_path, LOCK_FILENAME);
-
-  /* Make ps output prettier */
-  memset (argv[1], 0, strlen (argv[1]));
 
   if (-1 == bind (unixfd, (struct sockaddr*) &unixaddr, sizeof (unixaddr)))
     err (EXIT_FAILURE, "Failed to bind UNIX socket to address");

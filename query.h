@@ -19,6 +19,7 @@ struct ca_query_parse_context
 {
   void *scanner;
   struct ca_arena_info arena;
+  int in_transaction_block;
   int error;
 
   struct ca_schema *schema;
@@ -137,6 +138,7 @@ enum ca_sql_statement_type
   CA_SQL_LOCK,
   CA_SQL_SELECT,
   CA_SQL_SET,
+  CA_SQL_UPDATE,
   CA_SQL_QUERY
 };
 
@@ -158,6 +160,14 @@ struct select_statement
   struct expression *where;
 
   int64_t limit, offset;
+};
+
+struct update_statement
+{
+  char *table;
+  char *column;
+  struct expression *expression;
+  struct expression *where;
 };
 
 struct insert_statement
@@ -207,6 +217,7 @@ struct statement
       struct lock_statement lock;
       struct select_statement select;
       struct set_statement set;
+      struct update_statement update;
       struct query_statement query;
     } u;
 
@@ -264,8 +275,17 @@ int
 CA_compare_like (const char *subject, const char *pattern);
 
 int
+CA_query_resolve_variables (struct expression *expression,
+                            const struct ca_hashmap *variables,
+                            int *is_constant);
+
+int
 CA_select (struct ca_query_parse_context *context,
            struct select_statement *stmt);
+
+int
+CA_update (struct ca_query_parse_context *context,
+           struct update_statement *stmt);
 
 int
 CA_compiler_init (void);
@@ -292,6 +312,15 @@ CA_expression_compile (const char *name,
                        const struct ca_field *fields,
                        size_t field_count,
                        int flags);
+
+typedef int (*ca_output_function) (struct iovec *result,
+                                   struct ca_query_parse_context *context,
+                                   const struct iovec *field_values);
+
+ca_output_function
+CA_output_compile (struct expression *expr,
+                   const struct ca_field *fields, size_t field_count,
+                   enum ca_type *return_type);
 
 #ifdef __cplusplus
 } /* extern "C" */

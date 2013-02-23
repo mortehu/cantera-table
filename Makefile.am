@@ -47,7 +47,8 @@ libca_table_la_SOURCES = \
   table-backend-writeonce.c \
   table-write.c \
   table.c \
-  type.c
+  type.c \
+  update.c
 libca_table_la_LDFLAGS = $(LLVM_LDFLAGS) $(LLVM_LIBS) -pthread
 
 ca_table_lockd_SOURCES = lockd.c

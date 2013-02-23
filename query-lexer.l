@@ -111,6 +111,7 @@ Z [zZ]
 {T}{I}{M}{E}{S}{T}{A}{M}{P}        { character += yyleng; return TIMESTAMP; }
 {T}{I}{M}{E}{S}{T}{A}{M}{P}{T}{Z}  { character += yyleng; return TIMESTAMPTZ; }
 {T}{R}{U}{E}                       { character += yyleng; return TRUE; }
+{U}{P}{D}{A}{T}{E}                 { character += yyleng; return UPDATE; }
 {U}{I}{N}{T}16                     { character += yyleng; return UINT16; }
 {U}{I}{N}{T}32                     { character += yyleng; return UINT32; }
 {U}{I}{N}{T}64                     { character += yyleng; return UINT64; }

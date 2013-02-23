@@ -7,22 +7,78 @@ void
 CA_process_statement (struct ca_query_parse_context *context,
                       struct statement *stmt)
 {
+  int need_commit = 0;
+
+  /* Determine whether statement needs locking and committing */
+
+  if (!context->in_transaction_block)
+    {
+      switch (stmt->type)
+        {
+        case CA_SQL_COMMIT:
+        case CA_SQL_LOCK:
+
+          ca_set_error ("Statement requires a transaction block");
+          context->error = 1;
+
+          return;
+
+        case CA_SQL_CREATE_TABLE:
+        case CA_SQL_DROP_TABLE:
+        case CA_SQL_INSERT:
+        case CA_SQL_UPDATE:
+
+          if (-1 == ca_lock_grab_global ())
+            {
+              context->error = 1;
+
+              return;
+            }
+
+          /* Fall through */
+
+          need_commit = 1;
+
+          break;
+
+        case CA_SQL_BEGIN:
+        case CA_SQL_SELECT:
+        case CA_SQL_SET:
+        case CA_SQL_QUERY:
+
+          ; /* No commit needed */
+        }
+    }
+
+  /* Execute the statement itself */
+
   switch (stmt->type)
     {
     case CA_SQL_BEGIN:
+
+      if (context->in_transaction_block)
+        {
+          ca_set_error ("BEGIN is not supported inside a transaction");
+
+          context->error = 1;
+        }
+
+      if (-1 == ca_lock_grab_global ())
+        context->error = 1;
+      else
+        context->in_transaction_block = 1;
 
       break;
 
     case CA_SQL_COMMIT:
 
-      if (-1 == ca_lock_release ())
-        context->error = 1;
+      need_commit = 1;
 
       break;
 
     case CA_SQL_CREATE_TABLE:
 
-      if (-1 == ca_schema_create_table (context->schema, stmt->u.create_table.name, &stmt->u.create_table.declaration))
+      if (!ca_schema_create_table (context->schema, stmt->u.create_table.name, &stmt->u.create_table.declaration))
         context->error = 1;
 
       break;
@@ -81,6 +137,13 @@ CA_process_statement (struct ca_query_parse_context *context,
 
       break;
 
+    case CA_SQL_UPDATE:
+
+      if (-1 == CA_update (context, &stmt->u.update))
+        context->error = 1;
+
+      break;
+
     case CA_SQL_QUERY:
 
       if (-1 == ca_schema_query (context->schema,
@@ -92,4 +155,17 @@ CA_process_statement (struct ca_query_parse_context *context,
 
       break;
     }
+
+  if (!need_commit)
+    return;
+
+  /* Commit */
+
+  if (-1 == ca_schema_save (context->schema)
+      || -1 == ca_lock_release ())
+    {
+      context->error = 1;
+    }
+
+  context->in_transaction_block = 0;
 }

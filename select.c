@@ -99,7 +99,7 @@ expr_primary_key_filter (struct expression *expr, unsigned int primary_key_field
     }
 }
 
-static int
+int
 CA_query_resolve_variables (struct expression *expression,
                             const struct ca_hashmap *variables,
                             int *is_constant)

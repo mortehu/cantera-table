@@ -287,10 +287,16 @@ struct ca_schema;
 struct ca_schema *
 ca_schema_load (const char *path) CA_USE_RESULT;
 
+/**
+ * Used for committing changes at the end of a transaction
+ */
+int
+ca_schema_save (struct ca_schema *schema);
+
 void
 ca_schema_close (struct ca_schema *schema);
 
-int
+struct ca_table *
 ca_schema_create_table (struct ca_schema *schema, const char *table_name,
                         struct ca_table_declaration *declaration) CA_USE_RESULT;
 

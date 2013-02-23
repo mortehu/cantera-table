@@ -48,6 +48,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token DESCRIBE
 %token BOOLEAN INT8 INT16 INT32 INT64 UINT8 UINT16 UINT32 UINT64 TIMESTAMPTZ
 %token FLOAT4 FLOAT8
+%token UPDATE
 
 %token Identifier
 %token Integer
@@ -66,6 +67,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %type<p> statement
 %type<p> topStatements
 %type<p> whereClause
+%type<p> withArgs
 
 %type<l> Integer
 %type<l> binaryOperator
@@ -281,6 +283,21 @@ statement
         select->where = $4;
         select->offset = $5;
         select->limit = $6;
+
+        $$ = stmt;
+      }
+    | UPDATE Identifier SET Identifier '=' expression whereClause
+      {
+        struct statement *stmt;
+        struct update_statement *update;
+
+        ALLOC(stmt);
+        stmt->type = CA_SQL_UPDATE;
+        update = &stmt->u.update;
+        update->table = $2;
+        update->column = $4;
+        update->expression = $6;
+        update->where = $7;
 
         $$ = stmt;
       }

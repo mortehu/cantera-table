@@ -225,6 +225,10 @@ ca_schema_load (const char *path)
       assert (tmp == (const char *) value.iov_base + value.iov_len);
     }
 
+  assert (!strcmp (result->tables[0].name, "ca_catalog.ca_tables"));
+  result->tables[0].handle = ca_tables;
+  ca_tables = NULL;
+
   if (!(ca_columns = ca_schema_table (result, "ca_catalog.ca_columns", NULL)))
     goto fail;
 

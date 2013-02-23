@@ -217,9 +217,9 @@ ca_lock_grab (const char *table_name,
       goto fail;
     }
 
-  if (iov.iov_len != 1)
+  if (ret != 1)
     {
-      ca_set_error ("Unexpected message length from lock daemon");
+      ca_set_error ("Unexpected message length %zu from lock daemon, expecting 1", ret);
 
       return -1;
     }

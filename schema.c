@@ -136,8 +136,9 @@ ca_schema_load (const char *path)
 {
   struct ca_schema *result;
 
-  char *ca_tables_path = NULL, *ca_columns_path = NULL;
+  char *ca_tables_path = NULL;
   struct ca_table *ca_tables = NULL, *ca_columns = NULL;
+  size_t i;
 
   int ok = 0;
 
@@ -170,9 +171,6 @@ ca_schema_load (const char *path)
   if (-1 == asprintf (&ca_tables_path, "%s/ca_catalog.ca_tables", path))
     goto fail;
 
-  if (-1 == asprintf (&ca_columns_path, "%s/ca_catalog.ca_columns", path))
-    goto fail;
-
   if (!(ca_tables = ca_table_open ("write-once", ca_tables_path, O_RDONLY, 0)))
     {
       if (errno == ENOENT
@@ -180,16 +178,12 @@ ca_schema_load (const char *path)
           && 0 == CA_schema_save (result))
         {
           free (ca_tables_path);
-          free (ca_columns_path);
 
           return result;
         }
 
       goto fail;
     }
-
-  if (!(ca_columns = ca_table_open ("write-once", ca_columns_path, O_RDONLY, 0)))
-    goto fail;
 
   for (;;)
     {
@@ -229,6 +223,19 @@ ca_schema_load (const char *path)
       tmp = strchr (tmp, 0) + 1;
 
       assert (tmp == (const char *) value.iov_base + value.iov_len);
+    }
+
+  if (!(ca_columns = ca_schema_table (result, "ca_catalog.ca_columns", NULL)))
+    goto fail;
+
+  for (i = 0; i < result->table_count; ++i)
+    {
+      struct schema_table *table;
+      const char *tmp;
+      struct iovec value;
+      ssize_t ret;
+
+      table = &result->tables[i];
 
       if (1 != (ret = ca_table_seek_to_key (ca_columns, table->name)))
         {
@@ -308,9 +315,7 @@ fail:
     }
 
   free (ca_tables_path);
-  free (ca_columns_path);
 
-  ca_table_close (ca_columns);
   ca_table_close (ca_tables);
 
   return result;
@@ -356,10 +361,14 @@ CA_schema_save (struct ca_schema *schema)
   assert (!strcmp (schema->tables[0].name, "ca_catalog.ca_tables"));
   assert (!strcmp (schema->tables[1].name, "ca_catalog.ca_columns"));
 
-  if (!(ca_tables = ca_table_open ("write-once", schema->tables[0].declaration.path, O_WRONLY | O_CREAT | O_TRUNC, 0666)))
+  if (!(ca_tables = ca_table_open (schema->tables[0].backend,
+                                   schema->tables[0].declaration.path,
+                                   O_WRONLY | O_CREAT | O_TRUNC, 0666)))
     return -1;
 
-  if (!(ca_columns = ca_table_open ("write-once", schema->tables[1].declaration.path, O_WRONLY | O_CREAT | O_TRUNC, 0666)))
+  if (!(ca_columns = ca_table_open (schema->tables[1].backend,
+                                    schema->tables[1].declaration.path,
+                                    O_WRONLY | O_CREAT | O_TRUNC, 0666)))
     return -1;
 
   for (i = 0; i < schema->table_count; ++i)

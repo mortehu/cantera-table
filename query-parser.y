@@ -122,7 +122,7 @@ statement
 
         $$ = stmt;
       }
-    | CREATE TABLE Identifier '(' createTableArgs ')' WITH '(' PATH '=' StringLiteral ')'
+    | CREATE TABLE Identifier '(' createTableArgs ')' withArgs
       {
         struct statement *stmt;
         struct create_table_statement *create;
@@ -135,7 +135,7 @@ statement
         create = &stmt->u.create_table;
         create->name = $3;
 
-        create->declaration.path = $11;
+        create->declaration.path = $7;
 
         for (arg = $5; arg; arg = arg->next)
           {
@@ -352,6 +352,13 @@ createTableArgs
       }
     ;
 
+withArgs
+    : { $$ = NULL; }
+    | WITH '(' PATH '=' StringLiteral ')'
+      {
+        $$ = $5;
+      }
+    ;
 type
     : BOOLEAN                  { $$ = CA_BOOLEAN; }
     | FLOAT4                   { $$ = CA_FLOAT4; }

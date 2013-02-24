@@ -28,7 +28,10 @@ create_table (void)
 
   decl.fields = fields;
 
-  return ca_schema_create_table (schema, "foo", &decl);
+  if (!ca_schema_create_table (schema, "foo", &decl))
+    return -1;
+
+  return 0;
 }
 
 int

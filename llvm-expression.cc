@@ -348,7 +348,7 @@ namespace ca_llvm
                   case EXPR_LESS_EQUAL:    return builder->CreateICmpSLE (cmp, zero);
                   case EXPR_LESS_THAN:     return builder->CreateICmpSLT (cmp, zero);
                   case EXPR_NOT_EQUAL:     return builder->CreateICmpNE (cmp, zero);
-                  default: assert (!"bug: missing case");
+                  default: assert (!"bug: missing case"); return NULL;
                   }
               }
 
@@ -365,7 +365,7 @@ namespace ca_llvm
               case EXPR_LESS_EQUAL:    return builder->CreateICmpSLE (lhs, rhs);
               case EXPR_LESS_THAN:     return builder->CreateICmpSLT (lhs, rhs);
               case EXPR_NOT_EQUAL:     return builder->CreateICmpNE (lhs, rhs);
-              default: assert (!"bug: missing case");
+              default: assert (!"bug: missing case"); return NULL;
               }
 
           case CA_UINT8:
@@ -381,7 +381,7 @@ namespace ca_llvm
               case EXPR_LESS_EQUAL:    return builder->CreateICmpULE (lhs, rhs);
               case EXPR_LESS_THAN:     return builder->CreateICmpULT (lhs, rhs);
               case EXPR_NOT_EQUAL:     return builder->CreateICmpNE (lhs, rhs);
-              default: assert (!"bug: missing case");
+              default: assert (!"bug: missing case"); return NULL;
               }
 
           default:

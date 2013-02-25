@@ -54,6 +54,7 @@ namespace ca_llvm
   llvm::Function *f_ca_compare_like;
   llvm::Function *f_strcmp;
   llvm::Function *f_strchr;
+  llvm::Function *f_strlen;
 
   LLVM_TYPE *t_void;
 
@@ -298,7 +299,11 @@ CA_compiler_init (void)
     register_function (NULL, (void *) (const char * (*)(const char*, int)) std::strchr,
                        CA_TEXT, CA_TEXT, CA_INT32, -1);
 
-  register_function ("ts_sample", (void *) ca_sql_ts_sample,
+  f_strlen =
+    register_function (NULL, (void *) (const char * (*)(const char*, int)) std::strlen,
+                       CA_UINT64, CA_TEXT, -1);
+
+  register_function ("sample", (void *) ca_sql_ts_sample,
                      CA_FLOAT4, CA_TIME_FLOAT4_ARRAY, CA_TIMESTAMPTZ, -1);
 
   /* Unary <math.h> functions */
@@ -608,7 +613,7 @@ CA_expression_compile (const char *name,
   auto function = llvm::Function::Create (function_type, llvm::Function::InternalLinkage, name, module);
 
   auto argument = function->arg_begin ();
-  llvm::Value *arena = argument++;
+  llvm::Value *statement_context = argument++;
   llvm::Value *field_values = argument++;
   assert (argument == function->arg_end ());
 
@@ -643,7 +648,7 @@ CA_expression_compile (const char *name,
   ctx.builder = builder;
   ctx.module = module;
   ctx.fields = fields;
-  ctx.arena = arena;
+  ctx.context = statement_context;
   ctx.field_values = field_values;
 
   for (; expr; expr = expr->next)
@@ -754,4 +759,133 @@ CA_expression_compile (const char *name,
   CA_post_process_function (function);
 
   return (ca_expression_function) engine->getPointerToFunction (function);
+}
+
+ca_output_function
+CA_output_compile (struct expression *expr,
+                   const struct ca_field *fields, size_t field_count,
+                   enum ca_type *return_type)
+{
+  llvm::Value *return_value = NULL;
+
+  std::vector<LLVM_TYPE *> argument_types;
+
+  auto builder = new llvm::IRBuilder<> (llvm::getGlobalContext ());
+
+  argument_types.push_back (t_iovec_pointer);
+  argument_types.push_back (t_pointer);
+  argument_types.push_back (t_iovec_pointer);
+  auto function_type = llvm::FunctionType::get (t_int32, argument_types, false);
+
+  auto function = llvm::Function::Create (function_type, llvm::Function::InternalLinkage, "output", module);
+
+  auto argument = function->arg_begin ();
+  llvm::Value *result = argument++;
+  llvm::Value *statement_context = argument++;
+  llvm::Value *field_values = argument++;
+  assert (argument == function->arg_end ());
+
+  auto basic_block = llvm::BasicBlock::Create (llvm::getGlobalContext (), "entry", function);
+
+  builder->SetInsertPoint (basic_block);
+
+  context ctx;
+  ctx.engine = engine;
+  ctx.builder = builder;
+  ctx.module = module;
+  ctx.fields = fields;
+  ctx.context = statement_context;
+  ctx.field_values = field_values;
+
+  if (!(return_value = ctx.subexpression_compile (expr, return_type)))
+    return NULL;
+
+  struct llvm::Value *base_pointer, *length_pointer;
+
+  base_pointer = builder->CreateStructGEP (result, 0);
+  length_pointer = builder->CreateStructGEP (result, 1);
+
+  switch (*return_type)
+    {
+    case CA_TEXT:
+    case CA_NUMERIC:
+
+      builder->CreateStore (return_value, base_pointer);
+      builder->CreateStore (builder->CreateAdd (builder->CreateCall (f_strlen, return_value),
+                                                llvm::ConstantInt::get (t_size, 1)),
+                            length_pointer);
+
+      break;
+
+    case CA_TIME_FLOAT4_ARRAY:
+    case CA_OFFSET_SCORE_ARRAY:
+
+      builder->CreateStore (return_value, result);
+
+      break;
+
+    case CA_UINT64:
+    case CA_INT64:
+    case CA_TIMESTAMPTZ:
+    case CA_FLOAT8:
+
+      builder->CreateStore (return_value,
+                            builder->CreateIntToPtr (base_pointer, t_int64_pointer));
+      builder->CreateStore (llvm::ConstantInt::get (t_size, 8),
+                            length_pointer);
+
+      break;
+
+    case CA_UINT32:
+    case CA_INT32:
+    case CA_FLOAT4:
+
+      builder->CreateStore (return_value,
+                            builder->CreateIntToPtr (base_pointer, t_int32_pointer));
+      builder->CreateStore (llvm::ConstantInt::get (t_size, 4),
+                            length_pointer);
+
+      break;
+
+    case CA_UINT16:
+    case CA_INT16:
+
+      builder->CreateStore (return_value,
+                            builder->CreateIntToPtr (base_pointer, t_int16_pointer));
+      builder->CreateStore (llvm::ConstantInt::get (t_size, 2),
+                            length_pointer);
+
+      break;
+
+    case CA_UINT8:
+    case CA_INT8:
+    case CA_BOOLEAN:
+
+      builder->CreateStore (return_value,
+                            builder->CreateIntToPtr (base_pointer, t_int8_pointer));
+      builder->CreateStore (llvm::ConstantInt::get (t_size, 1),
+                            length_pointer);
+
+      break;
+
+    case CA_VOID:
+
+      builder->CreateStore (llvm::ConstantInt::get (t_size, 0),
+                            length_pointer);
+
+      break;
+
+    case CA_INVALID:
+
+      assert (!"Got field of type CA_INVALID");
+
+      break;
+
+    }
+
+  builder->CreateRet (llvm::ConstantInt::get (t_int32, 0));
+
+  CA_post_process_function (function);
+
+  return (ca_output_function) engine->getPointerToFunction (function);
 }

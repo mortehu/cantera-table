@@ -287,10 +287,19 @@ struct ca_schema;
 struct ca_schema *
 ca_schema_load (const char *path) CA_USE_RESULT;
 
+/**
+ * Used for committing changes at the end of a transaction
+ */
+int
+ca_schema_save (struct ca_schema *schema);
+
+int
+ca_schema_reload (struct ca_schema *schema);
+
 void
 ca_schema_close (struct ca_schema *schema);
 
-int
+struct ca_table *
 ca_schema_create_table (struct ca_schema *schema, const char *table_name,
                         struct ca_table_declaration *declaration) CA_USE_RESULT;
 
@@ -358,13 +367,17 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 
 /*****************************************************************************/
 
-ssize_t
+void
 ca_format_integer (uint8_t **output, uint64_t value);
 
-ssize_t
+void
 ca_format_time_float4 (uint8_t **output,
                        uint64_t start_time, uint32_t interval,
-                       const float *sample_values, size_t sample_count) CA_USE_RESULT;
+                       const float *sample_values, size_t sample_count);
+
+void
+ca_format_offset_score (uint8_t **output,
+                        const struct ca_offset_score *values, size_t count);
 
 /*****************************************************************************/
 
@@ -414,7 +427,10 @@ ca_crc32c (uint32_t input_crc32, const void *input_buffer, size_t length);
 /*****************************************************************************/
 
 void
-ca_sort_offset_score (struct ca_offset_score *data, size_t count);
+ca_sort_offset_score_by_offset (struct ca_offset_score *data, size_t count);
+
+void
+ca_sort_offset_score_by_score (struct ca_offset_score *data, size_t count);
 
 /*****************************************************************************/
 

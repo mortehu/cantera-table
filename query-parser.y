@@ -48,6 +48,8 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token DESCRIBE
 %token BOOLEAN INT8 INT16 INT32 INT64 UINT8 UINT16 UINT32 UINT64 TIMESTAMPTZ
 %token FLOAT4 FLOAT8
+%token UPDATE
+%token TRANSACTION ISOLATION LEVEL SERIALIZABLE VOLATILE
 
 %token Identifier
 %token Integer
@@ -66,6 +68,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %type<p> statement
 %type<p> topStatements
 %type<p> whereClause
+%type<p> withArgs
 
 %type<l> Integer
 %type<l> binaryOperator
@@ -120,7 +123,7 @@ statement
 
         $$ = stmt;
       }
-    | CREATE TABLE Identifier '(' createTableArgs ')' WITH '(' PATH '=' StringLiteral ')'
+    | CREATE TABLE Identifier '(' createTableArgs ')' withArgs
       {
         struct statement *stmt;
         struct create_table_statement *create;
@@ -133,7 +136,7 @@ statement
         create = &stmt->u.create_table;
         create->name = $3;
 
-        create->declaration.path = $11;
+        create->declaration.path = $7;
 
         for (arg = $5; arg; arg = arg->next)
           {
@@ -284,6 +287,21 @@ statement
 
         $$ = stmt;
       }
+    | UPDATE Identifier SET Identifier '=' expression whereClause
+      {
+        struct statement *stmt;
+        struct update_statement *update;
+
+        ALLOC(stmt);
+        stmt->type = CA_SQL_UPDATE;
+        update = &stmt->u.update;
+        update->table = $2;
+        update->column = $4;
+        update->expression = $6;
+        update->where = $7;
+
+        $$ = stmt;
+      }
     | SET runtimeParameter runtimeParameterValue
       {
         struct statement *stmt;
@@ -313,12 +331,15 @@ statement
     ;
 
 runtimeParameter
-    : OUTPUT FORMAT { $$ = CA_PARAM_OUTPUT_FORMAT; }
+    : OUTPUT FORMAT               { $$ = CA_PARAM_OUTPUT_FORMAT; }
+    | TRANSACTION ISOLATION LEVEL { $$ = CA_PARAM_ISOLATION_LEVEL; }
     ;
 
 runtimeParameterValue
     : CSV           { $$ = CA_PARAM_VALUE_CSV; }
     | JSON          { $$ = CA_PARAM_VALUE_JSON; }
+    | SERIALIZABLE  { $$ = CA_PARAM_VALUE_SERIALIZABLE; }
+    | VOLATILE      { $$ = CA_PARAM_VALUE_VOLATILE; }
     ;
 
 createTableArgs
@@ -335,6 +356,13 @@ createTableArgs
       }
     ;
 
+withArgs
+    : { $$ = NULL; }
+    | WITH '(' PATH '=' StringLiteral ')'
+      {
+        $$ = $5;
+      }
+    ;
 type
     : BOOLEAN                  { $$ = CA_BOOLEAN; }
     | FLOAT4                   { $$ = CA_FLOAT4; }

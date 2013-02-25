@@ -21,19 +21,12 @@
 #  include "config.h"
 #endif
 
+#include <assert.h>
 #include <string.h>
 
 #include "ca-table.h"
 
 #define MAX_HEADER_SIZE 64
-
-static void
-CA_put_float (uint8_t **output, float value)
-{
-  memcpy (*output, &value, sizeof (value));
-
-  *output += sizeof (value);
-}
 
 int
 ca_table_write_time_float4 (struct ca_table *table, const char *key,
@@ -66,53 +59,29 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
                              size_t count)
 {
   struct iovec iov[2];
-
-  uint8_t *target, *o;
-  size_t i, target_alloc, target_size = 0;
-  uint64_t prev_offset = 0;
-
+  size_t buffer_alloc;
+  uint8_t *buffer, *o;
   int result = -1;
 
-  target_alloc = 32;
+  /* XXX: Allocate correct amount */
+  buffer_alloc = 32 + count * 13;
 
-  if (!(target = ca_malloc (target_alloc)))
-    return -1;
+  buffer = ca_malloc (32 + count * 13);
+  o = buffer;
 
-  o = target;
+  ca_format_offset_score (&o, values, count);
 
-  ca_format_integer (&o, CA_OFFSET_SCORE_VARBYTE_FLOAT);
-  ca_format_integer (&o, count);
-
-  for (i = 0; i < count; ++i)
-    {
-      target_size = o - target;
-
-      /* 9 bytes integer + 4 bytes float + margin */
-      if (target_size + 16 > target_alloc)
-        {
-          if (-1 == CA_ARRAY_GROW_N (&target, &target_alloc, 16))
-            goto done;
-
-          o = target + target_size;
-        }
-
-      ca_format_integer (&o, values[i].offset - prev_offset);
-      prev_offset = values[i].offset;
-
-      CA_put_float (&o, values[i].score);
-    }
+  assert (o <= buffer + buffer_alloc);
 
   iov[0].iov_base = (void *) key;
   iov[0].iov_len = strlen (key) + 1;
 
-  iov[1].iov_base = target;
-  iov[1].iov_len = o - target;
+  iov[1].iov_base = buffer;
+  iov[1].iov_len = o - buffer;
 
   result = ca_table_insert_row (table, iov, sizeof (iov) / sizeof (iov[0]));
 
-done:
-
-  free (target);
+  free (buffer);
 
   return result;
 }

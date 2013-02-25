@@ -81,8 +81,10 @@ Z [zZ]
 {I}{N}{T}64                        { character += yyleng; return INT64; }
 {I}{N}{T}8                         { character += yyleng; return INT8; }
 {I}{N}{T}{O}                       { character += yyleng; return INTO; }
+{I}{S}{O}{L}{A}{T}{I}{O}{N}        { character += yyleng; return ISOLATION; }
 {J}{S}{O}{N}                       { character += yyleng; return JSON; }
 {K}{E}{Y}                          { character += yyleng; return KEY; }
+{L}{E}{V}{E}{L}                    { character += yyleng; return LEVEL; }
 {L}{I}{K}{E}                       { character += yyleng; return LIKE; }
 {L}{I}{M}{I}{T}                    { character += yyleng; return LIMIT; }
 {L}{O}{C}{K}                       { character += yyleng; return LOCK; }
@@ -100,6 +102,7 @@ Z [zZ]
 {R}{O}{W}                          { character += yyleng; return ROW; }
 {R}{O}{W}{S}                       { character += yyleng; return ROWS; }
 {S}{E}{L}{E}{C}{T}                 { character += yyleng; return SELECT; }
+{S}{E}{R}{I}{A}{L}{I}{Z}{A}{B}{L}{E} { character += yyleng; return SERIALIZABLE; }
 {S}{E}{T}                          { character += yyleng; return SET; }
 {S}{H}{O}{W}                       { character += yyleng; return SHOW; }
 {S}{U}{M}{M}{A}{R}{Y}              { character += yyleng; return SUMMARY; }
@@ -110,12 +113,15 @@ Z [zZ]
 {T}{I}{M}{E}_{F}{L}{O}{A}{T}4      { character += yyleng; return TIME_FLOAT4; }
 {T}{I}{M}{E}{S}{T}{A}{M}{P}        { character += yyleng; return TIMESTAMP; }
 {T}{I}{M}{E}{S}{T}{A}{M}{P}{T}{Z}  { character += yyleng; return TIMESTAMPTZ; }
+{T}{R}{A}{N}{S}{A}{C}{T}{I}{O}{N}  { character += yyleng; return TRANSACTION; }
 {T}{R}{U}{E}                       { character += yyleng; return TRUE; }
+{U}{P}{D}{A}{T}{E}                 { character += yyleng; return UPDATE; }
 {U}{I}{N}{T}16                     { character += yyleng; return UINT16; }
 {U}{I}{N}{T}32                     { character += yyleng; return UINT32; }
 {U}{I}{N}{T}64                     { character += yyleng; return UINT64; }
 {U}{I}{N}{T}8                      { character += yyleng; return UINT8; }
 {V}{A}{L}{U}{E}{S}                 { character += yyleng; return VALUES; }
+{V}{O}{L}{A}{T}{I}{L}{E}           { character += yyleng; return VOLATILE; }
 {W}{H}{E}{R}{E}                    { character += yyleng; return WHERE; }
 {W}{I}{T}{H}                       { character += yyleng; return WITH; }
 {Z}{O}{N}{E}                       { character += yyleng; return ZONE; }

@@ -125,6 +125,9 @@ main (int argc, char **argv)
   if (optind != argc)
     errx (EX_USAGE, "Usage: %s [OPTION]...", argv[0]);
 
+  if (-1 == chdir (schema_path))
+    errx (EXIT_FAILURE, "Could not chdir to '%s'", schema_path);
+
   if (!(context.schema = ca_schema_load (schema_path)))
     errx (EXIT_FAILURE, "Failed to load schema: %s", ca_last_error ());
 
@@ -159,7 +162,11 @@ main (int argc, char **argv)
           char *line = NULL;
 
           free (prompt);
-          if (-1 == asprintf (&prompt, "%s$ ", schema_path))
+
+          if (-1 == asprintf (&prompt,
+                              "[%1$c\033[32;1m%2$cca-table%1$c\033[00m%2$c:%1$c\033[1m%2$c%3$s%1$c\033[00m%2$c]$ ",
+                              RL_PROMPT_START_IGNORE, RL_PROMPT_END_IGNORE,
+                              get_current_dir_name ()))
             err (EXIT_FAILURE, "asprintf failed");
 
 #if HAVE_LIBREADLINE

@@ -72,7 +72,7 @@ namespace ca_llvm
       llvm::ExecutionEngine *engine;
       llvm::IRBuilder<> *builder;
       llvm::Module *module;
-      llvm::Value *arena;
+      llvm::Value *context;
       llvm::Value *field_values;
       const struct ca_field *fields;
 

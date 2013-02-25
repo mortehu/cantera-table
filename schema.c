@@ -130,58 +130,34 @@ fail:
   return result;
 }
 
-struct ca_schema *
-ca_schema_load (const char *path)
+static int
+CA_schema_read (struct ca_schema *schema)
 {
-  struct ca_schema *result;
-
   char *ca_tables_path = NULL;
   struct ca_table *ca_tables = NULL, *ca_columns = NULL;
   size_t i;
 
-  int ok = 0;
+  int result = -1;
 
-  if (path[0] != '/')
-    {
-      ca_set_error ("Schema path must be absolute");
+  if (-1 == asprintf (&ca_tables_path, "%s/ca_catalog.ca_tables", schema->path))
+    return -1;
 
-      return NULL;
-    }
+  ca_tables = ca_table_open ("write-once", ca_tables_path, O_RDONLY, 0);
 
-  if (path[strlen (path) - 1] == '/')
-    {
-      ca_set_error ("Schema path must not end with a slash (/)");
+  free (ca_tables_path);
 
-      return NULL;
-    }
-
-  if (-1 == ca_lock_init (path))
-    return NULL;
-
-  if (-1 == CA_compiler_init ())
-    return NULL;
-
-  if (!(result = ca_malloc (sizeof (*result))))
-    return NULL;
-
-  if (!(result->path = ca_strdup (path)))
-    goto fail;
-
-  if (-1 == asprintf (&ca_tables_path, "%s/ca_catalog.ca_tables", path))
-    goto fail;
-
-  if (!(ca_tables = ca_table_open ("write-once", ca_tables_path, O_RDONLY, 0)))
+  if (!ca_tables)
     {
       if (errno == ENOENT
-          && 0 == CA_schema_create (result, path)
-          && 0 == ca_schema_save (result))
+          && 0 == CA_schema_create (schema, schema->path)
+          && 0 == ca_schema_save (schema))
         {
-          free (ca_tables_path);
+          /* Successfully created new, empty schema */
 
-          return result;
+          return 0;
         }
 
-      goto fail;
+      return -1;
     }
 
   for (;;)
@@ -199,11 +175,11 @@ ca_schema_load (const char *path)
           goto fail;
         }
 
-      if (result->table_count == result->table_alloc
-          && -1 == CA_ARRAY_GROW (&result->tables, &result->table_alloc))
+      if (schema->table_count == schema->table_alloc
+          && -1 == CA_ARRAY_GROW (&schema->tables, &schema->table_alloc))
         goto fail;
 
-      table = &result->tables[result->table_count++];
+      table = &schema->tables[schema->table_count++];
       memset (table, 0, sizeof (*table));
 
       if (!(table->name = ca_strdup (value.iov_base)))
@@ -224,21 +200,21 @@ ca_schema_load (const char *path)
       assert (tmp == (const char *) value.iov_base + value.iov_len);
     }
 
-  assert (!strcmp (result->tables[0].name, "ca_catalog.ca_tables"));
-  result->tables[0].handle = ca_tables;
+  assert (!strcmp (schema->tables[0].name, "ca_catalog.ca_tables"));
+  schema->tables[0].handle = ca_tables;
   ca_tables = NULL;
 
-  if (!(ca_columns = ca_schema_table (result, "ca_catalog.ca_columns", NULL)))
+  if (!(ca_columns = ca_schema_table (schema, "ca_catalog.ca_columns", NULL)))
     goto fail;
 
-  for (i = 0; i < result->table_count; ++i)
+  for (i = 0; i < schema->table_count; ++i)
     {
       struct schema_table *table;
       const char *tmp;
       struct iovec value;
       ssize_t ret;
 
-      table = &result->tables[i];
+      table = &schema->tables[i];
 
       if (1 != (ret = ca_table_seek_to_key (ca_columns, table->name)))
         {
@@ -307,6 +283,51 @@ ca_schema_load (const char *path)
         }
     }
 
+  result = 0;
+
+fail:
+
+  ca_table_close (ca_tables);
+
+  return result;
+}
+
+struct ca_schema *
+ca_schema_load (const char *path)
+{
+  struct ca_schema *result;
+
+  int ok = 0;
+
+  if (path[0] != '/')
+    {
+      ca_set_error ("Schema path must be absolute");
+
+      return NULL;
+    }
+
+  if (path[strlen (path) - 1] == '/')
+    {
+      ca_set_error ("Schema path must not end with a slash (/)");
+
+      return NULL;
+    }
+
+  if (-1 == ca_lock_init (path))
+    return NULL;
+
+  if (-1 == CA_compiler_init ())
+    return NULL;
+
+  if (!(result = ca_malloc (sizeof (*result))))
+    return NULL;
+
+  if (!(result->path = ca_strdup (path)))
+    goto fail;
+
+  if (-1 == CA_schema_read (result))
+    goto fail;
+
   ok = 1;
 
 fail:
@@ -317,11 +338,27 @@ fail:
       result = NULL;
     }
 
-  free (ca_tables_path);
-
-  ca_table_close (ca_tables);
-
   return result;
+}
+
+int
+ca_schema_reload (struct ca_schema *schema)
+{
+  size_t i;
+
+  for (i = 0; i < schema->table_count; ++i)
+    {
+      ca_table_close (schema->tables[i].handle);
+
+      free (schema->tables[i].declaration.path);
+      free (schema->tables[i].declaration.fields);
+      free (schema->tables[i].backend);
+      free (schema->tables[i].name);
+    }
+
+  schema->table_count = 0;
+
+  return CA_schema_read (schema);
 }
 
 void

@@ -40,7 +40,6 @@ main (int argc, char **argv)
   int result = EXIT_FAILURE;
   char tmp_dir[64];
 
-
   strcpy (tmp_dir, "/tmp/ca-schema-00.tmp.XXXXXX");
 
   if (!(mkdtemp (tmp_dir)))
@@ -52,7 +51,16 @@ main (int argc, char **argv)
   if (-1 == create_table ())
     goto fail;
 
+  if (-1 == ca_schema_save (schema))
+    goto fail;
+
+  if (-1 == ca_schema_reload (schema))
+    goto fail;
+
   if (-1 == ca_schema_drop_table (schema, "foo"))
+    goto fail;
+
+  if (0 == ca_schema_drop_table (schema, "foo"))
     goto fail;
 
   if (-1 == create_table ())

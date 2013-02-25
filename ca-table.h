@@ -293,6 +293,9 @@ ca_schema_load (const char *path) CA_USE_RESULT;
 int
 ca_schema_save (struct ca_schema *schema);
 
+int
+ca_schema_reload (struct ca_schema *schema);
+
 void
 ca_schema_close (struct ca_schema *schema);
 

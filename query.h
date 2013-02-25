@@ -12,7 +12,11 @@ enum ca_param_value
 {
   /* OUTPUT FORMAT */
   CA_PARAM_VALUE_CSV,
-  CA_PARAM_VALUE_JSON
+  CA_PARAM_VALUE_JSON,
+
+  /* TRANSACTION ISOLATION LEVEL */
+  CA_PARAM_VALUE_SERIALIZABLE,
+  CA_PARAM_VALUE_VOLATILE
 };
 
 struct ca_query_parse_context
@@ -193,7 +197,8 @@ struct query_statement
 enum ca_param
 {
   CA_PARAM_OUTPUT_FORMAT,
-  CA_PARAM_TIME_FORMAT
+  CA_PARAM_TIME_FORMAT,
+  CA_PARAM_ISOLATION_LEVEL
 };
 
 struct set_statement
@@ -229,6 +234,7 @@ struct statement
 
 extern char CA_time_format[64];
 extern enum ca_param_value CA_output_format;
+extern enum ca_param_value CA_isolation_level;
 
 /*****************************************************************************/
 

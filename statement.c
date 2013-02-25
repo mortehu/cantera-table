@@ -3,6 +3,8 @@
 #include "ca-table.h"
 #include "query.h"
 
+enum ca_param_value CA_isolation_level = CA_PARAM_VALUE_SERIALIZABLE;
+
 void
 CA_process_statement (struct ca_query_parse_context *context,
                       struct statement *stmt)
@@ -197,6 +199,12 @@ CA_process_statement (struct ca_query_parse_context *context,
             }
 
           strcpy (CA_time_format, stmt->u.set.v.string_value);
+
+          break;
+
+        case CA_PARAM_ISOLATION_LEVEL:
+
+          CA_isolation_level = stmt->u.set.v.enum_value;
 
           break;
         }

@@ -49,6 +49,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token BOOLEAN INT8 INT16 INT32 INT64 UINT8 UINT16 UINT32 UINT64 TIMESTAMPTZ
 %token FLOAT4 FLOAT8
 %token UPDATE
+%token TRANSACTION ISOLATION LEVEL SERIALIZABLE VOLATILE
 
 %token Identifier
 %token Integer
@@ -330,12 +331,15 @@ statement
     ;
 
 runtimeParameter
-    : OUTPUT FORMAT { $$ = CA_PARAM_OUTPUT_FORMAT; }
+    : OUTPUT FORMAT               { $$ = CA_PARAM_OUTPUT_FORMAT; }
+    | TRANSACTION ISOLATION LEVEL { $$ = CA_PARAM_ISOLATION_LEVEL; }
     ;
 
 runtimeParameterValue
     : CSV           { $$ = CA_PARAM_VALUE_CSV; }
     | JSON          { $$ = CA_PARAM_VALUE_JSON; }
+    | SERIALIZABLE  { $$ = CA_PARAM_VALUE_SERIALIZABLE; }
+    | VOLATILE      { $$ = CA_PARAM_VALUE_VOLATILE; }
     ;
 
 createTableArgs

@@ -160,7 +160,9 @@ CA_update (struct ca_query_parse_context *context,
     goto done;
 
   new_declaration = *declaration;
-  new_declaration.path = NULL;
+
+  if (CA_isolation_level != CA_PARAM_VALUE_VOLATILE)
+    new_declaration.path = NULL;
 
   if (!(output_table = ca_schema_create_table (schema, stmt->table, &new_declaration)))
     goto done;

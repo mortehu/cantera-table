@@ -377,11 +377,7 @@ data_flush (const char *key)
 
               tmp_output = buffer + buffer_fill;
 
-              if (-1 == ca_format_time_float4 (&tmp_output, start_time, interval, series_values, series_count))
-                {
-                  free (series_values);
-                  goto done;
-                }
+              ca_format_time_float4 (&tmp_output, start_time, interval, series_values, series_count);
 
               buffer_fill = tmp_output - buffer;
             }

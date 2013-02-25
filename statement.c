@@ -28,6 +28,8 @@ CA_process_statement (struct ca_query_parse_context *context,
         case CA_SQL_INSERT:
         case CA_SQL_UPDATE:
 
+          need_commit = 1;
+
           if (-1 == ca_lock_grab_global ())
             {
               context->error = 1;
@@ -37,16 +39,84 @@ CA_process_statement (struct ca_query_parse_context *context,
 
           /* Fall through */
 
-          need_commit = 1;
+        case CA_SQL_SELECT:
+
+          /* XXX: Allocate XID between lock and reload */
+
+          if (-1 == ca_schema_reload (context->schema))
+            {
+              context->error = 1;
+
+              return;
+            }
+
+          context->transaction_id_allocated = 1;
 
           break;
 
         case CA_SQL_BEGIN:
-        case CA_SQL_SELECT:
         case CA_SQL_SET:
         case CA_SQL_QUERY:
 
           ; /* No commit needed */
+        }
+    }
+  else /* in transaction block */
+    {
+      switch (stmt->type)
+        {
+        case CA_SQL_CREATE_TABLE:
+        case CA_SQL_DROP_TABLE:
+        case CA_SQL_INSERT:
+        case CA_SQL_SELECT:
+        case CA_SQL_UPDATE:
+        case CA_SQL_QUERY:
+
+          if (!context->transaction_id_allocated)
+            {
+              /* Before we first access data we need to ensure that we're
+               * working on the most recent committed version of the database.
+               * Currently held locks should ensure that no other transaction
+               * can alter data relevant to us before our transaction block is
+               * finished. */
+
+              if (-1 == ca_schema_reload (context->schema))
+                {
+                  context->error = 1;
+
+                  return;
+                }
+
+              context->transaction_id_allocated = 1;
+            }
+
+          break;
+
+        case CA_SQL_LOCK:
+
+          if (!context->transaction_id_allocated)
+            break;
+
+          ca_set_error ("Cannot acquire locks after data has been accessed");
+
+          context->error = 1;
+
+          return;
+
+        case CA_SQL_BEGIN:
+
+          ca_set_error ("BEGIN is not supported inside a transaction block");
+
+          context->error = 1;
+
+          return;
+
+        case CA_SQL_COMMIT:
+        case CA_SQL_SET:
+
+          /* Nothing to do */
+
+          break;
         }
     }
 
@@ -56,17 +126,13 @@ CA_process_statement (struct ca_query_parse_context *context,
     {
     case CA_SQL_BEGIN:
 
-      if (context->in_transaction_block)
-        {
-          ca_set_error ("BEGIN is not supported inside a transaction");
-
-          context->error = 1;
-        }
-
       if (-1 == ca_lock_grab_global ())
         context->error = 1;
       else
-        context->in_transaction_block = 1;
+        {
+          context->in_transaction_block = 1;
+          context->transaction_id_allocated = 0;
+        }
 
       break;
 

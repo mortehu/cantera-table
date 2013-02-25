@@ -142,6 +142,7 @@ CA_schema_read (struct ca_schema *schema)
   if (-1 == asprintf (&ca_tables_path, "%s/ca_catalog.ca_tables", schema->path))
     return -1;
 
+  /* Return value checked below */
   ca_tables = ca_table_open ("write-once", ca_tables_path, O_RDONLY, 0);
 
   free (ca_tables_path);
@@ -323,9 +324,6 @@ ca_schema_load (const char *path)
     return NULL;
 
   if (!(result->path = ca_strdup (path)))
-    goto fail;
-
-  if (-1 == CA_schema_read (result))
     goto fail;
 
   ok = 1;

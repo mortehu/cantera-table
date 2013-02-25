@@ -20,6 +20,7 @@ struct ca_query_parse_context
   void *scanner;
   struct ca_arena_info arena;
   int in_transaction_block;
+  int transaction_id_allocated;
   int error;
 
   struct ca_schema *schema;

@@ -48,6 +48,9 @@ main (int argc, char **argv)
   if (!(schema = ca_schema_load (tmp_dir)))
     goto fail;
 
+  if (-1 == ca_schema_reload (schema))
+    goto fail;
+
   if (-1 == create_table ())
     goto fail;
 

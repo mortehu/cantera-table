@@ -42,6 +42,7 @@ CA_process_statement (struct ca_query_parse_context *context,
           /* Fall through */
 
         case CA_SQL_SELECT:
+        case CA_SQL_QUERY:
 
           /* XXX: Allocate XID between lock and reload */
 
@@ -58,7 +59,6 @@ CA_process_statement (struct ca_query_parse_context *context,
 
         case CA_SQL_BEGIN:
         case CA_SQL_SET:
-        case CA_SQL_QUERY:
 
           ; /* No commit needed */
         }

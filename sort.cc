@@ -27,7 +27,16 @@
 
 /*****************************************************************************/
 
-struct CA_offset_score_compare
+struct CA_offset_score_compare_offset
+{
+  bool operator()(const ca_offset_score &lhs,
+                  const ca_offset_score &rhs) const
+    {
+      return lhs.offset < rhs.offset;
+    }
+};
+
+struct CA_offset_score_compare_score
 {
   bool operator()(const ca_offset_score &lhs,
                   const ca_offset_score &rhs) const
@@ -37,9 +46,15 @@ struct CA_offset_score_compare
 };
 
 void
-ca_sort_offset_score (struct ca_offset_score *data, size_t count)
+ca_sort_offset_score_by_offset (struct ca_offset_score *data, size_t count)
 {
-  std::sort (data, data + count, CA_offset_score_compare());
+  std::sort (data, data + count, CA_offset_score_compare_offset ());
+}
+
+void
+ca_sort_offset_score_by_score (struct ca_offset_score *data, size_t count)
+{
+  std::sort (data, data + count, CA_offset_score_compare_score ());
 }
 
 /*****************************************************************************/

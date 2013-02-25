@@ -282,7 +282,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
   if (offset_count < limit)
     limit = offset_count;
 
-  ca_sort_offset_score (offsets, offset_count);
+  ca_sort_offset_score_by_score (offsets, offset_count);
 
   /* XXX: Fetch documents in phsyical order */
 

@@ -538,22 +538,17 @@ ca_schema_create_table (struct ca_schema *schema, const char *name,
 
           goto fail;
         }
-
-      if (!(table->handle = ca_table_open (table->backend,
-                                           table->declaration.path,
-                                           O_CREAT | O_TRUNC | O_RDWR, 0666)))
-        goto fail;
     }
   else
     {
       if (!(table->declaration.path = ca_strdup (declaration->path)))
         goto fail;
-
-      if (!(table->handle = ca_table_open (table->backend,
-                                           table->declaration.path,
-                                           O_RDONLY, 0666)))
-        goto fail;
     }
+
+  if (!(table->handle = ca_table_open (table->backend,
+                                       table->declaration.path,
+                                       O_CREAT | O_TRUNC | O_RDWR, 0666)))
+    goto fail;
 
   ++schema->table_count;
 

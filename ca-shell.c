@@ -163,7 +163,10 @@ main (int argc, char **argv)
 
           free (prompt);
 
-          if (-1 == asprintf (&prompt, "[\033[32;1mca-table\033[00m:\033[1m%s\033[00m]$ ", get_current_dir_name ()))
+          if (-1 == asprintf (&prompt,
+                              "[%1$c\033[32;1m%2$cca-table%1$c\033[00m%2$c:%1$c\033[1m%2$c%3$s%1$c\033[00m%2$c]$ ",
+                              RL_PROMPT_START_IGNORE, RL_PROMPT_END_IGNORE,
+                              get_current_dir_name ()))
             err (EXIT_FAILURE, "asprintf failed");
 
 #if HAVE_LIBREADLINE

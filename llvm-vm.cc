@@ -303,7 +303,7 @@ CA_compiler_init (void)
     register_function (NULL, (void *) (const char * (*)(const char*, int)) std::strlen,
                        CA_UINT64, CA_TEXT, -1);
 
-  register_function ("ts_sample", (void *) ca_sql_ts_sample,
+  register_function ("sample", (void *) ca_sql_ts_sample,
                      CA_FLOAT4, CA_TIME_FLOAT4_ARRAY, CA_TIMESTAMPTZ, -1);
 
   /* Unary <math.h> functions */

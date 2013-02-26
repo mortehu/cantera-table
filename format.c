@@ -2,6 +2,21 @@
 
 #include "ca-table.h"
 
+size_t
+ca_integer_size (uint64_t value)
+{
+  if (value < 0x00000000000000080ULL) return 1;
+  if (value < 0x00000000000004000ULL) return 2;
+  if (value < 0x00000000000200000ULL) return 3;
+  if (value < 0x00000000010000000ULL) return 4;
+  if (value < 0x00000000800000000ULL) return 5;
+  if (value < 0x00000040000000000ULL) return 6;
+  if (value < 0x00002000000000000ULL) return 7;
+  if (value < 0x00100000000000000ULL) return 8;
+  if (value < 0x08000000000000000ULL) return 9;
+  return 10;
+}
+
 void
 ca_format_integer (uint8_t **output, uint64_t value)
 {
@@ -22,7 +37,6 @@ ca_format_integer (uint8_t **output, uint64_t value)
 
   *output += 10 - ptr;
 }
-
 
 void
 ca_format_float (uint8_t **output, float value)
@@ -49,6 +63,26 @@ ca_format_time_float4 (uint8_t **output,
   o += sizeof (*sample_values) * sample_count;
 
   *output = o;
+}
+
+size_t
+ca_offset_score_size (const struct ca_offset_score *values, size_t count)
+{
+  size_t i, result = 0;
+  uint64_t prev_offset = 0;
+
+  result += 1;
+  result += ca_integer_size (count);
+
+  for (i = 0; i < count; ++i)
+    {
+      result += ca_integer_size (values[i].offset - prev_offset);
+      prev_offset = values[i].offset;
+
+      result += sizeof (float);
+    }
+
+  return result;
 }
 
 void

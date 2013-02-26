@@ -375,6 +375,9 @@ ca_format_time_float4 (uint8_t **output,
                        uint64_t start_time, uint32_t interval,
                        const float *sample_values, size_t sample_count);
 
+size_t
+ca_offset_score_size (const struct ca_offset_score *values, size_t count);
+
 void
 ca_format_offset_score (uint8_t **output,
                         const struct ca_offset_score *values, size_t count);

@@ -63,10 +63,9 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
   uint8_t *buffer, *o;
   int result = -1;
 
-  /* XXX: Allocate correct amount */
-  buffer_alloc = 32 + count * 13;
+  buffer_alloc = ca_offset_score_size (values, count);
 
-  buffer = ca_malloc (32 + count * 13);
+  buffer = ca_malloc (buffer_alloc);
   o = buffer;
 
   ca_format_offset_score (&o, values, count);

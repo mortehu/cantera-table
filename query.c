@@ -62,6 +62,41 @@ CA_subtract_offsets (struct ca_offset_score *lhs, size_t lhs_count,
 }
 
 static size_t
+CA_union_offsets (struct ca_offset_score *result,
+                  const struct ca_offset_score *lhs, size_t lhs_count,
+                  const struct ca_offset_score *rhs, size_t rhs_count)
+{
+  struct ca_offset_score *o;
+  const struct ca_offset_score *lhs_end, *rhs_end;
+
+  o = result;
+
+  lhs_end = lhs + lhs_count;
+  rhs_end = rhs + rhs_count;
+
+  while (lhs != lhs_end && rhs != rhs_end)
+    {
+      if (lhs->offset < rhs->offset)
+        *o++ = *lhs++;
+      else
+        {
+          if (lhs->offset == rhs->offset)
+            ++lhs;
+
+          *o++ = *rhs++;
+        }
+    }
+
+  while (lhs != lhs_end)
+    *o++ = *lhs++;
+
+  while (rhs != rhs_end)
+    *o++ = *rhs++;
+
+  return o - result;
+}
+
+static size_t
 CA_intersect_offsets (struct ca_offset_score *lhs, size_t lhs_count,
                       const struct ca_offset_score *rhs, size_t rhs_count)
 {
@@ -222,13 +257,15 @@ ca_schema_query (struct ca_schema *schema, const char *query,
     {
       struct ca_offset_score *token_offsets;
       uint32_t token_offset_count;
-      int invert_rank = 0, subtract = 0;
+      int invert_rank = 0, subtract = 0, add = 0;
 
       int operator = 0;
       float operand = 0;
 
       if (*token == '-')
         ++token, subtract = 1;
+      else if (*token == '+')
+        ++token, add = 1;
 
       if (*token == '~')
         ++token, invert_rank = 1;
@@ -313,6 +350,26 @@ ca_schema_query (struct ca_schema *schema, const char *query,
             {
               offset_count = CA_subtract_offsets (offsets, offset_count,
                                                   token_offsets, token_offset_count);
+            }
+          else if (add)
+            {
+              struct ca_offset_score *merged_offsets;
+              size_t merged_offset_count;
+              size_t max_merged_size;
+
+              max_merged_size = offset_count + token_offset_count;
+
+              if (!(merged_offsets = ca_malloc (sizeof (*merged_offsets) * max_merged_size)))
+                goto done;
+
+              merged_offset_count = CA_union_offsets (merged_offsets,
+                                                      offsets, offset_count,
+                                                      token_offsets, token_offset_count);
+
+              free (offsets);
+
+              offsets = merged_offsets;
+              offset_count = merged_offset_count;
             }
           else
             {

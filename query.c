@@ -255,8 +255,8 @@ ca_schema_query (struct ca_schema *schema, const char *query,
 
   for (token = strtok (query_buf, " \t"); token; token = strtok (NULL, " \t"))
     {
-      struct ca_offset_score *token_offsets;
-      uint32_t token_offset_count;
+      struct ca_offset_score *token_offsets = NULL;
+      uint32_t token_offset_count = 0;
       int invert_rank = 0, subtract = 0, add = 0;
 
       int operator = 0;
@@ -302,41 +302,112 @@ ca_schema_query (struct ca_schema *schema, const char *query,
             }
         }
 
-      if (1 != (ret = ca_table_seek_to_key (index_table, token)))
+      if (!strncmp (token, "in-", 3))
         {
-          if (ret == -1)
+          const char *key_match_begin, *key_match_end;
+          const char *parameter;
+
+          if (-1 == (ca_table_seek (index_table, 0, SEEK_SET)))
             goto done;
 
-          token_offsets = NULL;
-          token_offset_count = 0;
+          key_match_begin = token + 3;
+
+          if (NULL != (key_match_end = strchr (key_match_begin, ':')))
+            ++key_match_end;
+          else
+            key_match_begin = key_match_end;
+
+          parameter = key_match_end;
+
+          while (1 == (ret = ca_table_read_row (index_table, &data_iov)))
+            {
+              const char *key;
+              struct ca_offset_score *new_offsets;
+              uint32_t new_offset_count;
+
+              key = data_iov.iov_base;
+
+              if (strncmp (key, key_match_begin, key_match_end - key_match_begin))
+                continue;
+
+              if (!strstr (key + (key_match_end - key_match_begin), parameter))
+                continue;
+
+              data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
+
+              if (-1 == ca_parse_offset_score_array (&data, &new_offsets,
+                                                     &new_offset_count))
+                goto done;
+
+              if (!token_offsets)
+                {
+                  token_offsets = new_offsets;
+                  token_offset_count = new_offset_count;
+                }
+              else
+                {
+                  struct ca_offset_score *merged_offsets;
+                  size_t merged_offset_count;
+                  size_t max_merged_size;
+
+                  max_merged_size = new_offset_count + token_offset_count;
+
+                  if (!(merged_offsets = ca_malloc (sizeof (*merged_offsets) * max_merged_size)))
+                    goto done;
+
+                  merged_offset_count = CA_union_offsets (merged_offsets,
+                                                          new_offsets, new_offset_count,
+                                                          token_offsets, token_offset_count);
+
+                  free (token_offsets);
+                  free (new_offsets);
+
+                  token_offsets = merged_offsets;
+                  token_offset_count = merged_offset_count;
+                }
+            }
+
+          if (ret == -1)
+            goto done;
         }
       else
         {
-          if (1 != (ret = ca_table_read_row (index_table, &data_iov)))
+          if (1 != (ret = ca_table_seek_to_key (index_table, token)))
             {
-              if (ret >= 0)
-                ca_set_error ("ca_table_read_row unexpectedly returned %d", (int) ret);
+              if (ret == -1)
+                goto done;
 
-              goto done;
+              token_offsets = NULL;
+              token_offset_count = 0;
             }
-
-          data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
-
-          if (-1 == ca_parse_offset_score_array (&data, &token_offsets,
-                                                 &token_offset_count))
-            goto done;
-
-          if (operator)
+          else
             {
-              token_offset_count =
-                CA_filter_offsets (token_offsets, token_offset_count, operator, operand);
-            }
+              if (1 != (ret = ca_table_read_row (index_table, &data_iov)))
+                {
+                  if (ret >= 0)
+                    ca_set_error ("ca_table_read_row unexpectedly returned %d", (int) ret);
 
-          if (invert_rank)
-            {
-              for (i = 0; i < token_offset_count; ++i)
-                token_offsets[i].score = -token_offsets[i].score;
+                  goto done;
+                }
+
+              data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
+
+              if (-1 == ca_parse_offset_score_array (&data, &token_offsets,
+                                                     &token_offset_count))
+                goto done;
             }
+        }
+
+      if (operator)
+        {
+          token_offset_count =
+            CA_filter_offsets (token_offsets, token_offset_count, operator, operand);
+        }
+
+      if (invert_rank)
+        {
+          for (i = 0; i < token_offset_count; ++i)
+            token_offsets[i].score = -token_offsets[i].score;
         }
 
       if (first)

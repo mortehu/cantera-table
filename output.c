@@ -132,8 +132,8 @@ CA_output_time_float4 (struct iovec *iov)
 
   const uint8_t *begin, *end;
   size_t i;
-  int first = 1, delimiter = '\n';
-  const char *format = "%s\t%.9g";
+  int first = 1;
+  const char *format = "%s:%.9g";
 
   begin = iov->iov_base;
   end = begin + iov->iov_len;
@@ -142,7 +142,6 @@ CA_output_time_float4 (struct iovec *iov)
     {
       putchar ('[');
 
-      delimiter = ',';
       format = "{\"time\":\"%s\",\"value\":%.9g}";
     }
 
@@ -162,7 +161,7 @@ CA_output_time_float4 (struct iovec *iov)
           struct tm tm;
 
           if (!first)
-            putchar (delimiter);
+            putchar (',');
 
           time = start_time + i * interval;
 
@@ -185,8 +184,8 @@ CA_output_offset_score_array (struct iovec *iov)
 {
   const uint8_t *begin, *end;
   size_t i;
-  int first = 1, delimiter = '\n';
-  const char *format = "%llu\t%.9g";
+  int first = 1;
+  const char *format = "%llu:%.9g";
 
   begin = iov->iov_base;
   end = begin + iov->iov_len;
@@ -195,7 +194,6 @@ CA_output_offset_score_array (struct iovec *iov)
     {
       putchar ('[');
 
-      delimiter = ',';
       format = "{\"offset\":\"%llu\",\"score\":%.9g}";
     }
 
@@ -211,7 +209,7 @@ CA_output_offset_score_array (struct iovec *iov)
       for (i = 0; i < sample_count; ++i)
         {
           if (!first)
-            putchar (delimiter);
+            putchar (',');
 
           printf (format,
                   (unsigned long long) sample_values[i].offset,

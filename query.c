@@ -43,7 +43,10 @@ CA_subtract_offsets (struct ca_offset_score *lhs, size_t lhs_count,
     {
       if (lhs->offset == rhs->offset)
         {
-          ++lhs;
+          do
+            ++lhs;
+          while (lhs != lhs_end && lhs->offset == rhs->offset);
+
           ++rhs;
 
           continue;
@@ -182,6 +185,32 @@ CA_filter_offsets (struct ca_offset_score *offsets, size_t count,
     }
 
   return result;
+}
+
+static size_t
+CA_remove_duplicates (struct ca_offset_score *offsets, size_t count)
+{
+  struct ca_offset_score *input, *end, *output;
+  size_t prev_offset = SIZE_MAX;
+
+  output = offsets;
+  input = offsets;
+  end = offsets + count;
+
+  ca_sort_offset_score_by_offset (offsets, count);
+
+  while (input != end)
+    {
+      if (input->offset != prev_offset)
+        {
+          *output++ = *input;
+          prev_offset = input->offset;
+        }
+
+      ++input;
+    }
+
+  return output - offsets;
 }
 
 int
@@ -454,16 +483,16 @@ ca_schema_query (struct ca_schema *schema, const char *query,
       first = 0;
     }
 
-  if (offset_count < limit)
-    limit = offset_count;
+  offset_count = CA_remove_duplicates (offsets, offset_count);
 
   ca_sort_offset_score_by_score (offsets, offset_count);
 
-  /* XXX: Fetch documents in phsyical order */
+  if (limit >= 0 && limit < offset_count)
+    offset_count = limit;
 
   putchar ('[');
 
-  for (i = 0; i < limit; ++i)
+  for (i = 0; i < offset_count; ++i)
     {
       if (i)
         printf (",\n");

@@ -144,44 +144,41 @@ CA_filter_offsets (struct ca_offset_score *offsets, size_t count,
         {
         case L'≤':
 
-          if (offsets[i].score >= operand)
-            offsets[result++] = offsets[i];
+          if (offsets[i].score > operand)
+            continue;
 
           break;
 
         case '<':
 
-          if (offsets[i].score < operand)
-            offsets[result++] = offsets[i];
+          if (offsets[i].score >= operand)
+            continue;
 
           break;
 
         case '=':
 
-          if (offsets[i].score == operand)
-            offsets[result++] = offsets[i];
+          if (offsets[i].score != operand)
+            continue;
 
           break;
 
         case '>':
 
-          if (offsets[i].score > operand)
-            offsets[result++] = offsets[i];
+          if (offsets[i].score <= operand)
+            continue;
 
           break;
 
         case L'≥':
 
-          if (offsets[i].score >= operand)
-            offsets[result++] = offsets[i];
+          if (offsets[i].score < operand)
+            continue;
 
           break;
-
-        default:
-
-          fprintf (stderr, "%c\n", operator);
-          assert (!"unknown operator");
         }
+
+      offsets[result++] = offsets[i];
     }
 
   return result;

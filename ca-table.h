@@ -83,8 +83,19 @@ ca_type_to_string (enum ca_type type);
 enum ca_offset_score_type
 {
   /* Difference to previous value encoded using groups of 7 bit values, using
-   * the byte MSB to indicate continuation.  Scores stored as float4. */
-  CA_OFFSET_SCORE_VARBYTE_FLOAT = 1
+   * the byte MSB to indicate continuation.  Scores stored as float4.  */
+  CA_OFFSET_SCORE_VARBYTE_FLOAT = 1,
+
+  /* Same as CA_OFFSET_SCORE_VARBYTE_FLOAT, but the score is not stored, an
+   * assumed to be zero.  */
+  CA_OFFSET_SCORE_VARBYTE_ZERO = 2,
+
+  /* Same as CA_OFFSET_SCORE_VARBYTE_FLOAT, except the score is stored as an
+   * unsigned N-bit integer.  At the beginning of the data, a bias is stored
+   * for the score values.  */
+  CA_OFFSET_SCORE_VARBYTE_U8 = 3,
+  CA_OFFSET_SCORE_VARBYTE_U16 = 4,
+  CA_OFFSET_SCORE_VARBYTE_U24 = 5
 };
 
 /*****************************************************************************/

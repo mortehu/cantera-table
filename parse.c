@@ -100,6 +100,7 @@ ca_parse_offset_score_array (const uint8_t **input,
   uint_fast32_t i;
   const uint8_t *p;
   uint64_t offset = 0;
+  float base = 0.0f;
 
   p = *input;
 
@@ -118,6 +119,58 @@ ca_parse_offset_score_array (const uint8_t **input,
           offset += ca_parse_integer (&p);
           (*sample_values)[i].offset = offset;
           (*sample_values)[i].score = ca_parse_float (&p);
+        }
+
+      break;
+
+    case CA_OFFSET_SCORE_VARBYTE_ZERO:
+
+      for (i = 0; i < *count; ++i)
+        {
+          offset += ca_parse_integer (&p);
+          (*sample_values)[i].offset = offset;
+          (*sample_values)[i].score = 0.0f;
+        }
+
+      break;
+
+    case CA_OFFSET_SCORE_VARBYTE_U8:
+
+      base = ca_parse_float (&p);
+
+      for (i = 0; i < *count; ++i)
+        {
+          offset += ca_parse_integer (&p);
+          (*sample_values)[i].offset = offset;
+          (*sample_values)[i].score = *p++ + base;
+        }
+
+      break;
+
+    case CA_OFFSET_SCORE_VARBYTE_U16:
+
+      base = ca_parse_float (&p);
+
+      for (i = 0; i < *count; ++i)
+        {
+          offset += ca_parse_integer (&p);
+          (*sample_values)[i].offset = offset;
+          (*sample_values)[i].score = (p[0] << 8) + p[1] + base;
+          p += 2;
+        }
+
+      break;
+
+    case CA_OFFSET_SCORE_VARBYTE_U24:
+
+      base = ca_parse_float (&p);
+
+      for (i = 0; i < *count; ++i)
+        {
+          offset += ca_parse_integer (&p);
+          (*sample_values)[i].offset = offset;
+          (*sample_values)[i].score = (p[0] << 16) + (p[1] << 8) + p[2] + base;
+          p += 3;
         }
 
       break;

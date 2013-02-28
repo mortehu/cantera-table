@@ -75,6 +75,7 @@ TESTS = \
   tests/crc32c-00 \
   tests/fifo-00 \
   tests/flexi-sort-00 \
+  tests/format-00 \
   tests/hashmap-00 \
   tests/log-sort-00 \
   tests/rank-correlation-00 \
@@ -87,6 +88,7 @@ tests_correlation_00_LDADD = libca-table.la
 tests_crc32c_00_LDADD = libca-table.la
 tests_fifo_00_LDADD = libca-table.la
 tests_flexi_sort_00_LDADD = libca-table.la
+tests_format_00_LDADD = libca-table.la
 tests_hashmap_00_LDADD = libca-table.la
 tests_log_sort_00_LDADD = libca-table.la
 tests_rank_correlation_00_LDADD = libca-table.la

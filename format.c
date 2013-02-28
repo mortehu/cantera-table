@@ -1,3 +1,4 @@
+#include <math.h>
 #include <string.h>
 
 #include "ca-table.h"
@@ -93,17 +94,87 @@ ca_format_offset_score (uint8_t **output,
   size_t i;
   uint64_t prev_offset = 0;
 
+  enum ca_offset_score_type format;
+
+  float min_score, max_score;
+  int all_integer = 1;
+
   o = *output;
 
-  ca_format_integer (&o, CA_OFFSET_SCORE_VARBYTE_FLOAT);
+  if (!count)
+    {
+      ca_format_integer (&o, CA_OFFSET_SCORE_VARBYTE_FLOAT);
+      ca_format_integer (&o, 0);
+    }
+
+  /* Analyze */
+
+  min_score = max_score = values[0].score;
+
+  for (i = 1; i < count; ++i)
+    {
+      float int_part, frac_part;
+
+      if (values[i].score < min_score)
+        min_score = values[i].score;
+      else if (values[i].score > max_score)
+        max_score = values[i].score;
+
+      frac_part = modff (values[i].score, &int_part);
+
+      if (frac_part)
+        all_integer = 0;
+    }
+
+  if (min_score == max_score && min_score == 0)
+    format = CA_OFFSET_SCORE_VARBYTE_ZERO;
+  else if (all_integer && (max_score - min_score) <= 0xff)
+    format = CA_OFFSET_SCORE_VARBYTE_U8;
+  else if (all_integer && (max_score - min_score) <= 0xffff)
+    format = CA_OFFSET_SCORE_VARBYTE_U16;
+  else if (all_integer && (max_score - min_score) <= 0xffffff)
+    format = CA_OFFSET_SCORE_VARBYTE_U24;
+  else
+    format = CA_OFFSET_SCORE_VARBYTE_FLOAT;
+
+  /* Output */
+
+  ca_format_integer (&o, format);
   ca_format_integer (&o, count);
+
+  if (format == CA_OFFSET_SCORE_VARBYTE_U8
+      || format == CA_OFFSET_SCORE_VARBYTE_U16
+      || format == CA_OFFSET_SCORE_VARBYTE_U24)
+    ca_format_float (&o, min_score);
 
   for (i = 0; i < count; ++i)
     {
       ca_format_integer (&o, values[i].offset - prev_offset);
       prev_offset = values[i].offset;
 
-      ca_format_float (&o, values[i].score);
+      if (format == CA_OFFSET_SCORE_VARBYTE_FLOAT)
+        ca_format_float (&o, values[i].score);
+      else if (format == CA_OFFSET_SCORE_VARBYTE_U8)
+        *o++ = (uint8_t) (values[i].score - min_score);
+      else if (format == CA_OFFSET_SCORE_VARBYTE_U16)
+        {
+          uint_fast16_t delta;
+
+          delta = (uint_fast16_t) (values[i].score - min_score);
+
+          *o++ = delta >> 8;
+          *o++ = delta;
+        }
+      else if (format == CA_OFFSET_SCORE_VARBYTE_U24)
+        {
+          uint_fast32_t delta;
+
+          delta = (uint_fast32_t) (values[i].score - min_score);
+
+          *o++ = delta >> 16;
+          *o++ = delta >> 8;
+          *o++ = delta;
+        }
     }
 
   *output = o;

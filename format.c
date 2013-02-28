@@ -128,11 +128,11 @@ ca_format_offset_score (uint8_t **output,
 
   if (min_score == max_score && min_score == 0)
     format = CA_OFFSET_SCORE_VARBYTE_ZERO;
-  else if (all_integer && (max_score - min_score) <= 0xff)
+  else if (all_integer && (max_score - min_score) <= 0xff && count > 1)
     format = CA_OFFSET_SCORE_VARBYTE_U8;
-  else if (all_integer && (max_score - min_score) <= 0xffff)
+  else if (all_integer && (max_score - min_score) <= 0xffff && count > 2)
     format = CA_OFFSET_SCORE_VARBYTE_U16;
-  else if (all_integer && (max_score - min_score) <= 0xffffff)
+  else if (all_integer && (max_score - min_score) <= 0xffffff && count > 4)
     format = CA_OFFSET_SCORE_VARBYTE_U24;
   else
     format = CA_OFFSET_SCORE_VARBYTE_FLOAT;

@@ -525,6 +525,14 @@ expression
         expr->value.type = CA_BOOLEAN;
         $$ = expr;
       }
+    | NOT expression
+      {
+        struct expression *expr;
+        ALLOC(expr);
+        expr->type = EXPR_NOT;
+        expr->lhs = $2;
+        $$ = expr;
+      }
     | Identifier '(' expressionList ')'
       {
         struct expression *expr;

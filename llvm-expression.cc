@@ -107,6 +107,7 @@ namespace ca_llvm
         /* Fall through */
 
       case EXPR_CAST:
+      case EXPR_NOT:
 
         lhs = builder->CreateAlloca (t_expression_value);
 
@@ -453,11 +454,27 @@ namespace ca_llvm
             return NULL;
           }
 
+      case EXPR_NOT:
+
+        if (lhs_type != CA_BOOLEAN)
+          {
+            ca_set_error ("Argument to NOT must be of type BOOLEAN, got %s",
+                          ca_type_to_string (lhs_type));
+
+            return NULL;
+          }
+
+        *return_type = CA_BOOLEAN;
+
+        return builder->CreateNot (lhs);
+
       case EXPR_AND:
 
         if (lhs_type != CA_BOOLEAN || rhs_type != CA_BOOLEAN)
           {
-            ca_set_error ("Arguments to OR must be of type BOOLEAN");
+            ca_set_error ("Arguments to AND must be of type BOOLEAN, got %s and %s",
+                          ca_type_to_string (lhs_type),
+                          ca_type_to_string (rhs_type));
 
             return NULL;
           }

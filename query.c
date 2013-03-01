@@ -621,6 +621,7 @@ ca_schema_query_correlate (struct ca_schema *schema,
 
   ssize_t count_A, count_B;
   struct ca_offset_score *offsets_A = NULL, *offsets_B = NULL;
+  float prior_A;
 
   struct iovec data_iov;
   int result = -1, ret;
@@ -658,12 +659,23 @@ ca_schema_query_correlate (struct ca_schema *schema,
   if (-1 == (ca_table_seek (index_table, 0, SEEK_SET)))
     goto done;
 
-  double A_prior, B_prior;
-  size_t AB_count;
+  count_B = CA_subtract_offsets (offsets_B, count_B, offsets_A, count_A);
 
-  AB_count = CA_union_offsets (NULL, offsets_A, count_A, offsets_B, count_B);
-  A_prior = (double) count_A / AB_count;
-  B_prior = (double) count_B / AB_count;
+  if (!count_A)
+    {
+      ca_set_error ("Set A is empty");
+
+      goto done;
+    }
+
+  if (!count_B)
+    {
+      ca_set_error ("Set B is empty");
+
+      goto done;
+    }
+
+  prior_A = (float) count_A / (count_A + count_B);
 
   while (1 == (ret = ca_table_read_row (index_table, &data_iov)))
     {
@@ -673,17 +685,17 @@ ca_schema_query_correlate (struct ca_schema *schema,
       struct ca_offset_score *key_offsets;
       uint32_t key_offset_count;
 
+      const struct ca_offset_score *A, *B, *K;
+      const struct ca_offset_score *A_end, *B_end, *K_end;
+
+      size_t match_count_A = 0, match_count_B = 0;
+
       key = data_iov.iov_base;
       data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
 
       if (-1 == ca_parse_offset_score_array (&data, &key_offsets,
                                              &key_offset_count))
         goto done;
-
-      const struct ca_offset_score *A, *B, *K;
-      const struct ca_offset_score *A_end, *B_end, *K_end;
-
-      size_t A_match = 0, B_match = 0;
 
       A = offsets_A;
       B = offsets_B;
@@ -703,27 +715,26 @@ ca_schema_query_correlate (struct ca_schema *schema,
           B = CA_offset_score_lower_bound (B, B_end, offset);
 
           if (A != A_end && A->offset == offset)
-            ++A_match;
+            ++match_count_A;
 
           if (B != B_end && B->offset == offset)
-            ++B_match;
+            ++match_count_B;
 
           do
             ++K;
           while (K != K_end && K->offset == offset);
         }
 
-      if ((A_match || B_match)
-          && A_match < key_offset_count
-          && B_match < key_offset_count)
+      if (match_count_A || match_count_B)
         {
-          double A_fraction, A_overrepresentation;
+          float fraction_A, overrepresentation_A;
 
-          A_fraction = (double) A_match / (A_match + B_match);
-          A_overrepresentation = A_fraction / A_prior;
+          fraction_A = (float) match_count_A / (match_count_A + match_count_B);
+          overrepresentation_A = fraction_A / prior_A;
 
-          printf ("%.3f\t%zu\t%s\n",
-                  A_overrepresentation, A_match + B_match, key);
+          printf ("%.3f\t%zu\t%zu\t%s\n",
+                  overrepresentation_A, match_count_A, match_count_B, key);
+
           fflush (stdout);
         }
 
@@ -737,8 +748,8 @@ ca_schema_query_correlate (struct ca_schema *schema,
 
 done:
 
-  free (offsets_A);
   free (offsets_B);
+  free (offsets_A);
 
   return result;
 }

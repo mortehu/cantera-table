@@ -144,7 +144,8 @@ enum ca_sql_statement_type
   CA_SQL_SELECT,
   CA_SQL_SET,
   CA_SQL_UPDATE,
-  CA_SQL_QUERY
+  CA_SQL_QUERY,
+  CA_SQL_QUERY_CORRELATE
 };
 
 struct create_table_statement
@@ -194,6 +195,13 @@ struct query_statement
   int64_t limit;
 };
 
+struct query_correlate_statement
+{
+  const char *query_A;
+  const char *query_B;
+  const char *index_table_name;
+};
+
 enum ca_param
 {
   CA_PARAM_OUTPUT_FORMAT,
@@ -225,6 +233,7 @@ struct statement
       struct set_statement set;
       struct update_statement update;
       struct query_statement query;
+      struct query_correlate_statement query_correlate;
     } u;
 
   struct statement *next;

@@ -50,6 +50,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token FLOAT4 FLOAT8
 %token UPDATE
 %token TRANSACTION ISOLATION LEVEL SERIALIZABLE VOLATILE
+%token CORRELATE
 
 %token Identifier
 %token Integer
@@ -194,6 +195,20 @@ statement
         query->index_table_name = $7;
         query->summary_table_name = $11;
         query->limit = $13;
+
+        $$ = stmt;
+      }
+    | CORRELATE QUERY StringLiteral ',' StringLiteral WITH '(' INDEX '=' Identifier ')'
+      {
+        struct statement *stmt;
+        struct query_correlate_statement *query;
+
+        ALLOC (stmt);
+        stmt->type = CA_SQL_QUERY_CORRELATE;
+        query = &stmt->u.query_correlate;
+        query->query_A = $3;
+        query->query_B = $5;
+        query->index_table_name = $10;
 
         $$ = stmt;
       }

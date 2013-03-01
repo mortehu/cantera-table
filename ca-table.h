@@ -328,6 +328,12 @@ ca_schema_query (struct ca_schema *schema, const char *query,
                  const char *summary_table_name,
                  ssize_t limit);
 
+int
+ca_schema_query_correlate (struct ca_schema *schema,
+                           const char *query_A,
+                           const char *query_B,
+                           const char *index_table_name);
+
 /*****************************************************************************/
 
 #define CA_LOCK_MESSAGE_SIZE 508

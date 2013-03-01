@@ -43,6 +43,7 @@ CA_process_statement (struct ca_query_parse_context *context,
 
         case CA_SQL_SELECT:
         case CA_SQL_QUERY:
+        case CA_SQL_QUERY_CORRELATE:
 
           /* XXX: Allocate XID between lock and reload */
 
@@ -73,6 +74,7 @@ CA_process_statement (struct ca_query_parse_context *context,
         case CA_SQL_SELECT:
         case CA_SQL_UPDATE:
         case CA_SQL_QUERY:
+        case CA_SQL_QUERY_CORRELATE:
 
           if (!context->transaction_id_allocated)
             {
@@ -225,6 +227,16 @@ CA_process_statement (struct ca_query_parse_context *context,
                                  stmt->u.query.index_table_name,
                                  stmt->u.query.summary_table_name,
                                  stmt->u.query.limit))
+        context->error = 1;
+
+      break;
+
+    case CA_SQL_QUERY_CORRELATE:
+
+      if (-1 == ca_schema_query_correlate (context->schema,
+                                           stmt->u.query_correlate.query_A,
+                                           stmt->u.query_correlate.query_B,
+                                           stmt->u.query_correlate.index_table_name))
         context->error = 1;
 
       break;

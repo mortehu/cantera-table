@@ -63,6 +63,7 @@ Z [zZ]
 {B}{E}{G}{I}{N}                    { character += yyleng; return BEGIN_; }
 {B}{O}{O}{L}{E}{A}{N}              { character += yyleng; return BOOLEAN; }
 {C}{O}{M}{M}{I}{T}                 { character += yyleng; return COMMIT; }
+{C}{O}{R}{R}{E}{L}{A}{T}{E}        { character += yyleng; return CORRELATE; }
 {C}{R}{E}{A}{T}{E}                 { character += yyleng; return CREATE; }
 {C}{S}{V}                          { character += yyleng; return CSV; }
 {D}{E}{S}{C}{R}{I}{B}{E}           { character += yyleng; return DESCRIBE; }

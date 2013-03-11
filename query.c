@@ -163,7 +163,7 @@ CA_intersect_offsets (struct ca_offset_score *lhs, size_t lhs_count,
 
 static size_t
 CA_filter_offsets (struct ca_offset_score *offsets, size_t count,
-                   int operator, float operand)
+                   int operator, float operand0, float operand1)
 {
   size_t i, result = 0;
 
@@ -171,37 +171,44 @@ CA_filter_offsets (struct ca_offset_score *offsets, size_t count,
     {
       switch (operator)
         {
+        case '[':
+
+          if (offsets[i].score < operand0 || offsets[i].score > operand1)
+            continue;
+
+          break;
+
         case L'≤':
 
-          if (offsets[i].score > operand)
+          if (offsets[i].score > operand0)
             continue;
 
           break;
 
         case '<':
 
-          if (offsets[i].score >= operand)
+          if (offsets[i].score >= operand0)
             continue;
 
           break;
 
         case '=':
 
-          if (offsets[i].score != operand)
+          if (offsets[i].score != operand0)
             continue;
 
           break;
 
         case '>':
 
-          if (offsets[i].score <= operand)
+          if (offsets[i].score <= operand0)
             continue;
 
           break;
 
         case L'≥':
 
-          if (offsets[i].score < operand)
+          if (offsets[i].score < operand0)
             continue;
 
           break;
@@ -239,6 +246,26 @@ CA_remove_duplicates (struct ca_offset_score *offsets, size_t count)
   return output - offsets;
 }
 
+static float
+parse_value (char *string, char **endptr)
+{
+  float result;
+
+  result = strtod (string, endptr);
+
+  if (**endptr == '-')
+    {
+      struct tm tm;
+
+      memset (&tm, 0, sizeof (tm));
+      *endptr = strptime (string, "%Y-%m-%d", &tm);
+
+      result = timegm (&tm) / 86400;
+    }
+
+  return result;
+}
+
 static ssize_t
 CA_schema_subquery (struct ca_offset_score **ret_offsets,
                     const char *query,
@@ -265,7 +292,7 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
       int invert_rank = 0, subtract = 0, add = 0;
 
       int operator = 0;
-      float operand = 0;
+      float operand0 = 0, operand1 = 0;
 
       if (*token == '-')
         ++token, subtract = 1;
@@ -277,9 +304,10 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
 
       if (NULL != (ch = strchr (token, '>'))
           || NULL != (ch = strchr (token, '<'))
-          || NULL != (ch = strchr (token, '=')))
+          || NULL != (ch = strchr (token, '='))
+          || NULL != (ch = strchr (token, '[')))
         {
-          char *endptr;
+          char *endptr, *delimiter = NULL;
           operator = *ch;
           *ch++ = 0;
 
@@ -293,18 +321,15 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
               ++ch;
             }
 
-          operand = strtod (ch, &endptr);
-
-          if (*endptr == '-')
+          if (operator == '['
+              && NULL != (delimiter = strchr (ch, ',')))
             {
-              struct tm tm;
+              *delimiter++ = 0;
 
-              memset (&tm, 0, sizeof (tm));
-              endptr = strptime (ch, "%Y-%m-%d", &tm);
-
-              if (!*endptr)
-                operand = timegm (&tm) / 86400;
+              operand1 = parse_value (delimiter, &endptr);
             }
+
+          operand0 = parse_value (ch, &endptr);
         }
 
       if (!strncmp (token, "in-", 3))
@@ -406,7 +431,7 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
       if (operator)
         {
           token_offset_count =
-            CA_filter_offsets (token_offsets, token_offset_count, operator, operand);
+            CA_filter_offsets (token_offsets, token_offset_count, operator, operand0, operand1);
         }
 
       if (invert_rank)

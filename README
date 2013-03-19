@@ -1,0 +1,37 @@
+INTRODUCTION
+
+  To use this software, you need a schema file.  This is a simple ASCII file,
+  designed to be editable with an ordinary text editor.  Here's an example:
+
+    summary      /var/lib/search/summary:html  0
+    summary      /var/lib/search/summary:pdf   1000000000
+    index        /var/lib/search/index:html
+    index        /var/lib/search/index:pdf
+    time-series  /var/lib/search/nasdaq
+
+  The three supported table types are "summary", "index" and "time-series".
+  What follows is a brief description of each type.
+
+SUMMARY TABLES
+
+  A summary table consists of pairs of strings.  The first string is the name
+  of a document, and the second string is a JSON object describing the
+  document.
+
+  The data in all summary tables are mapped to the same address space.  The
+  integer value in the third column of the schema file indicates the starting
+  offset for the summary table.
+
+INDEX TABLES
+
+  An index table consists of strings coupled with an array of integer/floating
+  point value pairs.  The integer represents offsets into the summary table
+  address space.  The floating point value represents relevance, dates or any
+  other data you might want to rank or filter your search queries by.
+
+TIME SERIES TABLES
+
+  This table is stored exactly the same way as an index table.  The difference
+  is in its interpretation.  It is a convenient format for storing data like
+  daily stock market closing prices, or number of visitors to a web site per
+  day.

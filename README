@@ -25,8 +25,8 @@ SUMMARY TABLES
 INDEX TABLES
 
   An index table consists of strings coupled with an array of integer/floating
-  point value pairs.  The integer represents offsets into the summary table
-  address space.  The floating point value represents relevance, dates or any
+  point value pairs.  The integers represent offsets into the summary table
+  address space.  The floating point values represent relevance, dates or any
   other data you might want to rank or filter your search queries by.
 
 TIME SERIES TABLES

@@ -35,3 +35,54 @@ TIME SERIES TABLES
   is in its interpretation.  It is a convenient format for storing data like
   daily stock market closing prices, or number of visitors to a web site per
   day.
+
+HOW TO BUILD AND USE AN INVERTED INDEX
+
+  1. Create a file named /var/lib/search/schema with the following contents:
+
+     summary /var/lib/search/summary
+     index /var/lib/search/index
+
+  2. Create the summary table input data by building one or more text files
+     with each line in the following format:
+
+     <DOCUMENT-ID> TAB <KEY> TAB <VALUE>
+
+  3. Assemble the summaries into a summary table:
+
+     sort /tmp/index-input/summary.* \
+     | ca-load --output-format=summary /var/lib/search/summary
+
+  4. Create a keyword table by building one or more text files with each line
+     in the following format:
+
+     <KEYWORD> TAB <DOCUMENT-ID> [TAB <SCORE>]
+
+  5. Assemble the keywords into an index table:
+
+     sort /tmp/index-input/keywords.*          \
+     | ca-load --output-format=index           \
+               --schema=/var/lib/search/schema \
+               /var/lib/search/index
+
+    Each document ID will be converted to its offset according the the schema
+    and the summary table(s).  If a document exists in multiple summary tables,
+    a reference to each position will be kept.  The entries will be merged
+    during search.
+
+  6. Issue the following command:
+
+     ca-shell /var/lib/search/schema
+
+     You are now in a position to issue search queries.  You can type any
+     keyword, and you should get a list of all summaries matching that keyword.
+
+     It is possible to have ca-shell start from inetd or similar software, in
+     which case you may want it to handle the HTTP protocol:
+
+     ca-shell --http-param=q /var/lib/search/schema
+
+     This will read the query out of the HTTP GET parameter named "q", and
+     print an HTTP response with a payload consisting of a JSON array of
+     summaries.  The Content-Type will be reported as application/json.  To
+     prevent abuse, the --limit parameter might be of interest.

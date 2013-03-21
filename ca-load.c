@@ -199,6 +199,8 @@ main (int argc, char **argv)
 
   off_t file_size;
 
+  setenv ("TZ", "", 1);
+
   while ((i = getopt_long (argc, argv, "", long_options, 0)) != -1)
     {
       switch (i)

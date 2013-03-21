@@ -15,6 +15,7 @@
 .dirstamp
 .libs
 /aclocal.m4
+/ca-load
 /ca-shell
 /ca-sort
 /ca-table-lockd
@@ -50,7 +51,6 @@
 /tests/wo-sort-00
 /ts-correlate
 /ts-extract
-/ts-load
 /ts-merge
 /ylwrap
 Makefile

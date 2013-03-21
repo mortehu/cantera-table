@@ -8,8 +8,8 @@ include_HEADERS = ca-table.h ca-functions.h
 
 bin_PROGRAMS = \
   ca-shell \
+  ca-load \
   ca-sort \
-  ts-load \
   ca-table-lockd
 
 ACLOCAL_AMFLAGS = -I m4
@@ -58,8 +58,8 @@ ca_shell_LDADD = libca-table.la
 ca_sort_SOURCES = ca-sort.c
 ca_sort_LDADD = libca-table.la
 
-ts_load_SOURCES = ts-load.c
-ts_load_LDADD = libca-table.la
+ca_load_SOURCES = ca-load.c
+ca_load_LDADD = libca-table.la
 
 TESTS = \
   tests/arena-00 \

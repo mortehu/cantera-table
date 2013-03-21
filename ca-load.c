@@ -2,6 +2,7 @@
 #  include "config.h"
 #endif
 
+#include <assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdint.h>
@@ -24,14 +25,8 @@
 static int print_version;
 static int print_help;
 
-static char delimiter = ',';
+static char delimiter = '\t';
 static const char *date_format = "%Y-%m-%d %H:%M:%S";
-
-static const char *input_key;
-static int has_input_key;
-
-static time_t input_time;
-static int has_input_time;
 
 static time_t interval = 1;
 
@@ -39,10 +34,6 @@ static struct option long_options[] =
 {
     { "delimiter",      required_argument, NULL,           'D' },
     { "date-format",    required_argument, NULL,           'A' },
-    { "date-from-path", required_argument, NULL,           'F' },
-    { "date",           required_argument, NULL,           'T' },
-    { "key",            required_argument, NULL,           'K' },
-    { "interval",       required_argument, NULL,           'I' },
     { "version",        no_argument,       &print_version, 1 },
     { "help",           no_argument,       &print_help,    1 },
     { 0, 0, 0, 0 }
@@ -67,13 +58,29 @@ static char *date;
 static size_t date_alloc;
 static size_t date_length;
 
-static char *value;
+static char *value_string;
+static size_t value_string_alloc;
+static size_t value_string_length;
+
+static struct ca_offset_score *values;
 static size_t value_alloc;
-static size_t value_length;
+static size_t value_count;
+
+static void
+flush_values (void)
+{
+  if (-1 == ca_table_write_offset_score (table_handle, key,
+                                         values, value_count))
+    errx (EXIT_FAILURE, "%s", ca_last_error ());
+
+  value_count = 0;
+}
 
 static void
 parse_data (const char *begin, const char *end)
 {
+  time_t current_time;
+
   for (; begin != end; ++begin)
     {
       switch (state)
@@ -88,14 +95,15 @@ parse_data (const char *begin, const char *end)
             {
               key[key_length] = 0;
 
-              input_key = key;
-
               key_length = 0;
 
-              state = has_input_time ? parse_value : parse_date;
+              state = parse_date;
 
               break;
             }
+
+          if (value_count && key[key_length] != *begin)
+            flush_values ();
 
           key[key_length++] = *begin;
 
@@ -123,7 +131,7 @@ parse_data (const char *begin, const char *end)
               if (*end)
                 errx (EX_DATAERR, "Junk at end of date '%s': %s", date, end);
 
-              input_time = timegm (&tm);
+              current_time = timegm (&tm);
 
               date_length = 0;
 
@@ -141,8 +149,8 @@ parse_data (const char *begin, const char *end)
           if (*begin == '\r')
             continue;
 
-          if (value_length == value_alloc
-              && -1 == CA_ARRAY_GROW (&value, &value_alloc))
+          if (value_string_length == value_string_alloc
+              && -1 == CA_ARRAY_GROW (&value_string, &value_string_alloc))
             errx (EXIT_FAILURE, "%s", ca_last_error ());
 
           if (*begin == '\n')
@@ -150,41 +158,37 @@ parse_data (const char *begin, const char *end)
               float fvalue;
               char *endptr;
 
-              value[value_length] = 0;
+              value_string[value_string_length] = 0;
 
-              fvalue = strtod (value, &endptr);
+              fvalue = strtod (value_string, &endptr);
 
               if (*endptr)
                 errx (EX_DATAERR, "Unable to parse value '%s'.  Unexpected suffix: '%s'",
-                      value, endptr);
+                      value_string, endptr);
 
-              value_length = 0;
+              value_string_length = 0;
 
-              if (-1 == ca_table_write_time_float4 (table_handle, input_key, input_time, 0, &fvalue, 1))
-                {
-                  ca_table_close (table_handle);
+              if (value_count == value_alloc
+                  && -1 == CA_ARRAY_GROW (&values, &value_alloc))
+                errx (EXIT_FAILURE, "%s", ca_last_error ());
 
-                  errx (EXIT_FAILURE, "%s", ca_last_error ());
-                }
+              values[value_count].offset = current_time;
+              values[value_count].score = fvalue;
+              ++value_count;
 
-              if (!has_input_key)
-                state = parse_key;
-              else if (!has_input_time)
-                state = parse_date;
-              else
-                {
-                  state = parse_value;
-                  input_time += interval;
-                }
+              state = parse_key;
 
               break;
             }
 
-          value[value_length++] = *begin;
+          value_string[value_string_length++] = *begin;
 
           break;
         }
     }
+
+  if (value_count)
+    flush_values ();
 }
 
 int
@@ -221,42 +225,6 @@ main (int argc, char **argv)
 
           break;
 
-        case 'F':
-
-            {
-              struct stat st;
-
-              if (-1 == stat (optarg, &st))
-                errx (EX_NOINPUT, "Could not stat '%s''", optarg);
-
-              input_time = st.st_mtime;
-              has_input_time = 1;
-            }
-
-          break;
-
-        case 'T':
-
-            {
-              struct tm tm;
-
-              if (!strptime (optarg, date_format, &tm))
-                errx (EX_USAGE, "Unable to parse date '%s' according to format '%s'",
-                      optarg, date_format);
-
-              input_time = mktime (&tm);
-              has_input_time = 1;
-            }
-
-          break;
-
-        case 'K':
-
-          input_key = optarg;
-          has_input_key = 1;
-
-          break;
-
         case 'I':
 
             {
@@ -286,7 +254,6 @@ main (int argc, char **argv)
              "      --delimiter=DELIMITER  set input delimiter [%c]\n"
              "      --date-format=FORMAT   use provided date format [%s]\n"
              "      --date=DATE            use DATE as timestamp\n"
-             "      --date-from-path=PATH  get timestamp from PATH's mtime\n"
              "      --key=KEY              use KEY as key\n"
              "      --interval=INTERVAL    sample interval if both --date and --key are\n"
              "                             given\n"
@@ -312,12 +279,7 @@ main (int argc, char **argv)
   if (!(table_handle = ca_table_open ("write-once", argv[optind], O_CREAT | O_TRUNC | O_WRONLY, 0666)))
     errx (EXIT_FAILURE, "Failed to create '%s': %s", argv[optind], ca_last_error ());
 
-  if (!has_input_key)
-    state = parse_key;
-  else if (!has_input_time)
-    state = parse_date;
-  else
-    state = parse_value;
+  state = parse_key;
 
   if (-1 == (file_size = lseek (input_fd, 0, SEEK_END)))
     {

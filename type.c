@@ -25,7 +25,6 @@ static struct
     { "SMALLINT",       CA_INT16 },
     { "TEXT",           CA_TEXT },
     { "TIMESTAMPTZ",    CA_TIMESTAMPTZ },
-    { "TIME_FLOAT4[]",  CA_TIME_FLOAT4_ARRAY },
     { "UINT16",         CA_UINT16 },
     { "UINT32",         CA_UINT32 },
     { "UINT64",         CA_UINT64 },

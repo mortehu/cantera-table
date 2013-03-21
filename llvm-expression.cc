@@ -151,7 +151,6 @@ namespace ca_llvm
 
             return llvm::ConstantInt::get (t_int1, expr->value.d.integer);
 
-          case CA_TIME_FLOAT4_ARRAY:
           case CA_OFFSET_SCORE_ARRAY:
 
               {
@@ -221,7 +220,6 @@ namespace ca_llvm
 
                 return NULL;
 
-              case CA_TIME_FLOAT4_ARRAY:
               case CA_OFFSET_SCORE_ARRAY:
 
                 return field_iov;

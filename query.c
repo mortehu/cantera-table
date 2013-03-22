@@ -128,6 +128,40 @@ CA_union_offsets (struct ca_offset_score *result,
     }
 }
 
+/* Note: This function either frees the `rhs' or assigns `lhs' to it */
+int
+CA_union_offsets_inplace (struct ca_offset_score **lhs, uint32_t *lhs_count,
+                          struct ca_offset_score *rhs, uint32_t rhs_count)
+{
+  struct ca_offset_score *merged_offsets;
+  size_t merged_offset_count;
+  size_t max_merged_size;
+
+  if (!*lhs)
+    {
+      *lhs = rhs;
+      *lhs_count = rhs_count;
+
+      return 0;
+    }
+
+  max_merged_size = *lhs_count + rhs_count;
+
+  if (!(merged_offsets = ca_malloc (sizeof (*merged_offsets) * max_merged_size)))
+    return -1;
+
+  merged_offset_count = CA_union_offsets (merged_offsets,
+                                          *lhs, *lhs_count, rhs, rhs_count);
+
+  free (*lhs);
+  free (rhs);
+
+  *lhs = merged_offsets;
+  *lhs_count = merged_offset_count;
+
+  return 0;
+}
+
 static size_t
 CA_intersect_offsets (struct ca_offset_score *lhs, size_t lhs_count,
                       const struct ca_offset_score *rhs, size_t rhs_count)
@@ -269,7 +303,8 @@ parse_value (char *string, char **endptr)
 static ssize_t
 CA_schema_subquery (struct ca_offset_score **ret_offsets,
                     const char *query,
-                    struct ca_table *index_table)
+                    struct ca_table **index_tables,
+                    size_t index_table_count)
 {
   char *query_buf = NULL, *token, *ch;
 
@@ -337,9 +372,6 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
           const char *key_match_begin, *key_match_end;
           const char *parameter;
 
-          if (-1 == (ca_table_seek (index_table, 0, SEEK_SET)))
-            goto done;
-
           key_match_begin = token + 3;
 
           if (NULL != (key_match_end = strchr (key_match_begin, ':')))
@@ -349,70 +381,58 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
 
           parameter = key_match_end;
 
-          while (1 == (ret = ca_table_read_row (index_table, &data_iov)))
+          for (i = 0; i < index_table_count; ++i)
             {
-              const char *key;
-              struct ca_offset_score *new_offsets;
-              uint32_t new_offset_count;
-
-              key = data_iov.iov_base;
-
-              if (strncmp (key, key_match_begin, key_match_end - key_match_begin))
-                continue;
-
-              if (!strstr (key + (key_match_end - key_match_begin), parameter))
-                continue;
-
-              data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
-
-              if (-1 == ca_parse_offset_score_array (&data, &new_offsets,
-                                                     &new_offset_count))
+              if (-1 == (ca_table_seek (index_tables[i], 0, SEEK_SET)))
                 goto done;
 
-              if (!token_offsets)
+              while (1 == (ret = ca_table_read_row (index_tables[i], &data_iov)))
                 {
-                  token_offsets = new_offsets;
-                  token_offset_count = new_offset_count;
-                }
-              else
-                {
-                  struct ca_offset_score *merged_offsets;
-                  size_t merged_offset_count;
-                  size_t max_merged_size;
+                  const char *key;
+                  struct ca_offset_score *new_offsets;
+                  uint32_t new_offset_count;
 
-                  max_merged_size = new_offset_count + token_offset_count;
+                  key = data_iov.iov_base;
 
-                  if (!(merged_offsets = ca_malloc (sizeof (*merged_offsets) * max_merged_size)))
+                  if (strncmp (key, key_match_begin, key_match_end - key_match_begin))
+                    continue;
+
+                  if (!strstr (key + (key_match_end - key_match_begin), parameter))
+                    continue;
+
+                  data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
+
+                  if (-1 == ca_parse_offset_score_array (&data, &new_offsets,
+                                                         &new_offset_count))
                     goto done;
 
-                  merged_offset_count = CA_union_offsets (merged_offsets,
-                                                          new_offsets, new_offset_count,
-                                                          token_offsets, token_offset_count);
-
-                  free (token_offsets);
-                  free (new_offsets);
-
-                  token_offsets = merged_offsets;
-                  token_offset_count = merged_offset_count;
+                  if (-1 == CA_union_offsets_inplace (&token_offsets, &token_offset_count,
+                                                      new_offsets, new_offset_count))
+                    goto done;
                 }
-            }
 
-          if (ret == -1)
-            goto done;
+              if (ret == -1)
+                goto done;
+            }
         }
       else
         {
-          if (1 != (ret = ca_table_seek_to_key (index_table, token)))
+          for (i = 0; i < index_table_count; ++i)
             {
-              if (ret == -1)
-                goto done;
+              struct ca_offset_score *new_offsets;
+              uint32_t new_offset_count;
 
-              token_offsets = NULL;
-              token_offset_count = 0;
-            }
-          else
-            {
-              if (1 != (ret = ca_table_read_row (index_table, &data_iov)))
+              if (1 != (ret = ca_table_seek_to_key (index_tables[i], token)))
+                {
+                  /* No matches in this table */
+
+                  if (ret == -1)
+                    goto done;
+
+                  continue;
+                }
+
+              if (1 != (ret = ca_table_read_row (index_tables[i], &data_iov)))
                 {
                   if (ret >= 0)
                     ca_set_error ("ca_table_read_row unexpectedly returned %d", (int) ret);
@@ -422,8 +442,12 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
 
               data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
 
-              if (-1 == ca_parse_offset_score_array (&data, &token_offsets,
-                                                     &token_offset_count))
+              if (-1 == ca_parse_offset_score_array (&data, &new_offsets,
+                                                     &new_offset_count))
+                goto done;
+
+              if (-1 == CA_union_offsets_inplace (&token_offsets, &token_offset_count,
+                                                  new_offsets, new_offset_count))
                 goto done;
             }
         }
@@ -500,76 +524,47 @@ done:
 
 static ssize_t
 CA_schema_query (struct ca_offset_score **ret_offsets,
-                 struct ca_schema *schema, const char *query,
-                 const char *index_table_name)
+                 struct ca_schema *schema, const char *query)
 {
-  struct ca_table *index_table;
-  struct ca_table_declaration *index_declaration;
+  struct ca_table **index_tables;
+  ssize_t index_table_count;
 
-  if (!(index_table = ca_schema_table (schema, index_table_name, &index_declaration)))
+  if (-1 == (index_table_count = ca_schema_index_tables (schema, &index_tables)))
     return -1;
 
-  if (index_declaration->field_count != 2)
-    {
-      ca_set_error ("Incorrect field count in index table");
-
-      return -1;
-    }
-
-  if (index_declaration->fields[0].type != CA_TEXT)
-    {
-      ca_set_error ("First field in index table must be text");
-
-      return -1;
-    }
-
-  if (index_declaration->fields[1].type != CA_OFFSET_SCORE_ARRAY)
-    {
-      ca_set_error ("Second field in index table must be OFFSET_SCORE[], is %s", ca_type_to_string (index_declaration->fields[1].type));
-
-      return -1;
-    }
-
-  return CA_schema_subquery (ret_offsets, query, index_table);
+  return CA_schema_subquery (ret_offsets, query, index_tables, index_table_count);
 }
 
 int
 ca_schema_query (struct ca_schema *schema, const char *query,
-                 const char *index_table_name,
-                 const char *summary_table_name,
                  ssize_t limit)
 {
   struct iovec data_iov;
 
   struct ca_offset_score *offsets = NULL;
-  ssize_t i, offset_count;
+  ssize_t i, j, offset_count;
 
-  struct ca_table *summary_table;
-  struct ca_table_declaration *summary_declaration;
+  struct ca_table **summary_tables;
+  uint64_t *summary_table_offsets;
+  ssize_t summary_table_count;
 
   ssize_t ret;
   int result = -1;
 
   ca_clear_error ();
 
-  if (!(summary_table = ca_schema_table (schema, summary_table_name, &summary_declaration)))
-    return -1;
+  if (-1 == (summary_table_count = ca_schema_summary_tables (schema, &summary_tables,
+                                                             &summary_table_offsets)))
+    goto done;
 
-  if (summary_declaration->field_count != 2)
+  if (!summary_table_count)
     {
-      ca_set_error ("Incorrect field count in summary table");
+      ca_set_error ("No summary tables found");
 
-      return -1;
+      goto done;
     }
 
-  if (summary_declaration->fields[1].type != CA_TEXT)
-    {
-      ca_set_error ("Second field in summary table must be TEXT");
-
-      return -1;
-    }
-
-  if (-1 == (offset_count = CA_schema_query (&offsets, schema, query, index_table_name)))
+  if (-1 == (offset_count = CA_schema_query (&offsets, schema, query)))
     goto done;
 
   ca_sort_offset_score_by_score (offsets, offset_count);
@@ -584,13 +579,21 @@ ca_schema_query (struct ca_schema *schema, const char *query,
       if (i)
         printf (",\n");
 
-      if (-1 == ca_table_seek (summary_table, offsets[i].offset, SEEK_SET))
+      j = summary_table_count;
+
+      while (--j && summary_table_offsets[j] > offsets[i].offset)
+        ;
+
+      if (-1 == ca_table_seek (summary_tables[j],
+                               offsets[i].offset - summary_table_offsets[j],
+                               SEEK_SET))
         goto done;
 
-      if (1 != (ret = ca_table_read_row (summary_table, &data_iov)))
+      if (1 != (ret = ca_table_read_row (summary_tables[j], &data_iov)))
         {
           if (ret >= 0)
-            ca_set_error ("ca_table_read_row unexpectedly returned %d.  Is the index stale?", (int) ret);
+            ca_set_error ("ca_table_read_row unexpectedly returned %d",
+                          (int) ret);
 
           goto done;
         }
@@ -638,11 +641,10 @@ CA_offset_score_lower_bound (const struct ca_offset_score *begin,
 int
 ca_schema_query_correlate (struct ca_schema *schema,
                            const char *query_A,
-                           const char *query_B,
-                           const char *index_table_name)
+                           const char *query_B)
 {
-  struct ca_table *index_table;
-  struct ca_table_declaration *index_declaration;
+  struct ca_table **index_tables;
+  ssize_t index_table_count;
 
   ssize_t count_A, count_B;
   struct ca_offset_score *offsets_A = NULL, *offsets_B = NULL;
@@ -651,37 +653,15 @@ ca_schema_query_correlate (struct ca_schema *schema,
   struct iovec data_iov;
   int result = -1, ret;
 
-  if (!(index_table = ca_schema_table (schema, index_table_name, &index_declaration)))
+  if (-1 == (index_table_count = ca_schema_index_tables (schema, &index_tables)))
     return -1;
 
-  if (index_declaration->field_count != 2)
-    {
-      ca_set_error ("Incorrect field count in index table");
-
-      return -1;
-    }
-
-  if (index_declaration->fields[0].type != CA_TEXT)
-    {
-      ca_set_error ("First field in index table must be text");
-
-      return -1;
-    }
-
-  if (index_declaration->fields[1].type != CA_OFFSET_SCORE_ARRAY)
-    {
-      ca_set_error ("Second field in index table must be OFFSET_SCORE[], is %s", ca_type_to_string (index_declaration->fields[1].type));
-
-      return -1;
-    }
-
-  if (-1 == (count_A = CA_schema_subquery (&offsets_A, query_A, index_table)))
+  if (-1 == (count_A = CA_schema_subquery (&offsets_A, query_A,
+                                           index_tables, index_table_count)))
     goto done;
 
-  if (-1 == (count_B = CA_schema_subquery (&offsets_B, query_B, index_table)))
-    goto done;
-
-  if (-1 == (ca_table_seek (index_table, 0, SEEK_SET)))
+  if (-1 == (count_B = CA_schema_subquery (&offsets_B, query_B,
+                                           index_tables, index_table_count)))
     goto done;
 
   count_B = CA_subtract_offsets (offsets_B, count_B, offsets_A, count_A);
@@ -700,9 +680,12 @@ ca_schema_query_correlate (struct ca_schema *schema,
       goto done;
     }
 
+  if (-1 == (ca_table_seek (index_tables[0], 0, SEEK_SET)))
+    goto done;
+
   prior_A = (float) count_A / (count_A + count_B);
 
-  while (1 == (ret = ca_table_read_row (index_table, &data_iov)))
+  while (1 == (ret = ca_table_read_row (index_tables[0], &data_iov)))
     {
       const char *key;
       const uint8_t *data;

@@ -9,8 +9,7 @@ include_HEADERS = ca-table.h ca-functions.h
 bin_PROGRAMS = \
   ca-shell \
   ca-load \
-  ca-sort \
-  ca-table-lockd
+  ca-sort
 
 ACLOCAL_AMFLAGS = -I m4
 AM_CPPFLAGS = -I.
@@ -19,7 +18,6 @@ AM_CXXFLAGS = -Wall -Werror -g
 
 libca_table_la_SOURCES = \
   arena.c arena.h \
-  cast.c \
   crc32c.c crc32c.h \
   error.c error.h \
   fifo.c \
@@ -27,9 +25,6 @@ libca_table_la_SOURCES = \
   format.c \
   functions.c \
   hashmap.c hashmap.h \
-  llvm-expression.cc \
-  llvm-vm.cc \
-  lock.c \
   memory.c memory.h \
   merge.c \
   output.c \
@@ -37,7 +32,6 @@ libca_table_la_SOURCES = \
   query.c \
   rle.c \
   schema.c schema.h \
-  select.c \
   table-sort.c \
   sort.cc \
   statement.c \
@@ -46,11 +40,8 @@ libca_table_la_SOURCES = \
   table-backend-writeonce.c \
   table-write.c \
   table.c \
-  type.c \
-  update.c
+  type.c
 libca_table_la_LDFLAGS = $(LLVM_LDFLAGS) $(LLVM_LIBS) -pthread
-
-ca_table_lockd_SOURCES = lockd.c
 
 ca_shell_SOURCES = ca-shell.c query-parser.y query-lexer.l
 ca_shell_LDFLAGS = -lreadline

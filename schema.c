@@ -32,263 +32,161 @@
 #include "ca-table.h"
 #include "query.h"
 
-struct schema_table
+enum ca_schema_table_type
 {
-  char *name;
-  char *backend;
-  struct ca_table_declaration declaration;
+  CA_SCHEMA_TABLE_SUMMARY,
+  CA_SCHEMA_TABLE_INDEX,
+  CA_SCHEMA_TABLE_TIME_SERIES
+};
 
-  struct ca_table *handle;
-
-  int dropped;
+struct ca_schema_table
+{
+  enum ca_schema_table_type type;
+  char *path;
+  uint64_t offset;
 };
 
 struct ca_schema
 {
   char *path;
 
-  /* XXX: Switch to hashmap */
-
-  struct schema_table *tables;
+  struct ca_schema_table *tables;
   size_t table_alloc, table_count;
+
+  struct ca_table **summary_tables;
+  uint64_t *summary_table_offsets;
+  size_t summary_table_count;
+
+  struct ca_table **index_tables;
+  size_t index_table_count;
+
+  struct ca_table **time_series_tables;
+  size_t time_series_table_count;
 };
 
 static int
-CA_schema_create (struct ca_schema *schema, const char *path)
+CA_schema_load (struct ca_schema *schema)
 {
-  int result = -1;
+  FILE *f;
+  char line[4096];
+  int lineno = 0, result = -1;
 
-  if (2 > schema->table_alloc
-      && -1 == CA_ARRAY_GROW_N (&schema->tables, &schema->table_alloc, 2))
-    goto fail;
-
-  memset (schema->tables, 0, 2 * sizeof (*schema->tables));
-  schema->table_count = 2;
-
-  if (!(schema->tables[0].name = ca_strdup ("ca_catalog.ca_tables")))
-    goto fail;
-
-  if (!(schema->tables[0].backend = ca_strdup ("write-once")))
-    goto fail;
-
-  if (-1 == asprintf (&schema->tables[0].declaration.path, "%s/ca_catalog.ca_tables", path))
-    goto fail;
-
-  schema->tables[0].declaration.field_count = 3;
-  if (!(schema->tables[0].declaration.fields = ca_malloc (3 * sizeof (struct ca_field))))
-    goto fail;
-
-  strcpy (schema->tables[0].declaration.fields[0].name, "table_name");
-  schema->tables[0].declaration.fields[0].flags = CA_FIELD_PRIMARY_KEY | CA_FIELD_NOT_NULL;
-  schema->tables[0].declaration.fields[0].type = CA_TEXT;
-
-  strcpy (schema->tables[0].declaration.fields[1].name, "path");
-  schema->tables[0].declaration.fields[1].flags = CA_FIELD_NOT_NULL;
-  schema->tables[0].declaration.fields[1].type = CA_TEXT;
-
-  strcpy (schema->tables[0].declaration.fields[2].name, "backend");
-  schema->tables[0].declaration.fields[2].flags = CA_FIELD_NOT_NULL;
-  schema->tables[0].declaration.fields[2].type = CA_TEXT;
-
-  if (!(schema->tables[1].name = ca_strdup ("ca_catalog.ca_columns")))
-    goto fail;
-
-  if (!(schema->tables[1].backend = ca_strdup ("write-once")))
-    goto fail;
-
-  if (-1 == asprintf (&schema->tables[1].declaration.path, "%s/ca_catalog.ca_columns", path))
-    goto fail;
-
-  schema->tables[1].declaration.field_count = 5;
-  if (!(schema->tables[1].declaration.fields = ca_malloc (5 * sizeof (struct ca_field))))
-    goto fail;
-
-  strcpy (schema->tables[1].declaration.fields[0].name, "table_name");
-  schema->tables[1].declaration.fields[0].flags = CA_FIELD_PRIMARY_KEY | CA_FIELD_NOT_NULL;
-  schema->tables[1].declaration.fields[0].type = CA_TEXT;
-
-  strcpy (schema->tables[1].declaration.fields[1].name, "column_name");
-  schema->tables[1].declaration.fields[1].flags = CA_FIELD_PRIMARY_KEY | CA_FIELD_NOT_NULL;
-  schema->tables[1].declaration.fields[1].type = CA_TEXT;
-
-  strcpy (schema->tables[1].declaration.fields[2].name, "type");
-  schema->tables[1].declaration.fields[2].flags = CA_FIELD_NOT_NULL;
-  schema->tables[1].declaration.fields[2].type = CA_INT64;
-
-  strcpy (schema->tables[1].declaration.fields[3].name, "not_null");
-  schema->tables[1].declaration.fields[3].flags = CA_FIELD_NOT_NULL;
-  schema->tables[1].declaration.fields[3].type = CA_BOOLEAN;
-
-  strcpy (schema->tables[1].declaration.fields[4].name, "primary_key");
-  schema->tables[1].declaration.fields[4].flags = CA_FIELD_NOT_NULL;
-  schema->tables[1].declaration.fields[4].type = CA_BOOLEAN;
-
-  result = 0;
-
-fail:
-
-  return result;
-}
-
-static int
-CA_schema_read (struct ca_schema *schema)
-{
-  char *ca_tables_path = NULL;
-  struct ca_table *ca_tables = NULL, *ca_columns = NULL;
-  size_t i;
-
-  int result = -1;
-
-  if (-1 == asprintf (&ca_tables_path, "%s/ca_catalog.ca_tables", schema->path))
-    return -1;
-
-  /* Return value checked below */
-  ca_tables = ca_table_open ("write-once", ca_tables_path, O_RDONLY, 0);
-
-  free (ca_tables_path);
-
-  if (!ca_tables)
+  if (!(f = fopen (schema->path, "r")))
     {
-      if (errno == ENOENT
-          && 0 == CA_schema_create (schema, schema->path)
-          && 0 == ca_schema_save (schema))
-        {
-          /* Successfully created new, empty schema */
-
-          return 0;
-        }
+      ca_set_error ("Failed to open '%s' for reading: %s", schema->path, strerror (errno));
 
       return -1;
     }
 
-  for (;;)
-    {
-      struct schema_table *table;
-      const char *tmp;
-      struct iovec value;
-      ssize_t ret;
+  line[sizeof (line) - 1] = 0;
 
-      if (1 != (ret = ca_table_read_row (ca_tables, &value)))
+  while (NULL != fgets (line, sizeof (line), f))
+    {
+      struct ca_schema_table table;
+      char *path, *offset_string;
+      size_t line_length;
+
+      ++lineno;
+
+      if (line[sizeof (line) - 1])
         {
-          if (ret == 0)
-            break;
+          ca_set_error ("%s:%d: Line too long.  Max is %zu",
+                        lineno, schema->path, sizeof (line) - 1);
 
           goto fail;
         }
+
+      line_length = strlen (line);
+
+      /* fgets stores the \n, and we might just as well remove all trailing
+       * whitespace */
+      while (line_length && isspace (line[line_length - 1]))
+        line[--line_length] = 0;
+
+      if (!line[0] || line[0] == '#')
+        continue;
+
+      path = strchr (line, '\t');
+
+      if (!path)
+        {
+          ca_set_error ("%s:%d: Missing TAB character", schema->path, lineno);
+
+          goto fail;
+        }
+
+      *path++ = 0;
+      offset_string = strchr (path, '\t');
+
+      if (!strcmp (line, "summary"))
+        {
+          table.type = CA_SCHEMA_TABLE_SUMMARY;
+          ++schema->summary_table_count;
+        }
+      else if (!strcmp (line, "index"))
+        {
+          table.type = CA_SCHEMA_TABLE_INDEX;
+          ++schema->index_table_count;
+        }
+      else if (!strcmp (line, "time-series"))
+        {
+          table.type = CA_SCHEMA_TABLE_TIME_SERIES;
+          ++schema->time_series_table_count;
+        }
+      else
+        {
+          ca_set_error ("%s:%d: Unknown table type \"%s\"", schema->path, lineno, line);
+
+          goto fail;
+        }
+
+      if (-1 == access (path, R_OK))
+        {
+          ca_set_error ("%s:%d: Path \"%s\" is not readable: %s",
+                        schema->path, lineno, path, strerror (errno));
+
+          goto fail;
+        }
+
+      if (offset_string)
+        {
+          char *endptr;
+
+          if (table.type != CA_SCHEMA_TABLE_SUMMARY)
+            {
+              ca_set_error ("%s:%d: Unexpected column for table type \"%s\"", line);
+
+              goto fail;
+            }
+
+          table.offset = (uint64_t) strtoll (offset_string, &endptr, 0);
+
+          if (*endptr)
+            {
+              ca_set_error ("%s:%d: Expected EOL after offset, got \\x%02x",
+                            (unsigned char) *endptr);
+
+              goto fail;
+            }
+        }
+      else
+        table.offset = 0;
 
       if (schema->table_count == schema->table_alloc
           && -1 == CA_ARRAY_GROW (&schema->tables, &schema->table_alloc))
         goto fail;
 
-      table = &schema->tables[schema->table_count++];
-      memset (table, 0, sizeof (*table));
-
-      if (!(table->name = ca_strdup (value.iov_base)))
+      if (!(table.path = ca_strdup (path)))
         goto fail;
 
-      tmp = strchr (value.iov_base, 0) + 1;
-
-      if (!(table->declaration.path = ca_strdup (tmp)))
-        goto fail;
-
-      tmp = strchr (tmp, 0) + 1;
-
-      if (!(table->backend = ca_strdup (tmp)))
-        goto fail;
-
-      tmp = strchr (tmp, 0) + 1;
-
-      assert (tmp == (const char *) value.iov_base + value.iov_len);
-    }
-
-  assert (!strcmp (schema->tables[0].name, "ca_catalog.ca_tables"));
-  schema->tables[0].handle = ca_tables;
-  ca_tables = NULL;
-
-  if (!(ca_columns = ca_schema_table (schema, "ca_catalog.ca_columns", NULL)))
-    goto fail;
-
-  for (i = 0; i < schema->table_count; ++i)
-    {
-      struct schema_table *table;
-      const char *tmp;
-      struct iovec value;
-      ssize_t ret;
-
-      table = &schema->tables[i];
-
-      if (1 != (ret = ca_table_seek_to_key (ca_columns, table->name)))
-        {
-          const char *recursive_error;
-
-          if (ret == 0)
-            recursive_error = "No column was found for table";
-          else
-            recursive_error = ca_last_error ();
-
-          ca_set_error ("Seek to column information row failed: %s", recursive_error);
-
-          goto fail;
-        }
-
-      for (;;)
-        {
-          struct ca_field *new_fields, *field;
-          int64_t type;
-
-          if (1 != (ret = ca_table_read_row (ca_columns, &value)))
-            {
-              if (ret == 0)
-                break;
-
-              goto fail;
-            }
-
-          if (strcmp (value.iov_base, table->name))
-            break;
-
-          if (!(new_fields = realloc (table->declaration.fields, sizeof (*table->declaration.fields) * ++table->declaration.field_count)))
-            goto fail;
-
-          table->declaration.fields = new_fields;
-          field = &table->declaration.fields[table->declaration.field_count - 1];
-          memset (field, 0, sizeof (*field));
-
-          tmp = strchr (value.iov_base, 0) + 1;
-
-          assert (strlen (tmp) + 1 < sizeof (field->name));
-
-          strcpy (field->name, tmp);
-
-          tmp = strchr (tmp, 0) + 1;
-
-          memcpy (&type, tmp, sizeof (type));
-          tmp += sizeof (type);
-
-          if (*tmp++)
-            field->flags |= CA_FIELD_NOT_NULL;
-
-          if (*tmp++)
-            field->flags |= CA_FIELD_PRIMARY_KEY;
-
-          assert (tmp == (const char *) value.iov_base + value.iov_len);
-
-          field->type = type;
-        }
-
-      if (!table->declaration.field_count)
-        {
-          ca_set_error ("Table '%s' has no fields", table->name);
-
-          goto fail;
-        }
+      schema->tables[schema->table_count++] = table;
     }
 
   result = 0;
 
 fail:
 
-  ca_table_close (ca_tables);
+  fclose (f);
 
   return result;
 }
@@ -314,16 +212,13 @@ ca_schema_load (const char *path)
       return NULL;
     }
 
-  if (-1 == ca_lock_init (path))
-    return NULL;
-
-  if (-1 == CA_compiler_init ())
-    return NULL;
-
   if (!(result = ca_malloc (sizeof (*result))))
     return NULL;
 
   if (!(result->path = ca_strdup (path)))
+    goto fail;
+
+  if (-1 == CA_schema_load (result))
     goto fail;
 
   ok = 1;
@@ -339,281 +234,125 @@ fail:
   return result;
 }
 
-int
-ca_schema_reload (struct ca_schema *schema)
-{
-  size_t i;
-
-  for (i = 0; i < schema->table_count; ++i)
-    {
-      ca_table_close (schema->tables[i].handle);
-
-      free (schema->tables[i].declaration.path);
-      free (schema->tables[i].declaration.fields);
-      free (schema->tables[i].backend);
-      free (schema->tables[i].name);
-    }
-
-  schema->table_count = 0;
-
-  return CA_schema_read (schema);
-}
-
 void
 ca_schema_close (struct ca_schema *schema)
 {
   size_t i;
 
-  for (i = 0; i < schema->table_count; ++i)
+  if (schema->time_series_tables)
     {
-      ca_table_close (schema->tables[i].handle);
-
-      free (schema->tables[i].declaration.path);
-      free (schema->tables[i].declaration.fields);
-      free (schema->tables[i].backend);
-      free (schema->tables[i].name);
+      for (i = 0; i < schema->time_series_table_count; ++i)
+        ca_table_close (schema->time_series_tables[i]);
+      free (schema->time_series_tables);
     }
 
+  if (schema->index_tables)
+    {
+      for (i = 0; i < schema->index_table_count; ++i)
+        ca_table_close (schema->index_tables[i]);
+      free (schema->index_tables);
+    }
+
+  if (schema->summary_tables)
+    {
+      for (i = 0; i < schema->summary_table_count; ++i)
+        ca_table_close (schema->summary_tables[i]);
+      free (schema->summary_tables);
+    }
+
+  free (schema->summary_table_offsets);
   free (schema->tables);
   free (schema->path);
   free (schema);
 }
 
-static void
-iov_from_string (struct iovec *target, const char *string)
+ssize_t
+ca_schema_summary_tables (struct ca_schema *schema,
+                          struct ca_table ***tables,
+                          uint64_t **offsets)
 {
-  target->iov_base = (void *) string;
-  target->iov_len = strlen (string) + 1;
+  if (!schema->summary_tables)
+    {
+      size_t i, j = 0;
+
+      if (!(schema->summary_tables = ca_malloc (sizeof (*schema->summary_tables) * schema->summary_table_count)))
+        return -1;
+
+      if (!(schema->summary_table_offsets = ca_malloc (sizeof (*schema->summary_table_offsets) * schema->summary_table_count)))
+        return -1;
+
+      for (i = 0; i < schema->table_count; ++i)
+        {
+          if (schema->tables[i].type != CA_SCHEMA_TABLE_SUMMARY)
+            continue;
+
+          if (!(schema->summary_tables[j] = ca_table_open ("write-once", schema->tables[i].path, O_RDONLY, 0)))
+            return -1;
+
+          schema->summary_table_offsets[j] = schema->tables[i].offset;
+
+          ++j;
+        }
+    }
+
+  *tables = schema->summary_tables;
+  *offsets = schema->summary_table_offsets;
+
+  return schema->summary_table_count;
 }
 
-int
-ca_schema_save (struct ca_schema *schema)
+ssize_t
+ca_schema_index_tables (struct ca_schema *schema,
+                        struct ca_table ***tables)
 {
-  struct ca_table *ca_tables, *ca_columns;
-  size_t i, j;
-  int result = -1;
-
-  struct iovec iov[5];
-
-  assert (schema->table_count >= 2);
-  assert (!strcmp (schema->tables[0].name, "ca_catalog.ca_tables"));
-  assert (!strcmp (schema->tables[1].name, "ca_catalog.ca_columns"));
-
-  if (!(ca_tables = ca_table_open (schema->tables[0].backend,
-                                   schema->tables[0].declaration.path,
-                                   O_WRONLY | O_CREAT | O_TRUNC, 0666)))
-    return -1;
-
-  if (!(ca_columns = ca_table_open (schema->tables[1].backend,
-                                    schema->tables[1].declaration.path,
-                                    O_WRONLY | O_CREAT | O_TRUNC, 0666)))
-    return -1;
-
-  for (i = 0; i < schema->table_count; ++i)
+  if (!schema->index_tables)
     {
-      const struct ca_table_declaration *decl;
+      size_t i, j = 0;
 
-      if (schema->tables[i].handle)
+      if (!(schema->index_tables = ca_malloc (sizeof (*schema->index_tables) * schema->index_table_count)))
+        return -1;
+
+      for (i = 0; i < schema->table_count; ++i)
         {
-          if (!schema->tables[i].dropped
-              && -1 == ca_table_sync (schema->tables[i].handle))
-            goto done;
+          if (schema->tables[i].type != CA_SCHEMA_TABLE_INDEX)
+            continue;
 
-          ca_table_close (schema->tables[i].handle);
+          if (!(schema->index_tables[j] = ca_table_open ("write-once", schema->tables[i].path, O_RDONLY, 0)))
+            return -1;
 
-          schema->tables[i].handle = NULL;
-        }
-
-      if (schema->tables[i].dropped)
-        continue;
-
-      decl = &schema->tables[i].declaration;
-
-      iov_from_string (&iov[0], schema->tables[i].name);
-      iov_from_string (&iov[1], decl->path);
-      iov_from_string (&iov[2], schema->tables[i].backend);
-
-      if (-1 == ca_table_insert_row (ca_tables, iov, 3))
-        goto done;
-
-      for (j = 0; j < decl->field_count; ++j)
-        {
-          int64_t type;
-          uint8_t flag_null, flag_primary_key;
-
-          type = decl->fields[j].type;
-          flag_null = 0 != (decl->fields[j].flags & CA_FIELD_NOT_NULL);
-          flag_primary_key = 0 != (decl->fields[j].flags & CA_FIELD_PRIMARY_KEY);
-
-          iov_from_string (&iov[0], schema->tables[i].name);
-          iov_from_string (&iov[1], decl->fields[j].name);
-
-          iov[2].iov_base = &type;
-          iov[2].iov_len  = sizeof (type);
-
-          iov[3].iov_base = &flag_null;
-          iov[3].iov_len  = sizeof (flag_null);
-
-          iov[4].iov_base = &flag_primary_key;
-          iov[4].iov_len  = sizeof (flag_primary_key);
-
-          if (-1 == ca_table_insert_row (ca_columns, iov, 5))
-            goto done;
+          ++j;
         }
     }
 
-  /* XXX: We need journalling to ensure atomic replace of both ca_tables and
-   *      ca_columns */
+  *tables = schema->index_tables;
 
-  if (-1 == ca_table_sync (ca_columns))
-    goto done;
-
-  if (-1 == ca_table_sync (ca_tables))
-    goto done;
-
-  result = 0;
-
-done:
-
-  ca_table_close (ca_columns);
-  ca_table_close (ca_tables);
-
-  return result;
+  return schema->index_table_count;
 }
 
-struct ca_table *
-ca_schema_create_table (struct ca_schema *schema, const char *name,
-                        struct ca_table_declaration *declaration)
+ssize_t
+ca_schema_time_series_tables (struct ca_schema *schema,
+                              struct ca_table ***tables)
 {
-  struct schema_table *table;
-  size_t i;
-
-  if (!declaration->field_count)
+  if (!schema->time_series_tables)
     {
-      ca_set_error ("Table must have at least one column");
+      size_t i, j = 0;
 
-      return NULL;
-    }
+      if (!(schema->time_series_tables = ca_malloc (sizeof (*schema->time_series_tables) * schema->time_series_table_count)))
+        return -1;
 
-  for (i = 0; i < schema->table_count; ++i)
-    {
-      if (!schema->tables[i].dropped
-          && !strcmp (schema->tables[i].name, name))
+      for (i = 0; i < schema->table_count; ++i)
         {
-          ca_set_error ("Table '%s' already exists", name);
+          if (schema->tables[i].type != CA_SCHEMA_TABLE_TIME_SERIES)
+            continue;
 
-          return NULL;
+          if (!(schema->time_series_tables[j] = ca_table_open ("write-once", schema->tables[i].path, O_RDONLY, 0)))
+            return -1;
+
+          ++j;
         }
     }
 
-  if (schema->table_count == schema->table_alloc
-      && -1 == CA_ARRAY_GROW (&schema->tables, &schema->table_alloc))
-    return NULL;
+  *tables = schema->time_series_tables;
 
-  table = &schema->tables[schema->table_count];
-
-  memset (table, 0, sizeof (*table));
-
-  if (!(table->name = ca_strdup (name)))
-    goto fail;
-
-  if (!(table->backend = ca_strdup ("write-once")))
-    goto fail;
-
-  table->declaration.field_count = declaration->field_count;
-
-  if (!(table->declaration.fields = ca_memdup (declaration->fields, sizeof (struct ca_field) * declaration->field_count)))
-    goto fail;
-
-  if (!declaration->path)
-    {
-      if (-1 == asprintf (&table->declaration.path, "%s/table.%s.XXXXXX",
-                          schema->path, name))
-        goto fail;
-
-      if (-1 == mkstemp (table->declaration.path))
-        {
-          ca_set_error ("mkstemp failed on path %s: %s",
-                        table->declaration.path, strerror (errno));
-
-          goto fail;
-        }
-    }
-  else
-    {
-      if (!(table->declaration.path = ca_strdup (declaration->path)))
-        goto fail;
-    }
-
-  if (!(table->handle = ca_table_open (table->backend,
-                                       table->declaration.path,
-                                       O_CREAT | O_TRUNC | O_RDWR, 0666)))
-    goto fail;
-
-  ++schema->table_count;
-
-  return table->handle;
-
-fail:
-
-  ca_table_close (table->handle);
-  free (table->name);
-  free (table->declaration.path);
-  free (table->declaration.fields);
-
-  return NULL;
-}
-
-int
-ca_schema_drop_table (struct ca_schema *schema,
-                      const char *table_name)
-{
-  size_t i;
-
-  for (i = 0; i < schema->table_count; ++i)
-    {
-      if (schema->tables[i].dropped
-          || strcmp (schema->tables[i].name, table_name))
-        continue;
-
-      schema->tables[i].dropped = 1;
-
-      return 0;
-    }
-
-  ca_set_error ("Table '%s' does not exist", table_name);
-
-  return -1;
-}
-
-struct ca_table *
-ca_schema_table (struct ca_schema *schema, const char *table_name,
-                 struct ca_table_declaration **declaration)
-{
-  size_t i;
-
-  for (i = 0; i < schema->table_count; ++i)
-    {
-      if (schema->tables[i].dropped
-          || strcmp (schema->tables[i].name, table_name))
-        continue;
-
-      if (!schema->tables[i].handle)
-        {
-          schema->tables[i].handle
-            = ca_table_open (schema->tables[i].backend,
-                             schema->tables[i].declaration.path,
-                             O_RDONLY, /* XXX: O_RDONLY only applies to WORM tables */
-                             0);
-        }
-
-      if (declaration)
-        *declaration = &schema->tables[i].declaration;
-
-      return schema->tables[i].handle;
-    }
-
-  ca_set_error ("Table '%s' does not exist", table_name);
-
-  return NULL;
+  return schema->time_series_table_count;
 }

@@ -79,7 +79,7 @@ flush_values (void)
 static void
 parse_data (const char *begin, const char *end)
 {
-  time_t current_time;
+  time_t current_time = 0;
 
   for (; begin != end; ++begin)
     {

@@ -156,7 +156,6 @@ namespace ca_llvm
     switch (type)
       {
       case CA_TEXT: return t_pointer;
-      case CA_TIME_FLOAT4_ARRAY: return t_iovec_pointer;
       case CA_UINT64: return t_int64;
       case CA_INT64: return t_int64;
       case CA_NUMERIC: return t_pointer;
@@ -279,10 +278,6 @@ CA_compiler_init (void)
     register_function (NULL, (void *) CA_output_uint64,
                        CA_VOID, CA_UINT64, -1);
 
-  f_CA_output_time_float4 =
-    register_function (NULL, (void *) CA_output_time_float4,
-                       CA_VOID, CA_TIME_FLOAT4_ARRAY, -1);
-
   f_CA_output_offset_score_array =
     register_function (NULL, (void *) CA_output_offset_score_array,
                        CA_VOID, CA_OFFSET_SCORE_ARRAY, -1);
@@ -304,7 +299,7 @@ CA_compiler_init (void)
                        CA_UINT64, CA_TEXT, -1);
 
   register_function ("sample", (void *) ca_sql_ts_sample,
-                     CA_FLOAT4, CA_TIME_FLOAT4_ARRAY, CA_TIMESTAMPTZ, -1);
+                     CA_FLOAT4, CA_OFFSET_SCORE_ARRAY, CA_TIMESTAMPTZ, -1);
 
   /* Unary <math.h> functions */
 #define C_FLOAT_FUNCTION(name) \
@@ -415,12 +410,6 @@ CA_generate_output (llvm::IRBuilder<> *builder,
 
       break;
 
-    case CA_TIME_FLOAT4_ARRAY:
-
-      builder->CreateCall (f_CA_output_time_float4, value);
-
-      break;
-
     case CA_OFFSET_SCORE_ARRAY:
 
       builder->CreateCall (f_CA_output_offset_score_array, value);
@@ -515,7 +504,6 @@ CA_collect_compile (const struct ca_field *fields, size_t field_count)
               break;
 
             case CA_OFFSET_SCORE_ARRAY:
-            case CA_TIME_FLOAT4_ARRAY:
 
               assert (!"Bug: Arrays only supported in last column");
 
@@ -817,7 +805,6 @@ CA_output_compile (struct expression *expr,
 
       break;
 
-    case CA_TIME_FLOAT4_ARRAY:
     case CA_OFFSET_SCORE_ARRAY:
 
       builder->CreateStore (return_value, result);

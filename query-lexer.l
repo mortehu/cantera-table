@@ -111,7 +111,6 @@ Z [zZ]
 {T}{A}{B}{L}{E}{S}                 { character += yyleng; return TABLES; }
 {T}{E}{X}{T}                       { character += yyleng; return TEXT; }
 {T}{I}{M}{E}                       { character += yyleng; return TIME; }
-{T}{I}{M}{E}_{F}{L}{O}{A}{T}4      { character += yyleng; return TIME_FLOAT4; }
 {T}{I}{M}{E}{S}{T}{A}{M}{P}        { character += yyleng; return TIMESTAMP; }
 {T}{I}{M}{E}{S}{T}{A}{M}{P}{T}{Z}  { character += yyleng; return TIMESTAMPTZ; }
 {T}{R}{A}{N}{S}{A}{C}{T}{I}{O}{N}  { character += yyleng; return TRANSACTION; }

@@ -126,60 +126,6 @@ CA_output_uint64 (uint64_t number)
 }
 
 void
-CA_output_time_float4 (struct iovec *iov)
-{
-  char time_buffer[64];
-
-  const uint8_t *begin, *end;
-  size_t i;
-  int first = 1;
-  const char *format = "%s:%.9g";
-
-  begin = iov->iov_base;
-  end = begin + iov->iov_len;
-
-  if (CA_output_format == CA_PARAM_VALUE_JSON)
-    {
-      putchar ('[');
-
-      format = "{\"time\":\"%s\",\"value\":%.9g}";
-    }
-
-  while (begin != end)
-    {
-      uint64_t start_time;
-      uint32_t interval, sample_count;
-      const float *sample_values;
-
-      ca_parse_time_float4 (&begin,
-                            &start_time, &interval,
-                            &sample_values, &sample_count);
-
-      for (i = 0; i < sample_count; ++i)
-        {
-          time_t time;
-          struct tm tm;
-
-          if (!first)
-            putchar (',');
-
-          time = start_time + i * interval;
-
-          gmtime_r (&time, &tm);
-
-          strftime (time_buffer, sizeof (time_buffer), CA_time_format, &tm);
-
-          printf (format, time_buffer, sample_values[i]);
-
-          first = 0;
-        }
-    }
-
-  if (CA_output_format == CA_PARAM_VALUE_JSON)
-    putchar (']');
-}
-
-void
 CA_output_offset_score_array (struct iovec *iov)
 {
   const uint8_t *begin, *end;

@@ -53,7 +53,6 @@ enum ca_type
   CA_INVALID            = -1,
 
   CA_TEXT               =  0,
-  CA_TIME_FLOAT4_ARRAY  =  1,
   CA_UINT64             =  2,
   CA_INT64              =  3,
   CA_NUMERIC            =  4,
@@ -86,7 +85,7 @@ enum ca_offset_score_type
    * the byte MSB to indicate continuation.  Scores stored as float4.  */
   CA_OFFSET_SCORE_VARBYTE_FLOAT = 1,
 
-  /* Same as CA_OFFSET_SCORE_VARBYTE_FLOAT, but the score is not stored, an
+  /* Same as CA_OFFSET_SCORE_VARBYTE_FLOAT, but the score is not stored, and
    * assumed to be zero.  */
   CA_OFFSET_SCORE_VARBYTE_ZERO = 2,
 
@@ -95,7 +94,9 @@ enum ca_offset_score_type
    * for the score values.  */
   CA_OFFSET_SCORE_VARBYTE_U8 = 3,
   CA_OFFSET_SCORE_VARBYTE_U16 = 4,
-  CA_OFFSET_SCORE_VARBYTE_U24 = 5
+  CA_OFFSET_SCORE_VARBYTE_U24 = 5,
+
+  CA_OFFSET_SCORE_FLEXI = 6
 };
 
 /*****************************************************************************/
@@ -373,11 +374,6 @@ ca_lock_release (void);
 /*****************************************************************************/
 
 int
-ca_table_write_time_float4 (struct ca_table *table, const char *key,
-                            uint64_t start_time, uint32_t interval,
-                            const float *sample_values, size_t sample_count) CA_USE_RESULT;
-
-int
 ca_table_write_offset_score (struct ca_table *table, const char *key,
                              const struct ca_offset_score *values,
                              size_t count);
@@ -386,11 +382,6 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 
 void
 ca_format_integer (uint8_t **output, uint64_t value);
-
-void
-ca_format_time_float4 (uint8_t **output,
-                       uint64_t start_time, uint32_t interval,
-                       const float *sample_values, size_t sample_count);
 
 size_t
 ca_offset_score_size (const struct ca_offset_score *values, size_t count);
@@ -409,11 +400,6 @@ ca_parse_float (const uint8_t **input);
 
 const char *
 ca_parse_string (const uint8_t **input);
-
-void
-ca_parse_time_float4 (const uint8_t **input,
-                      uint64_t *start_time, uint32_t *interval,
-                      const float **sample_values, uint32_t *count);
 
 int
 ca_parse_offset_score_array (const uint8_t **input,

@@ -37,7 +37,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %}
 
 %token AND CREATE FROM INDEX KEY LIMIT NOT OFFSET_SCORE OR PATH PRIMARY QUERY
-%token SELECT SHOW SUMMARY TABLE TABLES TEXT TIME TIMESTAMP TIME_FLOAT4 UTF8BOM
+%token SELECT SHOW SUMMARY TABLE TABLES TEXT TIME TIMESTAMP UTF8BOM
 %token WHERE WITH ZONE _NULL
 %token OFFSET FETCH FIRST NEXT ROW ROWS ONLY
 %token TRUE FALSE
@@ -390,7 +390,6 @@ type
     | TEXT                     { $$ = CA_TEXT; }
     | TIMESTAMP WITH TIME ZONE { $$ = CA_TIMESTAMPTZ; }
     | TIMESTAMPTZ              { $$ = CA_TIMESTAMPTZ; }
-    | TIME_FLOAT4 '[' ']'      { $$ = CA_TIME_FLOAT4_ARRAY; }
     | UINT8                    { $$ = CA_UINT8; }
     | UINT16                   { $$ = CA_UINT16; }
     | UINT32                   { $$ = CA_UINT32; }

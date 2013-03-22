@@ -21,12 +21,14 @@
 #  include "config.h"
 #endif
 
+#include <assert.h>
 #include <string.h>
 
 #include <err.h>
 #include <sysexits.h>
 
 #include "ca-table.h"
+#include "ca-internal.h"
 
 uint64_t
 ca_parse_integer (const uint8_t **input)
@@ -72,30 +74,12 @@ ca_parse_string (const uint8_t **input)
   return result;
 }
 
-void
-ca_parse_time_float4 (const uint8_t **input,
-                      uint64_t *start_time, uint32_t *interval,
-                      const float **sample_values, uint32_t *count)
-{
-  const uint8_t *p;
-
-  p = *input;
-
-  *start_time = ca_parse_integer (&p);
-  *interval = ca_parse_integer (&p);
-  *count = ca_parse_integer (&p);
-  *sample_values = (const float *) p;
-
-  p += sizeof (**sample_values) * *count;
-
-  *input = p;
-}
-
 int
 ca_parse_offset_score_array (const uint8_t **input,
-                             struct ca_offset_score **sample_values,
+                             struct ca_offset_score **return_values,
                              uint32_t *count)
 {
+  struct ca_offset_score *values;
   enum ca_offset_score_type type;
   uint_fast32_t i;
   const uint8_t *p;
@@ -107,8 +91,122 @@ ca_parse_offset_score_array (const uint8_t **input,
   type = *p++;
   *count = ca_parse_integer (&p);
 
-  if (!(*sample_values = ca_malloc (sizeof (**sample_values) * *count)))
+  if (!*count)
+    return 0;
+
+  if (!(*return_values = ca_malloc (sizeof (**return_values) * *count)))
     return -1;
+
+  values = *return_values;
+
+  if (type == CA_OFFSET_SCORE_FLEXI)
+    {
+      struct CA_rle_context rle;
+      uint64_t step_gcd, min_step, max_step;
+      uint8_t score_flags;
+      uint32_t min_score = 0;
+      size_t parse_score_count;
+
+      values[0].offset = ca_parse_integer (&p);
+
+      step_gcd = ca_parse_integer (&p);
+
+      if (!step_gcd)
+        {
+          for (i = 1; i < *count; ++i)
+            values[i].offset = values[0].offset;
+        }
+      else
+        {
+          min_step = ca_parse_integer (&p);
+          max_step = ca_parse_integer (&p) + min_step;
+
+          if (min_step == max_step)
+            {
+              for (i = 1; i < *count; ++i)
+                values[i].offset = values[i - 1].offset + step_gcd * min_step;
+            }
+          else if (max_step - min_step <= 0x0f)
+            {
+              CA_rle_init_read (&rle, p);
+
+              for (i = 1; i < *count; i += 2)
+                {
+                  uint8_t tmp;
+
+                  tmp = CA_rle_get (&rle);
+
+                  values[i].offset = values[i - 1].offset + step_gcd * (min_step + (tmp & 0x0f));
+
+                  if (i + 1 < *count)
+                    values[i + 1].offset = values[i].offset + step_gcd * (min_step + (tmp >> 4));
+                }
+
+              assert (!rle.run);
+              p = CA_rle_flush (&rle);
+            }
+          else if (max_step - min_step <= 0xff)
+            {
+              CA_rle_init_read (&rle, p);
+
+              for (i = 1; i < *count; ++i)
+                values[i].offset = values[i - 1].offset + step_gcd * (min_step + CA_rle_get (&rle));
+
+              assert (!rle.run);
+              p = CA_rle_flush (&rle);
+            }
+          else
+            {
+              for (i = 1; i < *count; ++i)
+                values[i].offset = values[i - 1].offset + step_gcd * (min_step + ca_parse_integer (&p));
+            }
+        }
+
+      score_flags = *p++;
+
+      if (score_flags & 3)
+        min_score = ca_parse_integer (&p);
+
+      parse_score_count = (0 != (score_flags & 0x80)) ? 1 : *count;
+
+      for (i = 0; i < parse_score_count; ++i)
+        {
+          switch (score_flags & 0x03)
+            {
+            case 0x00:
+
+              values[i].score = ca_parse_float (&p);
+
+              break;
+
+            case 0x01:
+
+              values[i].score = min_score + p[0];
+              ++p;
+
+              break;
+
+            case 0x02:
+
+              values[i].score = min_score + (p[0] << 8) + p[1];
+              p += 2;
+
+              break;
+
+            case 0x03:
+
+              values[i].score = min_score + (p[0] << 16) + (p[1] << 8) + p[2];
+              p += 3;
+
+              break;
+            }
+        }
+
+      for (; i < *count; ++i)
+        values[i].score = values[0].score;
+
+      return 0;
+    }
 
   switch (type)
     {
@@ -117,8 +215,9 @@ ca_parse_offset_score_array (const uint8_t **input,
       for (i = 0; i < *count; ++i)
         {
           offset += ca_parse_integer (&p);
-          (*sample_values)[i].offset = offset;
-          (*sample_values)[i].score = ca_parse_float (&p);
+
+          values[i].offset = offset;
+          values[i].score = ca_parse_float (&p);
         }
 
       break;
@@ -128,8 +227,9 @@ ca_parse_offset_score_array (const uint8_t **input,
       for (i = 0; i < *count; ++i)
         {
           offset += ca_parse_integer (&p);
-          (*sample_values)[i].offset = offset;
-          (*sample_values)[i].score = 0.0f;
+
+          values[i].offset = offset;
+          values[i].score = 0.0f;
         }
 
       break;
@@ -141,8 +241,9 @@ ca_parse_offset_score_array (const uint8_t **input,
       for (i = 0; i < *count; ++i)
         {
           offset += ca_parse_integer (&p);
-          (*sample_values)[i].offset = offset;
-          (*sample_values)[i].score = *p++ + base;
+
+          values[i].offset = offset;
+          values[i].score = *p++ + base;
         }
 
       break;
@@ -154,8 +255,9 @@ ca_parse_offset_score_array (const uint8_t **input,
       for (i = 0; i < *count; ++i)
         {
           offset += ca_parse_integer (&p);
-          (*sample_values)[i].offset = offset;
-          (*sample_values)[i].score = (p[0] << 8) + p[1] + base;
+
+          values[i].offset = offset;
+          values[i].score = (p[0] << 8) + p[1] + base;
           p += 2;
         }
 
@@ -168,8 +270,9 @@ ca_parse_offset_score_array (const uint8_t **input,
       for (i = 0; i < *count; ++i)
         {
           offset += ca_parse_integer (&p);
-          (*sample_values)[i].offset = offset;
-          (*sample_values)[i].score = (p[0] << 16) + (p[1] << 8) + p[2] + base;
+
+          values[i].offset = offset;
+          values[i].score = (p[0] << 16) + (p[1] << 8) + p[2] + base;
           p += 3;
         }
 
@@ -179,7 +282,7 @@ ca_parse_offset_score_array (const uint8_t **input,
 
       ca_set_error ("Unknown (offset, score) array encoding %d", (int) type);
 
-      free (*sample_values);
+      free (values);
 
       return -1;
     }

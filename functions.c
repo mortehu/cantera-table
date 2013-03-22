@@ -160,31 +160,24 @@ ca_sql_ts_sample (struct iovec *iov, int64_t timestamp)
 {
   const uint8_t *begin, *end;
   float result = NAN;
+  struct ca_offset_score *samples;
+  uint32_t i, sample_count;
 
   begin = (const uint8_t *) iov->iov_base;
   end = begin + iov->iov_len;
 
-  while (begin != end)
+  if (-1 == ca_parse_offset_score_array (&begin,
+                                         &samples, &sample_count))
+    return result;
+
+
+  for (i = 0; i < sample_count; ++i)
     {
-      uint64_t start_time;
-      uint32_t interval, sample_count;
-      const float *sample_values;
-      size_t i;
-
-      ca_parse_time_float4 (&begin,
-                            &start_time, &interval,
-                            &sample_values, &sample_count);
-
-      for (i = 0; i < sample_count; ++i)
-        {
-          time_t time;
-
-          time = start_time + i * interval;
-
-          if (time == timestamp)
-            result = sample_values[i];
-        }
+      if (timestamp == samples[i].offset)
+        result = samples[i].score;
     }
+
+  free (samples);
 
   return result;
 }

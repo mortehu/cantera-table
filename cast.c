@@ -36,7 +36,6 @@ CA_cast_to_text (struct ca_query_parse_context *context,
                  const struct expression_value *value)
 {
   char *result = NULL;
-  size_t result_alloc = 0, result_size = 0;
 
   switch (value->type)
     {
@@ -84,81 +83,6 @@ CA_cast_to_text (struct ca_query_parse_context *context,
           t = value->d.integer;
 
           strftime (result, 24, CA_time_format, gmtime (&t));
-        }
-
-      break;
-
-    case CA_TIME_FLOAT4_ARRAY:
-
-        {
-          const uint8_t *begin, *end;
-          size_t i;
-          int first = 1;
-
-          begin = value->d.iov.iov_base;
-          end = begin + value->d.iov.iov_len;
-
-          assert (value->d.iov.iov_len > 0);
-
-          while (begin != end)
-            {
-              uint64_t start_time;
-              uint32_t interval, sample_count;
-              const float *sample_values;
-
-              ca_parse_time_float4 (&begin,
-                                    &start_time, &interval,
-                                    &sample_values, &sample_count);
-
-              for (i = 0; i < sample_count; ++i)
-                {
-                  time_t time;
-                  struct tm tm;
-                  char *o;
-
-                  /*   15 bytes %.9g formatted -FLT_MAX
-                   * + 19 bytes for ISO 8601 date/time
-                   * + 1 byte for LF
-                   * + 1 byte for TAB
-                   */
-                  if (result_size + 36 >= result_alloc
-                      && -1 == CA_ARRAY_GROW_N (&result, &result_alloc, 36))
-                    return NULL;
-
-                  if (!first)
-                    result[result_size++] = '\n';
-
-                  time = start_time + i * interval;
-
-                  gmtime_r (&time, &tm);
-
-                  o = result + result_size;
-
-                  /* XXX Support varying length date/time */
-
-                  o += strftime (o, 20, CA_time_format, &tm);
-
-                  *o++ = '\t';
-
-                  o += sprintf (o, "%.9g", sample_values[i]);
-
-                  result_size = o - result;
-
-                  first = 0;
-                }
-            }
-
-          if (result_size == result_alloc
-              && -1 == CA_ARRAY_GROW_N (&result, &result_alloc, 1))
-            return NULL;
-
-          result[result_size] = 0;
-
-          if (-1 == ca_arena_add_pointer (&context->arena, result))
-            {
-              free (result);
-              result = NULL;
-            }
         }
 
       break;

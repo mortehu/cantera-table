@@ -29,31 +29,6 @@
 #define MAX_HEADER_SIZE 64
 
 int
-ca_table_write_time_float4 (struct ca_table *table, const char *key,
-                            uint64_t start_time, uint32_t interval,
-                            const float *sample_values, size_t sample_count)
-{
-  struct iovec value[3];
-  uint8_t header[MAX_HEADER_SIZE], *o;
-
-  o = header;
-
-  ca_format_integer (&o, start_time);
-  ca_format_integer (&o, interval);
-  ca_format_integer (&o, sample_count);
-
-  value[0].iov_base = (void *) key;
-  value[0].iov_len = strlen (key) + 1;
-  value[1].iov_base = header;
-  value[1].iov_len = o - header;
-  value[2].iov_base = (void *) sample_values;
-  value[2].iov_len = sizeof (*sample_values) * sample_count;
-
-  return ca_table_insert_row (table,
-                              value, sizeof (value) / sizeof (value[0]));
-}
-
-int
 ca_table_write_offset_score (struct ca_table *table, const char *key,
                              const struct ca_offset_score *values,
                              size_t count)
@@ -69,6 +44,29 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
   o = buffer;
 
   ca_format_offset_score (&o, values, count);
+
+#ifndef VERIFY
+  struct ca_offset_score *tmp;
+  uint32_t tmp_count;
+  const uint8_t *input;
+
+  input = buffer;
+
+  if (0 == ca_parse_offset_score_array (&input, &tmp, &tmp_count))
+    {
+      size_t i;
+
+      assert (tmp_count = count);
+
+      for (i = 0; i < count; ++i)
+        {
+          assert (tmp[i].offset == values[i].offset);
+          assert (tmp[i].score == values[i].score);
+        }
+
+      free (tmp);
+    }
+#endif
 
   assert (o <= buffer + buffer_alloc);
 

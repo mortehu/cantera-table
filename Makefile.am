@@ -8,11 +8,9 @@ include_HEADERS = ca-table.h ca-functions.h
 
 bin_PROGRAMS = \
   ca-shell \
+  ca-load \
   ca-sort \
-  ca-table-lockd \
-  ts-extract \
-  ts-load \
-  ts-merge
+  ca-table-lockd
 
 ACLOCAL_AMFLAGS = -I m4
 AM_CPPFLAGS = -I.
@@ -37,6 +35,7 @@ libca_table_la_SOURCES = \
   output.c \
   parse.c \
   query.c \
+  rle.c \
   schema.c schema.h \
   select.c \
   table-sort.c \
@@ -60,14 +59,8 @@ ca_shell_LDADD = libca-table.la
 ca_sort_SOURCES = ca-sort.c
 ca_sort_LDADD = libca-table.la
 
-ts_extract_SOURCES = ts-extract.c
-ts_extract_LDADD = libca-table.la
-
-ts_load_SOURCES = ts-load.c
-ts_load_LDADD = libca-table.la
-
-ts_merge_SOURCES = ts-merge.c
-ts_merge_LDADD = libca-table.la
+ca_load_SOURCES = ca-load.c
+ca_load_LDADD = libca-table.la
 
 TESTS = \
   tests/arena-00 \

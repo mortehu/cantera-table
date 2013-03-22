@@ -158,13 +158,12 @@ fail:
 float
 ca_sql_ts_sample (struct iovec *iov, int64_t timestamp)
 {
-  const uint8_t *begin, *end;
+  const uint8_t *begin;
   float result = NAN;
   struct ca_offset_score *samples;
   uint32_t i, sample_count;
 
   begin = (const uint8_t *) iov->iov_base;
-  end = begin + iov->iov_len;
 
   if (-1 == ca_parse_offset_score_array (&begin,
                                          &samples, &sample_count))

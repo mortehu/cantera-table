@@ -8,8 +8,7 @@ include_HEADERS = ca-table.h ca-functions.h
 
 bin_PROGRAMS = \
   ca-shell \
-  ca-load \
-  ca-sort
+  ca-load
 
 ACLOCAL_AMFLAGS = -I m4
 AM_CPPFLAGS = -I.
@@ -47,9 +46,6 @@ libca_table_la_LDFLAGS = -lpthread
 ca_shell_SOURCES = ca-shell.c query-parser.y query-lexer.l
 ca_shell_LDFLAGS = -lreadline
 ca_shell_LDADD = libca-table.la
-
-ca_sort_SOURCES = ca-sort.c
-ca_sort_LDADD = libca-table.la
 
 ca_load_SOURCES = ca-load.c
 ca_load_LDADD = libca-table.la

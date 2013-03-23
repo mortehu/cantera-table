@@ -186,9 +186,6 @@ parse_data (const char *begin, const char *end)
           break;
         }
     }
-
-  if (value_count)
-    flush_values ();
 }
 
 int
@@ -308,6 +305,9 @@ main (int argc, char **argv)
 
       munmap (map, file_size);
     }
+
+  if (value_count)
+    flush_values ();
 
   if (-1 == ca_table_sync (table_handle))
     errx (EXIT_FAILURE, "Failed to sync '%s': %s", argv[optind], ca_last_error ());

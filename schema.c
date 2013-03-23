@@ -69,15 +69,32 @@ static int
 CA_schema_load (struct ca_schema *schema)
 {
   FILE *f;
-  char line[4096];
+  char line[4096], *path_buf, *filename;
   int lineno = 0, result = -1;
 
-  if (!(f = fopen (schema->path, "r")))
+  if (!(path_buf = ca_strdup (schema->path)))
+    return -1;
+
+  /* We change into the directory of the schema to be able to more easily resolve relative paths */
+
+  if (NULL != (filename = strrchr (path_buf, '/')))
     {
-      ca_set_error ("Failed to open '%s' for reading: %s", schema->path, strerror (errno));
+      *filename++ = 0;
+
+      if (-1 == chdir (path_buf))
+        ca_set_error ("Failed to change directory to '%s': %s", path_buf, strerror (errno));
+    }
+  else
+    filename = path_buf;
+
+  if (!(f = fopen (filename, "r")))
+    {
+      ca_set_error ("Failed to open '%s' for reading: %s", filename, strerror (errno));
 
       return -1;
     }
+
+  free (path_buf);
 
   line[sizeof (line) - 1] = 0;
 
@@ -198,20 +215,6 @@ ca_schema_load (const char *path)
   struct ca_schema *result;
 
   int ok = 0;
-
-  if (path[0] != '/')
-    {
-      ca_set_error ("Schema path must be absolute");
-
-      return NULL;
-    }
-
-  if (path[strlen (path) - 1] == '/')
-    {
-      ca_set_error ("Schema path must not end with a slash (/)");
-
-      return NULL;
-    }
 
   if (!(result = ca_malloc (sizeof (*result))))
     return NULL;

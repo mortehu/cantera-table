@@ -19,27 +19,11 @@ AM_PROG_LEX
 AC_PROG_YACC
 AX_LIB_READLINE
 
-AC_ARG_VAR([LLVM_CONFIG], [LLVM Compilation Option Tool])
-AC_CHECK_TARGET_TOOLS([LLVM_CONFIG], [llvm-config llvm-config-3.2])
-
-LLVM_CPPFLAGS="-I`$LLVM_CONFIG --includedir`"
-LLVM_LDFLAGS="`$LLVM_CONFIG --ldflags`"
-LLVM_LIBS="`$LLVM_CONFIG --libs core jit native`"
-AC_SUBST(LLVM_LDFLAGS)
-AC_SUBST(LLVM_LIBS)
-
-CPPFLAGS="$CPPFLAGS $LLVM_CPPFLAGS"
-
 AC_GNU_SOURCE
 
 AC_DEFINE(__STDC_CONSTANT_MACROS, [], [Force definition of constant macros for C++])
 AC_DEFINE(__STDC_FORMAT_MACROS, [], [Force definition of format macros for C++])
 AC_DEFINE(__STDC_LIMIT_MACROS, [], [Force definition of limit macros for C++])
-
-AC_LANG_PUSH([C++])
-AX_CXX_COMPILE_STDCXX_11([noext])
-AC_CHECK_HEADERS([llvm/Support/TargetSelect.h llvm/Target/TargetSelect.h llvm/Support/IRBuilder.h llvm/IRBuilder.h])
-AC_LANG_POP([C++])
 
 AS_AC_EXPAND(BINDIR, $bindir)
 AS_AC_EXPAND(DATADIR, $datadir)

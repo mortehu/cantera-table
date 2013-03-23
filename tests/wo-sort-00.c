@@ -64,7 +64,12 @@ main (int argc, char **argv)
       if (-1 == (ret = ca_table_read_row (table_A, &value)))
         goto fail;
 
-      assert (ret == 1);
+      if (ret != 1)
+        {
+          ca_set_error ("ca_table_read_row returned %d on word %zu", ret, i);
+
+          goto fail;
+        }
 
       key = value.iov_base;
 

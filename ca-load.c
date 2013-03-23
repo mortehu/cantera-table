@@ -73,6 +73,8 @@ static struct ca_table **summary_tables;
 static uint64_t *summary_table_offsets;
 static ssize_t summary_table_count;
 
+static int do_summaries;
+
 static void
 flush_values (void)
 {
@@ -103,11 +105,12 @@ parse_data (const char *begin, const char *end)
 
           if (*begin == delimiter)
             {
+              if (value_count && key[key_length])
+                flush_values ();
+
               key[key_length] = 0;
 
-              key_length = 0;
-
-              state = parse_offset;
+              state = do_summaries ? parse_value : parse_offset;
 
               break;
             }
@@ -189,34 +192,45 @@ parse_data (const char *begin, const char *end)
 
           if (*begin == '\n')
             {
-              float fvalue;
-              char *endptr;
-
-              if (no_match)
+              if (do_summaries)
                 {
-                  no_match = 0;
+                  struct iovec iov[2];
 
-                  break;
+                  iov[0].iov_base = key;
+                  iov[0].iov_len = key_length + 1;
+                  iov[1].iov_base = value_string;
+                  iov[1].iov_len = value_string_length;
+
+                  if (-1 == ca_table_insert_row (table_handle, iov, 2))
+                    errx (EXIT_FAILURE, "%s", ca_last_error ());
+                }
+              else if (no_match)
+                no_match = 0;
+              else
+                {
+                  float fvalue;
+                  char *endptr;
+
+                  value_string[value_string_length] = 0;
+
+                  fvalue = strtod (value_string, &endptr);
+
+                  if (*endptr)
+                    errx (EX_DATAERR, "Unable to parse value '%s'.  Unexpected suffix: '%s'",
+                          value_string, endptr);
+
+
+                  if (value_count == value_alloc
+                      && -1 == CA_ARRAY_GROW (&values, &value_alloc))
+                    errx (EXIT_FAILURE, "%s", ca_last_error ());
+
+                  values[value_count].offset = current_offset;
+                  values[value_count].score = fvalue;
+                  ++value_count;
                 }
 
-              value_string[value_string_length] = 0;
-
-              fvalue = strtod (value_string, &endptr);
-
-              if (*endptr)
-                errx (EX_DATAERR, "Unable to parse value '%s'.  Unexpected suffix: '%s'",
-                      value_string, endptr);
-
               value_string_length = 0;
-
-              if (value_count == value_alloc
-                  && -1 == CA_ARRAY_GROW (&values, &value_alloc))
-                errx (EXIT_FAILURE, "%s", ca_last_error ());
-
-              values[value_count].offset = current_offset;
-              values[value_count].score = fvalue;
-              ++value_count;
-
+              key_length = 0;
               state = parse_key;
 
               break;
@@ -344,11 +358,10 @@ main (int argc, char **argv)
 
       do_map_documents = 1;
     }
-  else if (strcmp (output_format, "time-series")
-           && strcmp (output_format, "summaries"))
-    {
-      errx (EX_USAGE, "Invalid output format '%s'", output_format);
-    }
+  else if (!strcmp (output_format, "summaries"))
+    do_summaries = 1;
+  else if (strcmp (output_format, "time-series"))
+    errx (EX_USAGE, "Invalid output format '%s'", output_format);
 
   if (optind + 1 != argc)
     errx (EX_USAGE, "Usage: %s [OPTION]... TABLE", argv[0]);

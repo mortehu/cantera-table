@@ -26,11 +26,16 @@ struct ca_query_parse_context
 
 enum ca_sql_statement_type
 {
+  CA_SQL_SAMPLE,
   CA_SQL_SET,
   CA_SQL_QUERY,
   CA_SQL_QUERY_CORRELATE
 };
 
+struct sample_statement
+{
+  char *key;
+};
 
 struct query_statement
 {
@@ -66,6 +71,7 @@ struct statement
 
   union
     {
+      struct sample_statement sample;
       struct set_statement set;
       struct query_statement query;
       struct query_correlate_statement query_correlate;

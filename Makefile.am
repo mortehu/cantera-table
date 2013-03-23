@@ -31,6 +31,7 @@ libca_table_la_SOURCES = \
   parse.c \
   query.c \
   rle.c \
+  sample.c \
   schema.c schema.h \
   table-sort.c \
   sort.cc \

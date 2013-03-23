@@ -11,6 +11,14 @@ CA_process_statement (struct ca_query_parse_context *context,
 
   switch (stmt->type)
     {
+    case CA_SQL_SAMPLE:
+
+      if (-1 == ca_schema_sample (context->schema,
+                                  stmt->u.sample.key))
+        context->error = 1;
+
+      break;
+
     case CA_SQL_SET:
 
       switch (stmt->u.set.parameter)

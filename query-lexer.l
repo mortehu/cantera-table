@@ -81,6 +81,7 @@ Z [zZ]
 {S}{H}{O}{W}                       { character += yyleng; return SHOW; }
 {S}{U}{M}{M}{A}{R}{Y}              { character += yyleng; return SUMMARY; }
 {T}{E}{X}{T}                       { character += yyleng; return TEXT; }
+{T}{I}{M}{E}                       { character += yyleng; return TIME; }
 {V}{A}{L}{U}{E}{S}                 { character += yyleng; return VALUES; }
 {W}{I}{T}{H}                       { character += yyleng; return WITH; }
 

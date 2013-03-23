@@ -12,186 +12,34 @@ enum ca_param_value
 {
   /* OUTPUT FORMAT */
   CA_PARAM_VALUE_CSV,
-  CA_PARAM_VALUE_JSON,
-
-  /* TRANSACTION ISOLATION LEVEL */
-  CA_PARAM_VALUE_SERIALIZABLE,
-  CA_PARAM_VALUE_VOLATILE
+  CA_PARAM_VALUE_JSON
 };
 
 struct ca_query_parse_context
 {
   void *scanner;
   struct ca_arena_info arena;
-  int in_transaction_block;
-  int transaction_id_allocated;
   int error;
 
   struct ca_schema *schema;
 };
 
-enum create_table_arg_type
-{
-  COLUMN_DEFINITION,
-  TABLE_CONSTRAINT
-};
-
-struct create_table_arg
-{
-  enum create_table_arg_type type;
-
-  union
-    {
-      struct column_definition *column;
-    } u;
-
-  struct create_table_arg *next;
-};
-
-enum expression_type
-{
-  EXPR_CONSTANT,
-
-  EXPR_ADD,
-  EXPR_AND,
-  EXPR_CAST,
-  EXPR_DISTINCT,
-  EXPR_DIV,
-  EXPR_EQUAL,
-  EXPR_EXISTS,
-  EXPR_FUNCTION_CALL,
-  EXPR_GREATER_EQUAL,
-  EXPR_GREATER_THAN,
-  EXPR_IDENTIFIER,
-  EXPR_IN,
-  EXPR_IS_NULL,
-  EXPR_LESS_EQUAL,
-  EXPR_LESS_THAN,
-  EXPR_LIKE,
-  EXPR_NOT_LIKE,
-  EXPR_MUL,
-  EXPR_NEGATIVE,
-  EXPR_NOT,
-  EXPR_NOT_EQUAL,
-  EXPR_OR,
-  EXPR_SELECT,
-  EXPR_SUB,
-
-  EXPR_ASTERISK,
-  EXPR_FIELD
-};
-
-struct column_definition
-{
-  const char *name;
-  int type;
-  int not_null;
-  int primary_key;
-};
-
-struct expression_value
-{
-  enum ca_type type;
-  union
-    {
-      int64_t integer;
-      float float4;
-      double float8;
-      char *numeric;
-      char *string_literal;
-      char *identifier;
-      struct column_type *type;
-      struct select_statement *select;
-      struct iovec iov;
-      uint32_t field_index;
-    } d;
-};
-
-struct expression
-{
-  enum expression_type type;
-
-  struct expression_value value;
-
-  struct expression *lhs, *rhs;
-
-  struct expression *next;
-};
-
-struct select_item
-{
-  struct expression expression;
-  char *alias;
-};
-
-struct select_variable
-{
-  const char *name;
-  uint32_t field_index;
-  enum ca_type type;
-
-  struct select_variable *next;
-};
-
 enum ca_sql_statement_type
 {
-  CA_SQL_BEGIN,
-  CA_SQL_COMMIT,
-  CA_SQL_CREATE_TABLE,
-  CA_SQL_DROP_TABLE,
-  CA_SQL_INSERT,
-  CA_SQL_LOCK,
-  CA_SQL_SELECT,
+  CA_SQL_SAMPLE,
   CA_SQL_SET,
-  CA_SQL_UPDATE,
   CA_SQL_QUERY,
   CA_SQL_QUERY_CORRELATE
 };
 
-struct create_table_statement
+struct sample_statement
 {
-  const char *name;
-  struct ca_table_declaration declaration;
-};
-
-struct drop_table_statement
-{
-  const char *name;
-};
-
-struct select_statement
-{
-  struct select_item *list;
-  char *from;
-  struct expression *where;
-
-  int64_t limit, offset;
-};
-
-struct update_statement
-{
-  char *table;
-  char *column;
-  struct expression *expression;
-  struct expression *where;
-};
-
-struct insert_statement
-{
-  const char *table_name;
-  struct expression *values;
-};
-
-struct lock_statement
-{
-  const char *table_name;
+  char *key;
 };
 
 struct query_statement
 {
   const char *query;
-  const char *index_table_name;
-  const char *summary_table_name;
   int64_t limit;
 };
 
@@ -199,14 +47,12 @@ struct query_correlate_statement
 {
   const char *query_A;
   const char *query_B;
-  const char *index_table_name;
 };
 
 enum ca_param
 {
   CA_PARAM_OUTPUT_FORMAT,
-  CA_PARAM_TIME_FORMAT,
-  CA_PARAM_ISOLATION_LEVEL
+  CA_PARAM_TIME_FORMAT
 };
 
 struct set_statement
@@ -225,13 +71,8 @@ struct statement
 
   union
     {
-      struct create_table_statement create_table;
-      struct drop_table_statement drop_table;
-      struct insert_statement insert;
-      struct lock_statement lock;
-      struct select_statement select;
+      struct sample_statement sample;
       struct set_statement set;
-      struct update_statement update;
       struct query_statement query;
       struct query_correlate_statement query_correlate;
     } u;
@@ -276,67 +117,6 @@ CA_output_uint64 (uint64_t number);
 
 void
 CA_output_time_float4 (struct iovec *iov);
-
-void
-CA_output_offset_score_array (struct iovec *iov);
-
-const char *
-CA_cast_to_text (struct ca_query_parse_context *context,
-                 const struct expression_value *value);
-
-
-/*****************************************************************************/
-
-int
-CA_compare_like (const char *subject, const char *pattern);
-
-int
-CA_query_resolve_variables (struct expression *expression,
-                            const struct ca_hashmap *variables,
-                            int *is_constant);
-
-int
-CA_select (struct ca_query_parse_context *context,
-           struct select_statement *stmt);
-
-int
-CA_update (struct ca_query_parse_context *context,
-           struct update_statement *stmt);
-
-int
-CA_compiler_init (void);
-
-void
-CA_compiler_dump (void);
-
-typedef int (*ca_collect_function) (struct iovec *result,
-                                    const uint8_t *begin,
-                                    const uint8_t *end);
-
-ca_collect_function
-CA_collect_compile (const struct ca_field *fields, size_t field_count);
-
-typedef int (*ca_expression_function) (struct ca_query_parse_context *context,
-                                       const struct iovec *field_values);
-
-#define CA_EXPRESSION_PRINT       0x0001
-#define CA_EXPRESSION_RETURN_BOOL 0x0002
-
-ca_expression_function
-CA_expression_compile (const char *name,
-                       struct expression *expr,
-                       const struct ca_field *fields,
-                       size_t field_count,
-                       int flags);
-
-typedef int (*ca_output_function) (struct iovec *result,
-                                   struct ca_query_parse_context *context,
-                                   const struct iovec *field_values);
-
-ca_output_function
-CA_output_compile (struct expression *expr,
-                   const struct ca_field *fields, size_t field_count,
-                   enum ca_type *return_type);
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -24,8 +24,7 @@
 
 static int
 validate_values (struct ca_offset_score *values,
-                 size_t count,
-                 enum ca_offset_score_type expected_type)
+                 size_t count)
 {
   size_t compressed_size;
   uint8_t *compressed_data, *p;
@@ -45,7 +44,6 @@ validate_values (struct ca_offset_score *values,
   ca_format_offset_score (&p, values, count);
 
   assert ((p - compressed_data) <= compressed_size);
-  assert (compressed_data[0] == expected_type);
 
   p = compressed_data;
 
@@ -79,37 +77,37 @@ main (int argc, char **argv)
       values[i].score = (double) random () / RAND_MAX;
     }
 
-  if (-1 == validate_values (values, value_count, CA_OFFSET_SCORE_VARBYTE_FLOAT))
+  if (-1 == validate_values (values, value_count))
     goto done;
 
   for (i = 0; i < value_count; ++i)
     values[i].score = (i << 8);
 
-  if (-1 == validate_values (values, value_count, CA_OFFSET_SCORE_VARBYTE_U24))
+  if (-1 == validate_values (values, value_count))
     goto done;
 
   for (i = 0; i < value_count; ++i)
     values[i].score = i;
 
-  if (-1 == validate_values (values, value_count, CA_OFFSET_SCORE_VARBYTE_U16))
+  if (-1 == validate_values (values, value_count))
     goto done;
 
   for (i = 0; i < value_count; ++i)
     values[i].score = i & 0xff;
 
-  if (-1 == validate_values (values, value_count, CA_OFFSET_SCORE_VARBYTE_U8))
+  if (-1 == validate_values (values, value_count))
     goto done;
 
   for (i = 0; i < value_count; ++i)
     values[i].score = 0;
 
-  if (-1 == validate_values (values, value_count, CA_OFFSET_SCORE_VARBYTE_ZERO))
+  if (-1 == validate_values (values, value_count))
     goto done;
 
   for (i = 0; i < value_count; ++i)
     values[i].offset = i;
 
-  if (-1 == validate_values (values, value_count, CA_OFFSET_SCORE_VARBYTE_ZERO))
+  if (-1 == validate_values (values, value_count))
     goto done;
 
   result = EXIT_SUCCESS;

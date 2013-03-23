@@ -59,7 +59,6 @@ extern int read_history ();
 #include "ca-table.h"
 #include "query.h"
 
-static const char *schema_path = "/data/tables";
 static int print_version;
 static int print_help;
 
@@ -75,6 +74,7 @@ int
 main (int argc, char **argv)
 {
   struct ca_query_parse_context context;
+  const char *schema_path;
   const char *command = NULL;
   int i;
 
@@ -122,11 +122,10 @@ main (int argc, char **argv)
       return EXIT_SUCCESS;
     }
 
-  if (optind != argc)
-    errx (EX_USAGE, "Usage: %s [OPTION]...", argv[0]);
+  if (optind + 1 != argc)
+    errx (EX_USAGE, "Usage: %s [OPTION]... SCHEMA", argv[0]);
 
-  if (-1 == chdir (schema_path))
-    errx (EXIT_FAILURE, "Could not chdir to '%s'", schema_path);
+  schema_path = argv[optind++];
 
   if (!(context.schema = ca_schema_load (schema_path)))
     errx (EXIT_FAILURE, "Failed to load schema: %s", ca_last_error ());

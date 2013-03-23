@@ -299,77 +299,33 @@ struct ca_schema;
 struct ca_schema *
 ca_schema_load (const char *path) CA_USE_RESULT;
 
-/**
- * Used for committing changes at the end of a transaction
- */
-int
-ca_schema_save (struct ca_schema *schema);
-
-int
-ca_schema_reload (struct ca_schema *schema);
-
 void
 ca_schema_close (struct ca_schema *schema);
 
-struct ca_table *
-ca_schema_create_table (struct ca_schema *schema, const char *table_name,
-                        struct ca_table_declaration *declaration) CA_USE_RESULT;
+ssize_t
+ca_schema_summary_tables (struct ca_schema *schema,
+                          struct ca_table ***tables,
+                          uint64_t **offsets);
+
+ssize_t
+ca_schema_index_tables (struct ca_schema *schema,
+                        struct ca_table ***tables);
+
+ssize_t
+ca_schema_time_series_tables (struct ca_schema *schema,
+                              struct ca_table ***tables);
 
 int
-ca_schema_drop_table (struct ca_schema *schema,
-                      const char *table_name) CA_USE_RESULT;
-
-struct ca_table *
-ca_schema_table (struct ca_schema *schema, const char *table_name,
-                 struct ca_table_declaration **declaration) CA_USE_RESULT;
+ca_schema_sample (struct ca_schema *schema, const char *key);
 
 int
 ca_schema_query (struct ca_schema *schema, const char *query,
-                 const char *index_table_name,
-                 const char *summary_table_name,
                  ssize_t limit);
 
 int
 ca_schema_query_correlate (struct ca_schema *schema,
                            const char *query_A,
-                           const char *query_B,
-                           const char *index_table_name);
-
-/*****************************************************************************/
-
-#define CA_LOCK_MESSAGE_SIZE 508
-
-enum ca_lock_direction
-{
-  CA_LOCK_GLOBAL,
-  CA_LOCK_TABLE,
-
-  CA_LOCK_LESS,
-  CA_LOCK_LEQUAL,
-  CA_LOCK_EQUAL,
-  CA_LOCK_GEQUAL,
-  CA_LOCK_GREATER
-};
-
-int
-ca_lock_init (const char *schema_path);
-
-int
-ca_lock_grab (const char *table_name,
-              const char *column_name,
-              enum ca_lock_direction direction,
-              const void *value,
-              size_t size);
-
-int
-ca_lock_grab_table (const char *table_name);
-
-int
-ca_lock_grab_global (void);
-
-int
-ca_lock_release (void);
-
+                           const char *query_B);
 
 /*****************************************************************************/
 
@@ -405,14 +361,6 @@ int
 ca_parse_offset_score_array (const uint8_t **input,
                              struct ca_offset_score **sample_values,
                              uint32_t *count) CA_USE_RESULT;
-
-/*****************************************************************************/
-
-float
-ca_cast_text_to_float4 (const char *text);
-
-double
-ca_cast_text_to_float8 (const char *text);
 
 /*****************************************************************************/
 

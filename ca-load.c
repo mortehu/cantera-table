@@ -34,6 +34,8 @@ static struct option long_options[] =
 {
     { "delimiter",      required_argument, NULL,           'D' },
     { "date-format",    required_argument, NULL,           'A' },
+    { "output-format",  required_argument, NULL,           'O' },
+    { "schema",         required_argument, NULL,           'S' },
     { "version",        no_argument,       &print_version, 1 },
     { "help",           no_argument,       &print_help,    1 },
     { 0, 0, 0, 0 }
@@ -44,7 +46,7 @@ static struct ca_table *table_handle;
 enum parse_state
 {
   parse_key,
-  parse_date,
+  parse_offset,
   parse_value
 };
 
@@ -54,9 +56,9 @@ static char *key;
 static size_t key_alloc;
 static size_t key_length;
 
-static char *date;
-static size_t date_alloc;
-static size_t date_length;
+static char *offset;
+static size_t offset_alloc;
+static size_t offset_length;
 
 static char *value_string;
 static size_t value_string_alloc;
@@ -66,9 +68,16 @@ static struct ca_offset_score *values;
 static size_t value_alloc;
 static size_t value_count;
 
+static int do_map_documents;
+static struct ca_table **summary_tables;
+static uint64_t *summary_table_offsets;
+static ssize_t summary_table_count;
+
 static void
 flush_values (void)
 {
+  ca_sort_offset_score_by_offset (values, value_count);
+
   if (-1 == ca_table_write_offset_score (table_handle, key,
                                          values, value_count))
     errx (EXIT_FAILURE, "%s", ca_last_error ());
@@ -79,7 +88,8 @@ flush_values (void)
 static void
 parse_data (const char *begin, const char *end)
 {
-  time_t current_time = 0;
+  uint64_t current_offset = 0;
+  int no_match = 0;
 
   for (; begin != end; ++begin)
     {
@@ -97,7 +107,7 @@ parse_data (const char *begin, const char *end)
 
               key_length = 0;
 
-              state = parse_date;
+              state = parse_offset;
 
               break;
             }
@@ -109,38 +119,62 @@ parse_data (const char *begin, const char *end)
 
           break;
 
-        case parse_date:
+        case parse_offset:
 
-          if (date_length == date_alloc
-              && -1 == CA_ARRAY_GROW (&date, &date_alloc))
+          if (offset_length == offset_alloc
+              && -1 == CA_ARRAY_GROW (&offset, &offset_alloc))
             errx (EXIT_FAILURE, "%s", ca_last_error ());
 
           if (*begin == delimiter)
             {
-              struct tm tm;
-              char *end;
+              offset[offset_length] = 0;
 
-              memset (&tm, 0, sizeof (tm));
+              if (do_map_documents)
+                {
+                  size_t i;
+                  int ret;
 
-              date[date_length] = 0;
+                  no_match = 1;
 
-              if (!(end = strptime (date, date_format, &tm)))
-                errx (EX_DATAERR, "Unable to parse date '%s' according to format '%s'",
-                      date, date_format);
+                  for (i = summary_table_count; i-- > 0; )
+                    {
+                      if (-1 == (ret = ca_table_seek_to_key (summary_tables[i], offset)))
+                        errx (EXIT_FAILURE, "Failed to seek to key '%s': %s", offset, ca_last_error ());
 
-              if (*end)
-                errx (EX_DATAERR, "Junk at end of date '%s': %s", date, end);
+                      if (ret == 1)
+                        {
+                          current_offset = ca_table_offset (summary_tables[i]);
 
-              current_time = timegm (&tm);
+                          no_match = 0;
 
-              date_length = 0;
+                          break;
+                        }
+                    }
+                }
+              else
+                {
+                  struct tm tm;
+                  char *end;
 
+                  memset (&tm, 0, sizeof (tm));
+
+                  if (!(end = strptime (offset, date_format, &tm)))
+                    errx (EX_DATAERR, "Unable to parse date '%s' according to format '%s'",
+                          offset, date_format);
+
+                  if (*end)
+                    errx (EX_DATAERR, "Junk at end of offset '%s': %s", offset, end);
+
+                  current_offset = timegm (&tm);
+                }
+
+              offset_length = 0;
               state = parse_value;
 
               break;
             }
 
-          date[date_length++] = *begin;
+          offset[offset_length++] = *begin;
 
           break;
 
@@ -158,6 +192,13 @@ parse_data (const char *begin, const char *end)
               float fvalue;
               char *endptr;
 
+              if (no_match)
+                {
+                  no_match = 0;
+
+                  break;
+                }
+
               value_string[value_string_length] = 0;
 
               fvalue = strtod (value_string, &endptr);
@@ -172,7 +213,7 @@ parse_data (const char *begin, const char *end)
                   && -1 == CA_ARRAY_GROW (&values, &value_alloc))
                 errx (EXIT_FAILURE, "%s", ca_last_error ());
 
-              values[value_count].offset = current_time;
+              values[value_count].offset = current_offset;
               values[value_count].score = fvalue;
               ++value_count;
 
@@ -186,14 +227,16 @@ parse_data (const char *begin, const char *end)
           break;
         }
     }
-
-  if (value_count)
-    flush_values ();
 }
 
 int
 main (int argc, char **argv)
 {
+  const char *output_format = "time-series";
+
+  const char *schema_path = NULL;
+  struct ca_schema *schema = NULL;
+
   int input_fd = STDIN_FILENO;
   int i;
 
@@ -224,6 +267,18 @@ main (int argc, char **argv)
         case 'A':
 
           date_format = optarg;
+
+          break;
+
+        case 'O':
+
+          output_format = optarg;
+
+          break;
+
+        case 'S':
+
+          schema_path = optarg;
 
           break;
 
@@ -275,6 +330,26 @@ main (int argc, char **argv)
       return EXIT_SUCCESS;
     }
 
+  if (!strcmp (output_format, "index"))
+    {
+      if (!schema_path)
+        errx (EX_USAGE, "--output-format=index can only be used with --schema=PATH");
+
+      if (!(schema = ca_schema_load (schema_path)))
+        errx (EXIT_FAILURE, "Failed to load schema: %s", ca_last_error ());
+
+      if (-1 == (summary_table_count = ca_schema_summary_tables (schema, &summary_tables,
+                                                                 &summary_table_offsets)))
+        errx (EXIT_FAILURE, "Failed to open summary tables: %s", ca_last_error ());
+
+      do_map_documents = 1;
+    }
+  else if (strcmp (output_format, "time-series")
+           && strcmp (output_format, "summaries"))
+    {
+      errx (EX_USAGE, "Invalid output format '%s'", output_format);
+    }
+
   if (optind + 1 != argc)
     errx (EX_USAGE, "Usage: %s [OPTION]... TABLE", argv[0]);
 
@@ -308,6 +383,9 @@ main (int argc, char **argv)
 
       munmap (map, file_size);
     }
+
+  if (value_count)
+    flush_values ();
 
   if (-1 == ca_table_sync (table_handle))
     errx (EXIT_FAILURE, "Failed to sync '%s': %s", argv[optind], ca_last_error ());

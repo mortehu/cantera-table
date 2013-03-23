@@ -53,6 +53,8 @@ main (int argc, char **argv)
   if (-1 == ca_table_sync (table_A))
     goto fail;
 
+  assert (!ca_table_is_sorted (table_A));
+
   if (-1 == ca_table_seek (table_A, 0, SEEK_SET))
     goto fail;
 
@@ -92,6 +94,8 @@ main (int argc, char **argv)
 
   if (-1 == ca_table_sync (table_B))
     goto fail;
+
+  assert (ca_table_is_sorted (table_B));
 
   if (-1 == ca_table_seek (table_B, 0, SEEK_SET))
     goto fail;

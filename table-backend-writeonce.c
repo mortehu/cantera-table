@@ -23,6 +23,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,8 +41,8 @@
 #include "ca-table.h"
 
 #define MAGIC 0x6c6261742e692e70ULL
-#define MAJOR_VERSION 1
-#define MINOR_VERSION 1
+#define MAJOR_VERSION 2
+#define MINOR_VERSION 0
 
 #define TMP_SUFFIX ".tmp.XXXXXX"
 #define BUFFER_SIZE (1024 * 1024)
@@ -135,18 +136,23 @@ struct CA_wo
   struct ca_file_buffer *write_buffer;
   uint64_t write_offset;
 
-  char *buffer;
+  uint8_t *buffer;
   size_t buffer_size, buffer_fill;
 
-  char *prev_key;
-
   uint32_t crc32c;
-  uint16_t flags;
 
   struct CA_wo_header *header;
 
-  uint64_t *entries;
-  size_t entry_alloc, entry_count;
+  uint64_t entry_count;
+
+  union
+    {
+      uint64_t *u64;
+      uint32_t *u32;
+      uint16_t *u16;
+    } index;
+  uint64_t index_size;
+  unsigned int index_bits;
 
   int no_relative;
   int no_fsync;
@@ -183,6 +189,13 @@ CA_wo_open (const char *path, int flags, mode_t mode)
   if (!(result->path = ca_strdup (path)))
     goto fail;
 
+  if ((flags & O_WRONLY) == O_WRONLY)
+    {
+      ca_set_error ("O_WRONLY is not allowed");
+
+      goto fail;
+    }
+
   if (flags & O_CREAT)
     {
       struct CA_wo_header dummy_header;
@@ -192,9 +205,9 @@ CA_wo_open (const char *path, int flags, mode_t mode)
       umask (mask);
 
       if ((flags & O_TRUNC) != O_TRUNC
-          || (((flags & O_RDWR) != O_RDWR) && (flags & O_WRONLY) != O_WRONLY))
+          || ((flags & O_RDWR) != O_RDWR))
         {
-          ca_set_error ("O_CREAT only allowed with O_TRUNC | O_RDWR or O_TRUNC | O_WRONLY");
+          ca_set_error ("O_CREAT only allowed with O_TRUNC | O_RDWR");
 
           goto fail;
         }
@@ -234,18 +247,9 @@ CA_wo_open (const char *path, int flags, mode_t mode)
         goto fail;
 
       result->write_offset = sizeof (dummy_header);
-
-      result->flags = CA_WO_FLAG_ASCENDING | CA_WO_FLAG_DESCENDING;
     }
   else
     {
-      if ((flags & O_WRONLY) == O_WRONLY)
-        {
-          ca_set_error ("O_WRONLY only allowed with O_CREAT");
-
-          goto fail;
-        }
-
       if ((flags & O_RDWR) == O_RDWR)
         {
           ca_set_error ("O_RDWR only allowed with O_CREAT");
@@ -303,6 +307,89 @@ CA_wo_utime (void *handle, const struct timeval tv[2])
   return 0;
 }
 
+static uint64_t
+CA_wo_hash (const char *str)
+{
+  uint64_t result = 0x2257d6803a6f1b2ULL;
+
+  while (*str)
+    result = result * 31 + (unsigned char) *str++;
+
+  return result;
+}
+
+static int
+CA_wo_build_index (struct CA_wo *t)
+{
+  struct iovec row;
+  const char *prev_key = NULL;
+  unsigned int flags = CA_WO_FLAG_ASCENDING | CA_WO_FLAG_DESCENDING;
+  int ret;
+
+  if (-1 == CA_wo_seek (t, 0, SEEK_SET))
+    return -1;
+
+  for (;;)
+    {
+      uint64_t offset, hash;
+
+      uint64_t fib[2] = { 2, 1 };
+      unsigned int collisions = 0;
+      int cmp;
+
+      offset = CA_wo_offset (t);
+
+      if (1 != (ret = CA_wo_read_row (t, &row)))
+        break;
+
+      if (flags && prev_key)
+        {
+          cmp = strcmp (row.iov_base, prev_key);
+
+          if (cmp < 0)
+            flags &= ~CA_WO_FLAG_ASCENDING;
+          else if (cmp > 0)
+            flags &= ~CA_WO_FLAG_DESCENDING;
+        }
+
+      hash = CA_wo_hash (row.iov_base) % t->index_size;
+
+      prev_key = row.iov_base;
+
+#define HASH_INSERT(bits)                                        \
+  do                                                             \
+    {                                                            \
+      while (t->index.u##bits[hash])                             \
+        {                                                        \
+          ++collisions;                                          \
+          hash = (hash + fib[collisions & 1]) % t->index_size;   \
+          fib[collisions & 1] += fib[~collisions & 1];           \
+        }                                                        \
+                                                                 \
+      t->index.u##bits[hash] = offset;                           \
+    }                                                            \
+  while (0)
+
+      switch (t->index_bits)
+        {
+        case 16: HASH_INSERT(16); break;
+        case 32: HASH_INSERT(32); break;
+        default: HASH_INSERT(64); break;
+        }
+
+#undef HASH_INSERT
+    }
+
+  if (ret == -1)
+    return -1;
+
+  t->header->flags = flags;
+
+  assert (ret == 0);
+
+  return 0;
+}
+
 static int
 CA_wo_sync (void *handle)
 {
@@ -318,22 +405,9 @@ CA_wo_sync (void *handle)
   header.minor_version = MINOR_VERSION;
   header.index_offset = t->write_offset;
 
-  /* Add end pointer for convenience when calculating entry sizes later */
-  if (t->entry_count == t->entry_alloc
-      && -1 == CA_ARRAY_GROW (&t->entries, &t->entry_alloc))
-    return -1;
-
-  t->entries[t->entry_count] = header.index_offset;
-
-  if (-1 == ca_file_buffer_write (t->write_buffer,
-                                  t->entries,
-                                  sizeof (*t->entries) * (t->entry_count + 1)))
-    return -1;
-
   if (-1 == ca_file_buffer_flush (t->write_buffer))
     return -1;
 
-  header.flags = t->flags;
   header.data_crc32c = t->crc32c;
 
   if (-1 == lseek (t->fd, 0, SEEK_SET))
@@ -345,6 +419,28 @@ CA_wo_sync (void *handle)
     }
 
   if (-1 == CA_wo_write_all (t->fd, &header, sizeof (header)))
+    return -1;
+
+  if (!(header.index_offset & ~0xffffULL))
+    t->index_bits = 16;
+  else if (!(header.index_offset & ~0xffffffffULL))
+    t->index_bits = 32;
+  else
+    t->index_bits = 64;
+
+  t->index_size = t->entry_count * 2 + 1;
+
+  if (-1 == ftruncate (t->fd, header.index_offset + t->index_size * (t->index_bits / CHAR_BIT)))
+    {
+      ca_set_error ("ftruncate failed: %s", strerror (errno));
+
+      return -1;
+    }
+
+  if (-1 == CA_wo_mmap (t))
+    return -1;
+
+  if (-1 == CA_wo_build_index (t))
     return -1;
 
   /* XXX: I think we need to sync all ancestor directories in order to be
@@ -369,14 +465,8 @@ CA_wo_sync (void *handle)
   free (t->tmp_path);
   t->tmp_path = NULL;
 
-  free (t->entries);
-  t->entries = NULL;
-
   ca_file_buffer_free (t->write_buffer);
   t->write_buffer = NULL;
-
-  if ((t->open_flags & O_RDWR) == O_RDWR)
-    return CA_wo_mmap (t);
 
   return 0;
 }
@@ -428,41 +518,34 @@ static int
 CA_wo_insert_row (void *handle, const struct iovec *value, size_t value_count)
 {
   struct CA_wo *t = handle;
-  const char *key;
-  size_t i;
-  int cmp = 1;
+  uint8_t size_buf[10], *p = size_buf;
+  int result = 0;
 
-  if (t->entry_alloc == t->entry_count
-      && -1 == CA_ARRAY_GROW (&t->entries, &t->entry_alloc))
+  struct iovec *iov;
+  uint64_t i, size = 0;
+
+  if (!(iov = ca_malloc ((value_count + 1) * sizeof (*iov))))
     return -1;
-
-  key = value[0].iov_base;
-
-  if (t->prev_key)
-    {
-      cmp = strcmp (key, t->prev_key);
-
-      if (cmp < 0)
-        t->flags &= ~CA_WO_FLAG_ASCENDING;
-      else if (cmp > 0)
-        t->flags &= ~CA_WO_FLAG_DESCENDING;
-    }
-
-  free (t->prev_key);
-  t->prev_key = NULL;
-
-  if (!(t->prev_key = ca_strdup (key)))
-    return -1;
-
-  t->entries[t->entry_count++] = t->write_offset;
 
   for (i = 0; i < value_count; ++i)
-    t->write_offset += value[i].iov_len;
+    size += value[i].iov_len;
 
-  if (-1 == ca_file_buffer_writev (t->write_buffer, value, value_count))
-    return -1;
+  ca_format_integer (&p, size);
 
-  return 0;
+  ++t->entry_count;
+
+  iov[0].iov_base = size_buf;
+  iov[0].iov_len = p - size_buf;
+  memcpy (iov + 1, value, value_count * sizeof (*iov));
+
+  if (-1 == ca_file_buffer_writev (t->write_buffer, iov, value_count + 1))
+    result = -1;
+
+  t->write_offset += size + iov[0].iov_len;
+
+  free (iov);
+
+  return result;
 }
 
 static int
@@ -475,7 +558,7 @@ CA_wo_seek (void *handle, off_t offset, int whence)
     {
     case SEEK_SET:
 
-      new_offset = offset;
+      new_offset = sizeof (struct CA_wo_header);
 
       break;
 
@@ -487,7 +570,7 @@ CA_wo_seek (void *handle, off_t offset, int whence)
 
     case SEEK_END:
 
-      new_offset = t->entry_count + offset;
+      new_offset = t->header->index_offset;
 
       break;
 
@@ -499,14 +582,14 @@ CA_wo_seek (void *handle, off_t offset, int whence)
       return -1;
     }
 
-  if (new_offset < 0)
+  if (new_offset < sizeof (struct CA_wo_header))
     {
       ca_set_error ("Attempt to seek before start of table");
 
       return -1;
     }
 
-  if (new_offset > t->entry_count)
+  if (new_offset > t->header->index_offset)
     {
       ca_set_error ("Attempt to seek past end of table");
 
@@ -522,91 +605,48 @@ static int
 CA_wo_seek_to_key (void *handle, const char *key)
 {
   struct CA_wo *t = handle;
-  size_t first = 0, middle, half, count;
-  int found = 0;
+  uint64_t hash, offset;
 
-  count = t->entry_count;
+  uint64_t fib[2] = { 2, 1 };
+  unsigned int collisions = 0;
 
-  if (0 != (t->header->flags & CA_WO_FLAG_ASCENDING))
+  hash = CA_wo_hash (key) % t->index_size;
+
+  for (;;)
     {
-      while (count > 0)
+      const uint8_t *data;
+      int cmp;
+
+      switch (t->index_bits)
         {
-          int cmp;
-
-          half = count >> 1;
-          middle = first + half;
-
-          cmp = strcmp (t->buffer + t->entries[middle], key);
-
-          if (cmp < 0)
-            {
-              first = middle + 1;
-              count -= half + 1;
-            }
-          else
-            {
-              if (!cmp)
-                found = 1;
-
-              count = half;
-            }
+        case 16: offset = t->index.u16[hash]; break;
+        case 32: offset = t->index.u32[hash]; break;
+        default: offset = t->index.u64[hash]; break;
         }
 
-      if (found)
+      if (!offset)
+        break;
+
+      data = t->buffer + offset;
+
+      while ((*data) & 0x80)
+        ++data;
+
+      ++data;
+
+      if (!(cmp = strcmp ((const char *) data, key)))
         {
-          t->offset = first;
+          t->offset = offset;
 
           return 1;
         }
-    }
-  else if (0 != (t->header->flags & CA_WO_FLAG_DESCENDING))
-    {
-      while (count > 0)
-        {
-          int cmp;
 
-          half = count >> 1;
-          middle = first + half;
-
-          cmp = strcmp (t->buffer + t->entries[middle], key);
-
-          if (cmp > 0)
-            {
-              first = middle + 1;
-              count -= half + 1;
-            }
-          else
-            {
-              if (!cmp)
-                found = 1;
-
-              count = half;
-            }
-        }
-
-      if (found)
-        {
-          t->offset = first;
-
-          return 1;
-        }
-    }
-  else
-    {
-      off_t offset;
-
-      for (offset = 0; offset < t->entry_count; ++offset)
-        {
-          if (!strcmp (t->buffer + t->entries[offset], key))
-            {
-              t->offset = offset;
-
-              return 1;
-            }
-        }
+      ++collisions;
+      hash = (hash + fib[collisions & 1]) % t->index_size;
+      fib[collisions & 1] += fib[~collisions & 1];
     }
 
-  return 0;
+  return -1;
 }
 
 static off_t
@@ -621,6 +661,8 @@ static ssize_t
 CA_wo_read_row (void *handle, struct iovec *value)
 {
   struct CA_wo *t = handle;
+  uint64_t size;
+  uint8_t *p;
 
   if (t->offset < 0)
     {
@@ -629,13 +671,22 @@ CA_wo_read_row (void *handle, struct iovec *value)
       return -1;
     }
 
-  if (t->offset >= t->entry_count)
-    return 0;
+  if (t->offset >= t->header->index_offset)
+    {
+      assert (t->offset == t->header->index_offset);
 
-  value->iov_base = (void *) t->buffer + t->entries[t->offset];
-  value->iov_len = t->entries[t->offset + 1] - t->entries[t->offset];
+      return 0;
+    }
 
-  ++t->offset;
+  p = t->buffer + t->offset;
+
+  size = ca_parse_integer ((const uint8_t **) &p);
+
+  value->iov_base = p;
+  value->iov_len = size;
+
+  p += size;
+  t->offset = p - t->buffer;
 
   return 1;
 }
@@ -681,6 +732,7 @@ static int
 CA_wo_mmap (struct CA_wo *t)
 {
   off_t end = 0;
+  int prot = PROT_READ;
 
   if (-1 == (end = lseek (t->fd, 0, SEEK_END)))
     {
@@ -700,7 +752,10 @@ CA_wo_mmap (struct CA_wo *t)
   t->buffer_size = end;
   t->buffer_fill = end;
 
-  if (MAP_FAILED == (t->buffer = mmap (NULL, end, PROT_READ, MAP_SHARED, t->fd, 0)))
+  if ((t->open_flags & O_RDWR) == O_RDWR)
+    prot |= PROT_WRITE;
+
+  if (MAP_FAILED == (t->buffer = mmap (NULL, end, prot, MAP_SHARED, t->fd, 0)))
     {
       ca_set_error ("Failed to mmap '%s': %s", t->path, strerror (errno));
 
@@ -726,9 +781,17 @@ CA_wo_mmap (struct CA_wo *t)
       return -1;
     }
 
-  t->entries = (uint64_t *) (t->buffer + t->header->index_offset);
-  t->entry_alloc = (t->buffer_size - t->header->index_offset) / sizeof (uint64_t);
-  t->entry_count = t->entry_alloc - 1; /* Don't count end pointer */
+  if (!(t->header->index_offset & ~0xffffULL))
+    t->index_bits = 16;
+  else if (!(t->header->index_offset & ~0xffffffffULL))
+    t->index_bits = 32;
+  else
+    t->index_bits = 64;
+
+  t->index.u64 = (uint64_t *) (t->buffer + t->header->index_offset);
+  t->index_size = (t->buffer_size - t->header->index_offset) / (t->index_bits / CHAR_BIT);
+
+  t->offset = sizeof (struct CA_wo_header);
 
   return 0;
 }
@@ -749,11 +812,8 @@ CA_wo_free (struct CA_wo *t)
     {
       unlink (t->tmp_path);
       free (t->tmp_path);
-
-      free (t->entries); /* Part of t->buffer otherwise */
     }
 
-  free (t->prev_key);
   free (t->path);
   free (t);
 }

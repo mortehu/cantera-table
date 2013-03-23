@@ -366,7 +366,7 @@ main (int argc, char **argv)
   if (optind + 1 != argc)
     errx (EX_USAGE, "Usage: %s [OPTION]... TABLE", argv[0]);
 
-  if (!(table_handle = ca_table_open ("write-once", argv[optind], O_CREAT | O_TRUNC | O_WRONLY, 0666)))
+  if (!(table_handle = ca_table_open ("write-once", argv[optind], O_CREAT | O_TRUNC | O_RDWR, 0666)))
     errx (EXIT_FAILURE, "Failed to create '%s': %s", argv[optind], ca_last_error ());
 
   state = parse_key;

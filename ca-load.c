@@ -146,7 +146,8 @@ parse_data (const char *begin, const char *end)
 
                       if (ret == 1)
                         {
-                          current_offset = ca_table_offset (summary_tables[i]);
+                          current_offset = ca_table_offset (summary_tables[i])
+                                         + summary_table_offsets[i];
 
                           no_match = 0;
 

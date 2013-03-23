@@ -42,7 +42,7 @@ libca_table_la_SOURCES = \
   table-write.c \
   table.c \
   type.c
-libca_table_la_LDFLAGS = $(LLVM_LDFLAGS) $(LLVM_LIBS) -pthread
+libca_table_la_LDFLAGS = -lpthread
 
 ca_shell_SOURCES = ca-shell.c query-parser.y query-lexer.l
 ca_shell_LDFLAGS = -lreadline

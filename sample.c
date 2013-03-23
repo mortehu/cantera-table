@@ -38,6 +38,8 @@ ca_schema_sample (struct ca_schema *schema, const char *key)
       if (-1 == CA_output_time_series (data))
         return -1;
 
+      putchar ('\n');
+
       break;
     }
 

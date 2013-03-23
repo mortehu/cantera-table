@@ -69,6 +69,8 @@ static size_t value_count;
 static void
 flush_values (void)
 {
+  ca_sort_offset_score_by_offset (values, value_count);
+
   if (-1 == ca_table_write_offset_score (table_handle, key,
                                          values, value_count))
     errx (EXIT_FAILURE, "%s", ca_last_error ());

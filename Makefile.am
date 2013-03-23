@@ -64,7 +64,6 @@ TESTS = \
   tests/hashmap-00 \
   tests/log-sort-00 \
   tests/rank-correlation-00 \
-  tests/schema-00 \
   tests/wo-sort-00
 check_PROGRAMS = $(TESTS)
 
@@ -77,5 +76,4 @@ tests_format_00_LDADD = libca-table.la
 tests_hashmap_00_LDADD = libca-table.la
 tests_log_sort_00_LDADD = libca-table.la
 tests_rank_correlation_00_LDADD = libca-table.la
-tests_schema_00_LDADD = libca-table.la
 tests_wo_sort_00_LDADD = libca-table.la

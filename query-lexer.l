@@ -65,6 +65,7 @@ Z [zZ]
 {F}{A}{L}{S}{E}                    { character += yyleng; return FALSE; }
 {F}{E}{T}{C}{H}                    { character += yyleng; return FETCH; }
 {F}{I}{R}{S}{T}                    { character += yyleng; return FIRST; }
+{S}{A}{M}{P}{L}{E}                 { character += yyleng; return SAMPLE; }
 {F}{O}{R}{M}{A}{T}                 { character += yyleng; return FORMAT; }
 {J}{S}{O}{N}                       { character += yyleng; return JSON; }
 {L}{I}{M}{I}{T}                    { character += yyleng; return LIMIT; }

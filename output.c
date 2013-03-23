@@ -125,16 +125,15 @@ CA_output_uint64 (uint64_t number)
     }
 }
 
-void
-CA_output_offset_score_array (struct iovec *iov)
+int
+CA_output_offset_score_array (const uint8_t *data)
 {
-  const uint8_t *begin, *end;
   size_t i;
   int first = 1;
   const char *format = "%llu:%.9g";
 
-  begin = iov->iov_base;
-  end = begin + iov->iov_len;
+  uint32_t sample_count;
+  struct ca_offset_score *sample_values;
 
   if (CA_output_format == CA_PARAM_VALUE_JSON)
     {
@@ -143,28 +142,77 @@ CA_output_offset_score_array (struct iovec *iov)
       format = "{\"offset\":\"%llu\",\"score\":%.9g}";
     }
 
-  while (begin != end)
+  if (-1 == ca_parse_offset_score_array (&data,
+                                         &sample_values, &sample_count))
+    return -1;
+
+  for (i = 0; i < sample_count; ++i)
     {
-      uint32_t sample_count;
-      struct ca_offset_score *sample_values;
+      if (!first)
+        putchar (',');
 
-      if (-1 == ca_parse_offset_score_array (&begin,
-                                             &sample_values, &sample_count))
-        break;
+      printf (format,
+              (unsigned long long) sample_values[i].offset,
+              sample_values[i].score);
 
-      for (i = 0; i < sample_count; ++i)
-        {
-          if (!first)
-            putchar (',');
-
-          printf (format,
-                  (unsigned long long) sample_values[i].offset,
-                  sample_values[i].score);
-
-          first = 0;
-        }
+      first = 0;
     }
+
+  free (sample_values);
 
   if (CA_output_format == CA_PARAM_VALUE_JSON)
     putchar (']');
+
+  return 0;
+}
+
+int
+CA_output_time_series (const uint8_t *data)
+{
+  char time_buffer[64];
+
+  size_t i;
+  int first = 1;
+  const char *format = "%s:%.9g";
+
+  uint32_t sample_count;
+  struct ca_offset_score *sample_values;
+
+  if (CA_output_format == CA_PARAM_VALUE_JSON)
+    {
+      putchar ('[');
+
+      format = "{\"time\":\"%s\",\"value\":%.9g}";
+    }
+
+  if (-1 == ca_parse_offset_score_array (&data,
+                                         &sample_values, &sample_count))
+    return -1;
+
+  for (i = 0; i < sample_count; ++i)
+    {
+      time_t time;
+      struct tm tm;
+
+      if (!first)
+        putchar (',');
+
+      time = sample_values[i].offset;
+      memset (&tm, 0, sizeof (tm));
+
+      gmtime_r (&time, &tm);
+
+      strftime (time_buffer, sizeof (time_buffer), CA_time_format, &tm);
+
+      printf (format, time_buffer, sample_values[i].score);
+
+      first = 0;
+    }
+
+  free (sample_values);
+
+  if (CA_output_format == CA_PARAM_VALUE_JSON)
+    putchar (']');
+
+  return 0;
 }

@@ -44,6 +44,7 @@ yyerror (YYLTYPE *loc, struct ca_query_parse_context *context, const char *messa
 %token INTO VALUES
 %token DROP
 %token SET OUTPUT FORMAT CSV JSON
+%token SAMPLE
 %token CORRELATE
 
 %token Identifier
@@ -107,6 +108,18 @@ statement
         query = &stmt->u.query_correlate;
         query->query_A = $3;
         query->query_B = $5;
+
+        $$ = stmt;
+      }
+    | SAMPLE StringLiteral
+      {
+        struct statement *stmt;
+        struct sample_statement *sample;
+
+        ALLOC (stmt);
+        stmt->type = CA_SQL_SAMPLE;
+        sample = &stmt->u.sample;
+        sample->key = $2;
 
         $$ = stmt;
       }

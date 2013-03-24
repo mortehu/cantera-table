@@ -337,7 +337,7 @@ CA_wo_build_index (struct CA_wo *t)
       unsigned int collisions = 0;
       int cmp;
 
-      offset = CA_wo_offset (t);
+      offset = t->offset;
 
       if (1 != (ret = CA_wo_read_row (t, &row)))
         break;
@@ -558,7 +558,7 @@ CA_wo_seek (void *handle, off_t offset, int whence)
     {
     case SEEK_SET:
 
-      new_offset = sizeof (struct CA_wo_header);
+      new_offset = sizeof (struct CA_wo_header) + offset;
 
       break;
 
@@ -615,7 +615,6 @@ CA_wo_seek_to_key (void *handle, const char *key)
   for (;;)
     {
       const uint8_t *data;
-      int cmp;
 
       switch (t->index_bits)
         {
@@ -634,7 +633,7 @@ CA_wo_seek_to_key (void *handle, const char *key)
 
       ++data;
 
-      if (!(cmp = strcmp ((const char *) data, key)))
+      if (!strcmp ((const char *) data, key))
         {
           t->offset = offset;
 
@@ -654,7 +653,7 @@ CA_wo_offset (void *handle)
 {
   struct CA_wo *t = handle;
 
-  return t->offset;
+  return t->offset - sizeof (struct CA_wo_header);
 }
 
 static ssize_t
@@ -664,7 +663,7 @@ CA_wo_read_row (void *handle, struct iovec *value)
   uint64_t size;
   uint8_t *p;
 
-  if (t->offset < 0)
+  if (t->offset < sizeof (struct CA_wo_header))
     {
       ca_set_error ("Current offset is negative");
 

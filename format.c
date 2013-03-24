@@ -83,6 +83,8 @@ ca_format_offset_score (uint8_t **output,
   int all_integer = 1;
   uint8_t score_flags = 0;
 
+  float tmp;
+
   o = *output;
 
   if (!count)
@@ -97,10 +99,12 @@ ca_format_offset_score (uint8_t **output,
 
   min_score = max_score = values[0].score;
 
+  if (modff (values[0].score, &tmp))
+    all_integer = 0;
+
   for (i = 1; i < count; ++i)
     {
       uint64_t step;
-      float int_part, frac_part;
 
       step = values[i].offset - values[i - 1].offset;
 
@@ -121,9 +125,7 @@ ca_format_offset_score (uint8_t **output,
       else if (values[i].score > max_score)
         max_score = values[i].score;
 
-      frac_part = modff (values[i].score, &int_part);
-
-      if (frac_part)
+      if (modff (values[i].score, &tmp))
         all_integer = 0;
     }
 

@@ -576,6 +576,8 @@ ca_schema_query (struct ca_schema *schema, const char *query,
 
   for (i = 0; i < offset_count; ++i)
     {
+      const char *begin, *end;
+
       if (i)
         printf (",\n");
 
@@ -598,7 +600,12 @@ ca_schema_query (struct ca_schema *schema, const char *query,
           goto done;
         }
 
-      printf ("%s", (const char *) strchr (data_iov.iov_base, 0) + 1);
+      begin = data_iov.iov_base;
+      end = begin + data_iov.iov_len;
+
+      begin = strchr (begin, 0) + 1;
+
+      printf ("%.*s", (int) (end - begin), begin);
     }
 
   printf ("]\n");

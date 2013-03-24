@@ -170,6 +170,9 @@ parse_data (const char *begin, const char *end)
                     errx (EX_DATAERR, "Junk at end of offset '%s': %s", offset, end);
 
                   current_offset = timegm (&tm);
+
+                  if (!current_offset)
+                    fprintf (stderr, "Warning: %s maps to 1970-01-01", date_format);
                 }
 
               offset_length = 0;

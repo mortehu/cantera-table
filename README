@@ -3,11 +3,12 @@ INTRODUCTION
   To use this software, you need a schema file.  This is a simple ASCII file,
   designed to be editable with an ordinary text editor.  Here's an example:
 
-    summary      /var/lib/search/summary:html  0
-    summary      /var/lib/search/summary:pdf   1000000000
-    index        /var/lib/search/index:html
-    index        /var/lib/search/index:pdf
-    time-series  /var/lib/search/nasdaq
+    summary          /var/lib/search/summary:html  0
+    summary          /var/lib/search/summary:pdf   1000000000
+    summary-override /var/lib/search/summary.override
+    index            /var/lib/search/index:html
+    index            /var/lib/search/index:pdf
+    time-series      /var/lib/search/nasdaq
 
   The three supported table types are "summary", "index" and "time-series".
   What follows is a brief description of each type.
@@ -22,12 +23,32 @@ SUMMARY TABLES
   integer value in the third column of the schema file indicates the starting
   offset for the summary table.
 
+  During search queries, summary tables are accessed by seeking directly to the
+  correct file offset.  During index construction, offsets are found using the
+  hash map stored at the end of each file.
+
+SUMMARY-OVERRIDE TABLES
+
+  Sometimes a document changes, and you want the changes to be visible without
+  rebuilding all index tables.  This is when you use a summary-override table.
+  They are stored in the exact same format as summary tables.  When a search
+  query has found its result set, the summary-override tables are queried for
+  entries with matching names.  If an entry is found, it is used instead of the
+  entry from the summary table.
+
+  When a summary-override table is used, it causes a hash map lookup for every
+  query result entry.  It's therefore advisable that the summary-override
+  tables are kept in RAM.
+
 INDEX TABLES
 
   An index table consists of strings coupled with an array of integer/floating
   point value pairs.  The integers represent offsets into the summary table
   address space.  The floating point values represent relevance, dates or any
   other data you might want to rank or filter your search queries by.
+
+  During search queries, index tables are accessed by resolving keywords into
+  file offsets using the hash map stored at the end of each file.
 
 TIME SERIES TABLES
 
@@ -46,7 +67,7 @@ HOW TO BUILD AND USE AN INVERTED INDEX
   2. Create the summary table input data by building one or more text files
      with each line in the following format:
 
-     <DOCUMENT-ID> TAB <KEY> TAB <VALUE>
+     <DOCUMENT-NAME> TAB <KEY> TAB <VALUE>
 
   3. Assemble the summaries into a summary table:
 
@@ -56,7 +77,7 @@ HOW TO BUILD AND USE AN INVERTED INDEX
   4. Create a keyword table by building one or more text files with each line
      in the following format:
 
-     <KEYWORD> TAB <DOCUMENT-ID> [TAB <SCORE>]
+     <KEYWORD> TAB <DOCUMENT-NAME> [TAB <SCORE>]
 
   5. Assemble the keywords into an index table:
 
@@ -65,7 +86,7 @@ HOW TO BUILD AND USE AN INVERTED INDEX
                --schema=/var/lib/search/schema \
                /var/lib/search/index
 
-    Each document ID will be converted to its offset according the the schema
+    Each document name will be converted to its offset according the the schema
     and the summary table(s).  If a document exists in multiple summary tables,
     a reference to each position will be kept.  The entries will be merged
     during search.
@@ -80,9 +101,10 @@ HOW TO BUILD AND USE AN INVERTED INDEX
      It is possible to have ca-shell start from inetd or similar software, in
      which case you may want it to handle the HTTP protocol:
 
-     ca-shell --http-param=q /var/lib/search/schema
+     ca-shell --http-query-param=q /var/lib/search/schema
 
      This will read the query out of the HTTP GET parameter named "q", and
      print an HTTP response with a payload consisting of a JSON array of
      summaries.  The Content-Type will be reported as application/json.  To
-     prevent abuse, the --limit parameter might be of interest.
+     prevent restrict the number of results returned, use the --limit
+     parameter.

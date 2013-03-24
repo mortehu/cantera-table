@@ -548,6 +548,9 @@ ca_schema_query (struct ca_schema *schema, const char *query,
   uint64_t *summary_table_offsets;
   ssize_t summary_table_count;
 
+  struct ca_table **summary_override_tables;
+  ssize_t summary_override_table_count;
+
   ssize_t ret;
   int result = -1;
 
@@ -563,6 +566,9 @@ ca_schema_query (struct ca_schema *schema, const char *query,
 
       goto done;
     }
+
+  if (-1 == (summary_override_table_count = ca_schema_summary_override_tables (schema, &summary_override_tables)))
+    goto done;
 
   if (-1 == (offset_count = CA_schema_query (&offsets, schema, query)))
     goto done;
@@ -598,6 +604,26 @@ ca_schema_query (struct ca_schema *schema, const char *query,
                           (int) ret);
 
           goto done;
+        }
+
+      for (j = 0; j < summary_override_table_count; ++j)
+        {
+          if (-1 == (ret = ca_table_seek_to_key (summary_override_tables[j], data_iov.iov_base)))
+            goto done;
+
+          if (!ret)
+            continue;
+
+          if (1 != (ret = ca_table_read_row (summary_override_tables[j], &data_iov)))
+            {
+              if (ret >= 0)
+                ca_set_error ("ca_table_read_row unexpectedly returned %d",
+                              (int) ret);
+
+              goto done;
+            }
+
+          break;
         }
 
       begin = data_iov.iov_base;

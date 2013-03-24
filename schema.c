@@ -36,6 +36,7 @@
 enum ca_schema_table_type
 {
   CA_SCHEMA_TABLE_SUMMARY,
+  CA_SCHEMA_TABLE_SUMMARY_OVERRIDE,
   CA_SCHEMA_TABLE_INDEX,
   CA_SCHEMA_TABLE_TIME_SERIES
 };
@@ -57,6 +58,9 @@ struct ca_schema
   struct ca_table **summary_tables;
   uint64_t *summary_table_offsets;
   size_t summary_table_count;
+
+  struct ca_table **summary_override_tables;
+  size_t summary_override_table_count;
 
   struct ca_table **index_tables;
   size_t index_table_count;
@@ -140,6 +144,11 @@ CA_schema_load (struct ca_schema *schema)
         {
           table.type = CA_SCHEMA_TABLE_SUMMARY;
           ++schema->summary_table_count;
+        }
+      else if (!strcmp (line, "summary-override"))
+        {
+          table.type = CA_SCHEMA_TABLE_SUMMARY_OVERRIDE;
+          ++schema->summary_override_table_count;
         }
       else if (!strcmp (line, "index"))
         {
@@ -295,6 +304,34 @@ ca_schema_summary_tables (struct ca_schema *schema,
   *offsets = schema->summary_table_offsets;
 
   return schema->summary_table_count;
+}
+
+ssize_t
+ca_schema_summary_override_tables (struct ca_schema *schema,
+                                   struct ca_table ***tables)
+{
+  if (!schema->summary_override_tables)
+    {
+      size_t i, j = 0;
+
+      if (!(schema->summary_override_tables = ca_malloc (sizeof (*schema->summary_override_tables) * schema->summary_override_table_count)))
+        return -1;
+
+      for (i = 0; i < schema->table_count; ++i)
+        {
+          if (schema->tables[i].type != CA_SCHEMA_TABLE_SUMMARY_OVERRIDE)
+            continue;
+
+          if (!(schema->summary_override_tables[j] = ca_table_open ("write-once", schema->tables[i].path, O_RDONLY, 0)))
+            return -1;
+
+          ++j;
+        }
+    }
+
+  *tables = schema->summary_override_tables;
+
+  return schema->summary_override_table_count;
 }
 
 ssize_t

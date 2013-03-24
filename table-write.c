@@ -45,7 +45,7 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 
   ca_format_offset_score (&o, values, count);
 
-#ifndef VERIFY
+#ifndef NVERIFY
   struct ca_offset_score *tmp;
   uint32_t tmp_count;
   const uint8_t *input;
@@ -56,7 +56,7 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
     {
       size_t i;
 
-      assert (tmp_count = count);
+      assert (tmp_count == count);
 
       for (i = 0; i < count; ++i)
         {

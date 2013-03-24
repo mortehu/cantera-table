@@ -308,6 +308,10 @@ ca_schema_summary_tables (struct ca_schema *schema,
                           uint64_t **offsets);
 
 ssize_t
+ca_schema_summary_override_tables (struct ca_schema *schema,
+                                   struct ca_table ***tables);
+
+ssize_t
 ca_schema_index_tables (struct ca_schema *schema,
                         struct ca_table ***tables);
 

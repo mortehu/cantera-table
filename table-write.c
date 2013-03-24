@@ -22,6 +22,7 @@
 #endif
 
 #include <assert.h>
+#include <math.h>
 #include <string.h>
 
 #include "ca-table.h"
@@ -60,8 +61,22 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 
       for (i = 0; i < count; ++i)
         {
-          assert (tmp[i].offset == values[i].offset);
-          assert (tmp[i].score == values[i].score);
+          if (tmp[i].offset != values[i].offset)
+            {
+              ca_set_error("Software error while writing offset/score array for '%s': Offset at index %zu/%zu was not preserved.  Was: %lu  Restored: %lu",
+                           key, i, count, values[i].offset, tmp[i].offset);
+
+              goto done;
+            }
+
+          if (tmp[i].score != values[i].score
+              && !(isnan (tmp[i].score) && isnan (values[i].score)))
+            {
+              ca_set_error("Software error while writing offset/score array for '%s': Score at index %zu/%zu was not preserved.  Was: %.9g  Restored: %.9g",
+                           key, i, count, values[i].score, tmp[i].score);
+
+              goto done;
+            }
         }
 
       free (tmp);
@@ -77,6 +92,8 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
   iov[1].iov_len = o - buffer;
 
   result = ca_table_insert_row (table, iov, sizeof (iov) / sizeof (iov[0]));
+
+done:
 
   free (buffer);
 

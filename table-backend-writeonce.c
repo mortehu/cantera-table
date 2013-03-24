@@ -645,7 +645,7 @@ CA_wo_seek_to_key (void *handle, const char *key)
       fib[collisions & 1] += fib[~collisions & 1];
     }
 
-  return -1;
+  return 0;
 }
 
 static off_t

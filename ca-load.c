@@ -60,6 +60,8 @@ static char *offset;
 static size_t offset_alloc;
 static size_t offset_length;
 
+static uint64_t current_offset;
+
 static char *value_string;
 static size_t value_string_alloc;
 static size_t value_string_length;
@@ -90,7 +92,6 @@ flush_values (void)
 static void
 parse_data (const char *begin, const char *end)
 {
-  uint64_t current_offset = 0;
   int no_match = 0;
 
   for (; begin != end; ++begin)

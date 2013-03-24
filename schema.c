@@ -158,14 +158,6 @@ CA_schema_load (struct ca_schema *schema)
           goto fail;
         }
 
-      if (-1 == access (path, R_OK))
-        {
-          ca_set_error ("%s:%d: Path \"%s\" is not readable: %s",
-                        schema->path, lineno, path, strerror (errno));
-
-          goto fail;
-        }
-
       if (offset_string)
         {
           char *endptr;

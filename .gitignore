@@ -15,6 +15,7 @@
 .dirstamp
 .libs
 /aclocal.m4
+/ca-dump
 /ca-load
 /ca-shell
 /config.guess

@@ -7,8 +7,9 @@ lib_LTLIBRARIES = libca-table.la
 include_HEADERS = ca-table.h ca-functions.h
 
 bin_PROGRAMS = \
-  ca-shell \
-  ca-load
+  ca-dump \
+  ca-load \
+  ca-shell
 
 ACLOCAL_AMFLAGS = -I m4
 AM_CPPFLAGS = -I.
@@ -48,6 +49,9 @@ ca_shell_LDADD = libca-table.la
 
 ca_load_SOURCES = ca-load.c
 ca_load_LDADD = libca-table.la
+
+ca_dump_SOURCES = ca-dump.c
+ca_dump_LDADD = libca-table.la
 
 TESTS = \
   tests/arena-00 \

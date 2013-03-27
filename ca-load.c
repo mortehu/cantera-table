@@ -206,6 +206,11 @@ parse_data (const char *begin, const char *end)
                   iov[1].iov_base = value_string;
                   iov[1].iov_len = value_string_length;
 
+                  if (value_string_length < 2
+                      || value_string[0] != '{'
+                      || value_string[value_string_length - 1] != '}')
+                    errx (EXIT_FAILURE, "Summary values must start with '{' and end width '}'");
+
                   if (-1 == ca_table_insert_row (table_handle, iov, 2))
                     errx (EXIT_FAILURE, "%s", ca_last_error ());
                 }

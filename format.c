@@ -80,7 +80,7 @@ ca_format_offset_score (uint8_t **output,
   uint64_t min_step = 0, max_step = 0, step_gcd = 0;
 
   float min_score, max_score;
-  int all_integer = 1;
+  int all_uint24 = 1;
   uint8_t score_flags = 0;
 
   float tmp;
@@ -100,7 +100,9 @@ ca_format_offset_score (uint8_t **output,
   min_score = max_score = values[0].score;
 
   if (modff (values[0].score, &tmp))
-    all_integer = 0;
+    all_uint24 = 0;
+  else if (values[0].score < 0 || values[0].score > 0xffffff)
+    all_uint24 = 0;
 
   for (i = 1; i < count; ++i)
     {
@@ -126,7 +128,9 @@ ca_format_offset_score (uint8_t **output,
         max_score = values[i].score;
 
       if (modff (values[i].score, &tmp))
-        all_integer = 0;
+        all_uint24 = 0;
+      else if (values[i].score < 0 || values[i].score > 0xffffff)
+        all_uint24 = 0;
     }
 
 
@@ -200,7 +204,7 @@ ca_format_offset_score (uint8_t **output,
       count = 1;
     }
 
-  if (all_integer)
+  if (all_uint24)
     {
       if (max_score - min_score <= 0xff)
         score_flags |= 0x01;
@@ -212,7 +216,7 @@ ca_format_offset_score (uint8_t **output,
 
   *o++ = score_flags;
 
-  if (all_integer)
+  if (all_uint24)
     ca_format_integer (&o, min_score);
 
   for (i = 0; i < count; ++i)

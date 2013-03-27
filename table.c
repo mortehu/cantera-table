@@ -6,7 +6,6 @@ uint64_t ca_xid;
 
 /*****************************************************************************/
 
-extern struct ca_table_backend CA_table_flexi;
 extern struct ca_table_backend CA_table_log;
 extern struct ca_table_backend CA_table_writeonce;
 
@@ -21,9 +20,6 @@ struct ca_table
 struct ca_table_backend *
 ca_table_backend (const char *name)
 {
-  if (!strcmp (name, "flexi"))
-    return &CA_table_flexi;
-
   if (!strcmp (name, "log"))
     return &CA_table_log;
 

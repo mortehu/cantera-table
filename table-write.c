@@ -46,6 +46,16 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 
   ca_format_offset_score (&o, values, count);
 
+  assert (o <= buffer + buffer_alloc);
+
+  iov[0].iov_base = (void *) key;
+  iov[0].iov_len = strlen (key) + 1;
+
+  iov[1].iov_base = buffer;
+  iov[1].iov_len = o - buffer;
+
+  result = ca_table_insert_row (table, iov, sizeof (iov) / sizeof (iov[0]));
+
 #ifndef NVERIFY
   struct ca_offset_score *tmp;
   uint32_t tmp_count;
@@ -81,19 +91,9 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 
       free (tmp);
     }
-#endif
-
-  assert (o <= buffer + buffer_alloc);
-
-  iov[0].iov_base = (void *) key;
-  iov[0].iov_len = strlen (key) + 1;
-
-  iov[1].iov_base = buffer;
-  iov[1].iov_len = o - buffer;
-
-  result = ca_table_insert_row (table, iov, sizeof (iov) / sizeof (iov[0]));
 
 done:
+#endif
 
   free (buffer);
 

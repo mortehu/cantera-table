@@ -259,7 +259,7 @@ CA_wo_open (const char *path, int flags, mode_t mode)
 
       if (-1 == (result->fd = open (path, O_RDONLY)))
         {
-          ca_set_error ("Failed to open '%s' for reading: %s", path, strerror (errno));
+          ca_set_error ("Failed to open file for reading: %s", path, strerror (errno));
 
           goto fail;
         }

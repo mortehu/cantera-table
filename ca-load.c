@@ -253,10 +253,56 @@ parse_data (const char *begin, const char *end)
     }
 }
 
+static int
+merge_time_series_callback (const struct iovec *value, void *opaque)
+{
+  const uint8_t *begin, *end;
+  const char *new_key;
+  size_t new_key_length;
+
+  struct ca_offset_score *new_values;
+  uint32_t new_count;
+
+  begin = value->iov_base;
+  end = begin + value->iov_len;
+
+  new_key = (const char *) begin;
+  new_key_length = strlen (new_key) + 1;
+
+  begin += new_key_length;
+
+  if (!key || strcmp (key, new_key))
+    {
+      if (value_count)
+        flush_values ();
+
+      free (key);
+
+      if (!(key = ca_strdup (new_key)))
+        errx (EXIT_FAILURE, "ca_strdup failed: %s", ca_last_error ());
+    }
+
+  if (-1 == ca_parse_offset_score_array (&begin,
+                                         &new_values, &new_count))
+    errx (EXIT_FAILURE, "ca_parse_offset_score_array failed: %s", ca_last_error ());
+
+  if (value_count + new_count > value_alloc
+      && -1 == CA_ARRAY_GROW_N (&values, &value_alloc, new_count))
+    errx (EXIT_FAILURE, "CA_ARRAY_GROW failed: %s", ca_last_error ());
+
+  memcpy (&values[value_count], new_values, sizeof (*new_values) * new_count);
+  value_count += new_count;
+
+  free (new_values);
+
+  return 0;
+}
+
 int
 main (int argc, char **argv)
 {
   const char *output_format = "time-series";
+  const char *output_path;
 
   const char *schema_path = NULL;
   struct ca_schema *schema = NULL;
@@ -373,38 +419,69 @@ main (int argc, char **argv)
   else if (strcmp (output_format, "time-series"))
     errx (EX_USAGE, "Invalid output format '%s'", output_format);
 
-  if (optind + 1 != argc)
-    errx (EX_USAGE, "Usage: %s [OPTION]... TABLE", argv[0]);
+  if (optind + 1 > argc)
+    errx (EX_USAGE, "Usage: %s [OPTION]... TABLE [INPUT]...", argv[0]);
 
-  if (!(table_handle = ca_table_open ("write-once", argv[optind], O_CREAT | O_TRUNC | O_RDWR, 0666)))
-    errx (EXIT_FAILURE, "Failed to create '%s': %s", argv[optind], ca_last_error ());
+  output_path = argv[optind++];
 
-  state = parse_key;
+  if (!(table_handle = ca_table_open ("write-once", output_path, O_CREAT | O_TRUNC | O_RDWR, 0666)))
+    errx (EXIT_FAILURE, "Failed to create '%s': %s", output_path, ca_last_error ());
 
-  if (-1 == (file_size = lseek (input_fd, 0, SEEK_END)))
+  if (optind == argc)
     {
-      char buffer[65536];
-      ssize_t ret;
+      state = parse_key;
 
-      while (0 < (ret = read (input_fd, buffer, sizeof (buffer))))
-        parse_data (buffer, buffer + ret);
+      if (-1 == (file_size = lseek (input_fd, 0, SEEK_END)))
+        {
+          char buffer[65536];
+          ssize_t ret;
 
-      if (ret == -1)
-        err (EX_IOERR, "read failed");
+          while (0 < (ret = read (input_fd, buffer, sizeof (buffer))))
+            parse_data (buffer, buffer + ret);
+
+          if (ret == -1)
+            err (EX_IOERR, "read failed");
+        }
+      else
+        {
+          void *map;
+
+          if (!file_size)
+            errx (EX_DATAERR, "input file has zero size");
+
+          if (MAP_FAILED == (map = mmap (NULL, file_size, PROT_READ, MAP_SHARED, input_fd, 0)))
+            err (EX_NOINPUT, "failed to mmap input");
+
+          parse_data (map, (char *) map + file_size);
+
+          munmap (map, file_size);
+        }
     }
   else
     {
-      void *map;
+      struct ca_table **tables;
+      size_t table_count;
 
-      if (!file_size)
-        errx (EX_DATAERR, "input file has zero size");
+      if (strcmp (output_format, "time-series"))
+        errx (EX_USAGE, "File input only support for time-series data for now.  Please use standard input");
 
-      if (MAP_FAILED == (map = mmap (NULL, file_size, PROT_READ, MAP_SHARED, input_fd, 0)))
-        err (EX_NOINPUT, "failed to mmap input");
+      table_count = argc - optind;
 
-      parse_data (map, (char *) map + file_size);
+      if (!(tables = ca_malloc (sizeof (*tables) * table_count)))
+        errx (EXIT_FAILURE, "ca_malloc failed: %s", ca_last_error ());
 
-      munmap (map, file_size);
+      for (i = optind; i < argc; ++i)
+        {
+          if (!(tables[i - optind] = ca_table_open ("write-once", argv[i], O_RDONLY, 0)))
+            errx (EXIT_FAILURE, "ca_table_open failed: %s", ca_last_error ());
+
+          if (!ca_table_is_sorted (tables[i - optind]))
+            errx (EX_DATAERR, "Tabe '%s' is not sorted", ca_last_error ());
+        }
+
+      if (-1 == ca_table_merge (tables, table_count,
+                                merge_time_series_callback, table_handle))
+        errx (EXIT_FAILURE, "ca_table_merge failed: %s", ca_last_error ());
     }
 
   if (value_count)

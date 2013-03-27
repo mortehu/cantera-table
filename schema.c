@@ -45,6 +45,7 @@ struct ca_schema_table
 {
   enum ca_schema_table_type type;
   char *path;
+  char *prefix;
   uint64_t offset;
 };
 
@@ -65,7 +66,7 @@ struct ca_schema
   struct ca_table **index_tables;
   size_t index_table_count;
 
-  struct ca_table **time_series_tables;
+  struct ca_time_series_table *time_series_tables;
   size_t time_series_table_count;
 };
 
@@ -107,6 +108,8 @@ CA_schema_load (struct ca_schema *schema)
       struct ca_schema_table table;
       char *path, *offset_string;
       size_t line_length;
+
+      memset (&table, 0, sizeof (table));
 
       ++lineno;
 
@@ -169,21 +172,30 @@ CA_schema_load (struct ca_schema *schema)
 
       if (offset_string)
         {
-          char *endptr;
+          *offset_string++ = 0;
 
-          if (table.type != CA_SCHEMA_TABLE_SUMMARY)
+          if (table.type == CA_SCHEMA_TABLE_SUMMARY)
+            {
+              char *endptr;
+
+              table.offset = (uint64_t) strtoll (offset_string, &endptr, 0);
+
+              if (*endptr)
+                {
+                  ca_set_error ("%s:%d: Expected EOL after offset, got \\x%02x",
+                                (unsigned char) *endptr);
+
+                  goto fail;
+                }
+            }
+          else if (table.type == CA_SCHEMA_TABLE_TIME_SERIES)
+            {
+              if (!(table.prefix = ca_strdup (offset_string)))
+                goto fail;
+            }
+          else
             {
               ca_set_error ("%s:%d: Unexpected column for table type \"%s\"", line);
-
-              goto fail;
-            }
-
-          table.offset = (uint64_t) strtoll (offset_string, &endptr, 0);
-
-          if (*endptr)
-            {
-              ca_set_error ("%s:%d: Expected EOL after offset, got \\x%02x",
-                            (unsigned char) *endptr);
 
               goto fail;
             }
@@ -247,7 +259,10 @@ ca_schema_close (struct ca_schema *schema)
   if (schema->time_series_tables)
     {
       for (i = 0; i < schema->time_series_table_count; ++i)
-        ca_table_close (schema->time_series_tables[i]);
+        {
+          ca_table_close (schema->time_series_tables[i].table);
+          free (schema->time_series_tables[i].prefix);
+        }
       free (schema->time_series_tables);
     }
 
@@ -364,7 +379,7 @@ ca_schema_index_tables (struct ca_schema *schema,
 
 ssize_t
 ca_schema_time_series_tables (struct ca_schema *schema,
-                              struct ca_table ***tables)
+                              struct ca_time_series_table **tables)
 {
   if (!schema->time_series_tables)
     {
@@ -378,8 +393,16 @@ ca_schema_time_series_tables (struct ca_schema *schema,
           if (schema->tables[i].type != CA_SCHEMA_TABLE_TIME_SERIES)
             continue;
 
-          if (!(schema->time_series_tables[j] = ca_table_open ("write-once", schema->tables[i].path, O_RDONLY, 0)))
+          if (!(schema->time_series_tables[j].table = ca_table_open ("write-once", schema->tables[i].path, O_RDONLY, 0)))
             return -1;
+
+          if (schema->tables[i].prefix)
+            {
+              if (!(schema->time_series_tables[j].prefix = ca_strdup (schema->tables[i].prefix)))
+                return -1;
+
+              schema->time_series_tables[j].prefix_length = strlen (schema->tables[i].prefix);
+            }
 
           ++j;
         }

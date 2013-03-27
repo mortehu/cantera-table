@@ -390,6 +390,9 @@ ca_sort_offset_score_by_offset (struct ca_offset_score *data, size_t count);
 void
 ca_sort_offset_score_by_score (struct ca_offset_score *data, size_t count);
 
+void
+ca_sort_iovec_cstring (struct iovec *data, size_t count);
+
 /*****************************************************************************/
 
 struct ca_hashmap_data

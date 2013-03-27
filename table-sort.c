@@ -23,15 +23,6 @@
 
 #include "ca-table.h"
 
-static int
-CA_sort_entrycmp (const void *vlhs, const void *vrhs)
-{
-  const struct iovec *lhs = vlhs;
-  const struct iovec *rhs = vrhs;
-
-  return strcmp (lhs->iov_base, rhs->iov_base);
-}
-
 int
 ca_table_sort (struct ca_table *output, struct ca_table *input)
 {
@@ -65,8 +56,7 @@ ca_table_sort (struct ca_table *output, struct ca_table *input)
       ++sorted_entry_count;
     }
 
-  qsort (sorted_entries, sorted_entry_count, sizeof (*sorted_entries),
-         CA_sort_entrycmp);
+  ca_sort_iovec_cstring (sorted_entries, sorted_entry_count);
 
   for (i = 0; i < sorted_entry_count; ++i)
     {

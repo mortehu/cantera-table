@@ -18,6 +18,7 @@
 */
 
 #include <algorithm>
+#include <cstring>
 
 #include "ca-table.h"
 #include "ca-internal.h"
@@ -72,4 +73,21 @@ void
 CA_sort_float_rank (struct CA_float_rank *data, size_t count)
 {
   std::sort (data, data + count, CA_float_rank_compare());
+}
+
+/*****************************************************************************/
+
+struct CA_iovec_cstring_compare
+{
+  bool operator()(const iovec &lhs,
+                  const iovec &rhs) const
+    {
+      return std::strcmp ((const char *) lhs.iov_base, (const char *) rhs.iov_base) < 0;
+    }
+};
+
+void
+ca_sort_iovec_cstring (struct iovec *data, size_t count)
+{
+  std::sort (data, data + count, CA_iovec_cstring_compare ());
 }

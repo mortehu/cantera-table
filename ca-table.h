@@ -296,6 +296,14 @@ ca_file_buffer_flush (struct ca_file_buffer *buffer);
 
 struct ca_schema;
 
+struct ca_time_series_table
+{
+  struct ca_table *table;
+
+  char *prefix;
+  size_t prefix_length;
+};
+
 struct ca_schema *
 ca_schema_load (const char *path) CA_USE_RESULT;
 
@@ -317,7 +325,7 @@ ca_schema_index_tables (struct ca_schema *schema,
 
 ssize_t
 ca_schema_time_series_tables (struct ca_schema *schema,
-                              struct ca_table ***tables);
+                              struct ca_time_series_table **tables);
 
 int
 ca_schema_sample (struct ca_schema *schema, const char *key);

@@ -35,7 +35,6 @@ libca_table_la_SOURCES = \
   table-sort.c \
   sort.cc \
   statement.c \
-  table-backend-flexi.c \
   table-backend-log.c \
   table-backend-writeonce.c \
   table-write.c \
@@ -55,7 +54,6 @@ TESTS = \
   tests/correlation-00 \
   tests/crc32c-00 \
   tests/fifo-00 \
-  tests/flexi-sort-00 \
   tests/format-00 \
   tests/hashmap-00 \
   tests/log-sort-00 \
@@ -67,7 +65,6 @@ tests_arena_00_LDADD = libca-table.la
 tests_correlation_00_LDADD = libca-table.la
 tests_crc32c_00_LDADD = libca-table.la
 tests_fifo_00_LDADD = libca-table.la -lpthread
-tests_flexi_sort_00_LDADD = libca-table.la
 tests_format_00_LDADD = libca-table.la
 tests_hashmap_00_LDADD = libca-table.la
 tests_log_sort_00_LDADD = libca-table.la

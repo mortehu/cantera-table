@@ -63,7 +63,7 @@ ca_table_write_offset_score (struct ca_table *table, const char *key,
 
   input = buffer;
 
-  if (0 == ca_parse_offset_score_array (&input, &tmp, &tmp_count))
+  if (0 == ca_offset_score_parse (&input, &tmp, &tmp_count))
     {
       size_t i;
 

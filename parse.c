@@ -75,20 +75,26 @@ ca_parse_string (const uint8_t **input)
 }
 
 int
-ca_parse_offset_score_array (const uint8_t **input,
-                             struct ca_offset_score **return_values,
-                             uint32_t *count)
+ca_offset_score_parse (const uint8_t **input,
+                       struct ca_offset_score **return_values,
+                       uint32_t *count)
 {
   struct ca_offset_score *values;
   enum ca_offset_score_type type;
   uint_fast32_t i;
   const uint8_t *p;
-  uint64_t offset = 0;
-  float base = 0.0f;
 
   p = *input;
 
   type = *p++;
+
+  if (type != CA_OFFSET_SCORE_FLEXI)
+    {
+      ca_set_error ("Unknown (offset, score) array encoding %d", (int) type);
+
+      return -1;
+    }
+
   *count = ca_parse_integer (&p);
 
   if (!*count)
@@ -99,7 +105,6 @@ ca_parse_offset_score_array (const uint8_t **input,
 
   values = *return_values;
 
-  if (type == CA_OFFSET_SCORE_FLEXI)
     {
       struct CA_rle_context rle;
       uint64_t step_gcd, min_step, max_step;
@@ -204,90 +209,90 @@ ca_parse_offset_score_array (const uint8_t **input,
 
       for (; i < *count; ++i)
         values[i].score = values[0].score;
-
-      return 0;
     }
 
-  switch (type)
+  return 0;
+}
+
+int
+ca_offset_score_max_offset (const uint8_t *input, uint64_t *result)
+{
+  enum ca_offset_score_type type;
+  uint_fast32_t i;
+  const uint8_t *p;
+  uint64_t offset = 0, count;
+
+  struct CA_rle_context rle;
+  uint64_t step_gcd, min_step, max_step;
+
+  p = input;
+
+  type = *p++;
+
+  if (type != CA_OFFSET_SCORE_FLEXI)
     {
-    case CA_OFFSET_SCORE_VARBYTE_FLOAT:
-
-      for (i = 0; i < *count; ++i)
-        {
-          offset += ca_parse_integer (&p);
-
-          values[i].offset = offset;
-          values[i].score = ca_parse_float (&p);
-        }
-
-      break;
-
-    case CA_OFFSET_SCORE_VARBYTE_ZERO:
-
-      for (i = 0; i < *count; ++i)
-        {
-          offset += ca_parse_integer (&p);
-
-          values[i].offset = offset;
-          values[i].score = 0.0f;
-        }
-
-      break;
-
-    case CA_OFFSET_SCORE_VARBYTE_U8:
-
-      base = ca_parse_float (&p);
-
-      for (i = 0; i < *count; ++i)
-        {
-          offset += ca_parse_integer (&p);
-
-          values[i].offset = offset;
-          values[i].score = *p++ + base;
-        }
-
-      break;
-
-    case CA_OFFSET_SCORE_VARBYTE_U16:
-
-      base = ca_parse_float (&p);
-
-      for (i = 0; i < *count; ++i)
-        {
-          offset += ca_parse_integer (&p);
-
-          values[i].offset = offset;
-          values[i].score = (p[0] << 8) + p[1] + base;
-          p += 2;
-        }
-
-      break;
-
-    case CA_OFFSET_SCORE_VARBYTE_U24:
-
-      base = ca_parse_float (&p);
-
-      for (i = 0; i < *count; ++i)
-        {
-          offset += ca_parse_integer (&p);
-
-          values[i].offset = offset;
-          values[i].score = (p[0] << 16) + (p[1] << 8) + p[2] + base;
-          p += 3;
-        }
-
-      break;
-
-    default:
-
       ca_set_error ("Unknown (offset, score) array encoding %d", (int) type);
-
-      free (values);
 
       return -1;
     }
 
-  *input = p;
+  count = ca_parse_integer (&p);
+
+  if (!count)
+    {
+      *result = 0;
+
+      return 0;
+    }
+
+  offset = ca_parse_integer (&p);
+
+  step_gcd = ca_parse_integer (&p);
+
+  if (step_gcd && count > 1)
+    {
+      min_step = ca_parse_integer (&p);
+      max_step = ca_parse_integer (&p) + min_step;
+
+      if (min_step == max_step)
+        {
+          offset += step_gcd * min_step * (count - 1);
+        }
+      else if (max_step - min_step <= 0x0f)
+        {
+          CA_rle_init_read (&rle, p);
+
+          for (i = 1; i < count; i += 2)
+            {
+              uint8_t tmp;
+
+              tmp = CA_rle_get (&rle);
+
+              offset += step_gcd * (min_step + (tmp & 0x0f));
+
+              if (i + 1 < count)
+                offset += step_gcd * (min_step + (tmp >> 4));
+            }
+
+          assert (!rle.run);
+        }
+      else if (max_step - min_step <= 0xff)
+        {
+          CA_rle_init_read (&rle, p);
+
+          for (i = 1; i < count; ++i)
+            offset += step_gcd * (min_step + CA_rle_get (&rle));
+
+          assert (!rle.run);
+        }
+      else
+        {
+          for (i = 1; i < count; ++i)
+            offset += step_gcd * (min_step + ca_parse_integer (&p));
+        }
+    }
+
+  *result = offset;
 
   return 0;
 }

@@ -281,9 +281,9 @@ merge_time_series_callback (const struct iovec *value, void *opaque)
         errx (EXIT_FAILURE, "ca_strdup failed: %s", ca_last_error ());
     }
 
-  if (-1 == ca_parse_offset_score_array (&begin,
-                                         &new_values, &new_count))
-    errx (EXIT_FAILURE, "ca_parse_offset_score_array failed: %s", ca_last_error ());
+  if (-1 == ca_offset_score_parse (&begin,
+                                   &new_values, &new_count))
+    errx (EXIT_FAILURE, "ca_offset_score_parse failed: %s", ca_last_error ());
 
   if (value_count + new_count > value_alloc
       && -1 == CA_ARRAY_GROW_N (&values, &value_alloc, new_count))

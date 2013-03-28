@@ -86,7 +86,7 @@ dump_index (void)
               break;
             }
 
-          printf ("%s\t%s\t%.9g\n", key, summary.iov_base, offsets[i].score);
+          printf ("%s\t%s\t%.9g\n", key, (const char *) summary.iov_base, offsets[i].score);
 
         }
 

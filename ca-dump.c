@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include <err.h>
 #include <fcntl.h>
@@ -140,8 +141,29 @@ dump_time_series (void)
                                                     &offset_count)))
         break;
 
-      for (i = 0; i < offset_count; ++i)
-        printf ("%s\t%llu\t%.9g\n", key, (long long unsigned) offsets[i].offset, offsets[i].score);
+      if (!strcmp (date_format, "%s"))
+        {
+          for (i = 0; i < offset_count; ++i)
+            printf ("%s\t%llu\t%.9g\n", key, (long long unsigned) offsets[i].offset, offsets[i].score);
+        }
+      else
+        {
+          char time_buffer[64];
+          time_t time;
+          struct tm tm;
+
+          for (i = 0; i < offset_count; ++i)
+            {
+              time = offsets[i].offset;
+              memset (&tm, 0, sizeof (tm));
+
+              gmtime_r (&time, &tm);
+
+              strftime (time_buffer, sizeof (time_buffer), date_format, &tm);
+
+              printf ("%s\t%s\t%.9g\n", key, time_buffer, offsets[i].score);
+            }
+        }
 
       free (offsets);
     }

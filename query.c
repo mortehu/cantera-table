@@ -402,8 +402,8 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
 
                   data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
 
-                  if (-1 == ca_parse_offset_score_array (&data, &new_offsets,
-                                                         &new_offset_count))
+                  if (-1 == ca_offset_score_parse (&data, &new_offsets,
+                                                   &new_offset_count))
                     goto done;
 
                   if (-1 == CA_union_offsets_inplace (&token_offsets, &token_offset_count,
@@ -442,8 +442,8 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
 
               data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
 
-              if (-1 == ca_parse_offset_score_array (&data, &new_offsets,
-                                                     &new_offset_count))
+              if (-1 == ca_offset_score_parse (&data, &new_offsets,
+                                               &new_offset_count))
                 goto done;
 
               if (-1 == CA_union_offsets_inplace (&token_offsets, &token_offset_count,
@@ -734,8 +734,8 @@ ca_schema_query_correlate (struct ca_schema *schema,
       key = data_iov.iov_base;
       data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
 
-      if (-1 == ca_parse_offset_score_array (&data, &key_offsets,
-                                             &key_offset_count))
+      if (-1 == ca_offset_score_parse (&data, &key_offsets,
+                                       &key_offset_count))
         goto done;
 
       A = offsets_A;

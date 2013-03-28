@@ -165,8 +165,8 @@ ca_sql_ts_sample (struct iovec *iov, int64_t timestamp)
 
   begin = (const uint8_t *) iov->iov_base;
 
-  if (-1 == ca_parse_offset_score_array (&begin,
-                                         &samples, &sample_count))
+  if (-1 == ca_offset_score_parse (&begin,
+                                   &samples, &sample_count))
     return result;
 
 

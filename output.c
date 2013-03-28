@@ -142,8 +142,8 @@ CA_output_offset_score_array (const uint8_t *data)
       format = "{\"offset\":\"%llu\",\"score\":%.9g}";
     }
 
-  if (-1 == ca_parse_offset_score_array (&data,
-                                         &sample_values, &sample_count))
+  if (-1 == ca_offset_score_parse (&data,
+                                   &sample_values, &sample_count))
     return -1;
 
   for (i = 0; i < sample_count; ++i)
@@ -185,8 +185,8 @@ CA_output_time_series (const uint8_t *data)
       format = "{\"time\":\"%s\",\"value\":%.9g}";
     }
 
-  if (-1 == ca_parse_offset_score_array (&data,
-                                         &sample_values, &sample_count))
+  if (-1 == ca_offset_score_parse (&data,
+                                   &sample_values, &sample_count))
     return -1;
 
   for (i = 0; i < sample_count; ++i)

@@ -61,8 +61,8 @@ dump_index (void)
 
       data = (const uint8_t *) strchr (offset_score.iov_base, 0) + 1;
 
-      if (-1 == (ret = ca_parse_offset_score_array (&data, &offsets,
-                                                    &offset_count)))
+      if (-1 == (ret = ca_offset_score_parse (&data, &offsets,
+                                              &offset_count)))
         break;
 
       for (i = 0; i < offset_count; ++i)
@@ -137,8 +137,8 @@ dump_time_series (void)
 
       data = (const uint8_t *) strchr (offset_score.iov_base, 0) + 1;
 
-      if (-1 == (ret = ca_parse_offset_score_array (&data, &offsets,
-                                                    &offset_count)))
+      if (-1 == (ret = ca_offset_score_parse (&data, &offsets,
+                                              &offset_count)))
         break;
 
       if (!strcmp (date_format, "%s"))

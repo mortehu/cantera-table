@@ -370,9 +370,12 @@ const char *
 ca_parse_string (const uint8_t **input);
 
 int
-ca_parse_offset_score_array (const uint8_t **input,
-                             struct ca_offset_score **sample_values,
-                             uint32_t *count) CA_USE_RESULT;
+ca_offset_score_parse (const uint8_t **input,
+                       struct ca_offset_score **sample_values,
+                       uint32_t *count) CA_USE_RESULT;
+
+int
+ca_offset_score_max_offset (const uint8_t *input, uint64_t *result);
 
 /*****************************************************************************/
 

@@ -256,7 +256,7 @@ parse_data (const char *begin, const char *end)
 static int
 merge_time_series_callback (const struct iovec *value, void *opaque)
 {
-  const uint8_t *begin, *end;
+  const uint8_t *begin;
   const char *new_key;
   size_t new_key_length;
 
@@ -264,7 +264,6 @@ merge_time_series_callback (const struct iovec *value, void *opaque)
   uint32_t new_count;
 
   begin = value->iov_base;
-  end = begin + value->iov_len;
 
   new_key = (const char *) begin;
   new_key_length = strlen (new_key) + 1;

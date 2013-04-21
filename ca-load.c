@@ -462,7 +462,7 @@ main (int argc, char **argv)
       size_t table_count;
 
       if (strcmp (output_format, "time-series"))
-        errx (EX_USAGE, "File input only support for time-series data for now.  Please use standard input");
+        errx (EX_USAGE, "File input is only supported for time-series.  Please use standard input");
 
       table_count = argc - optind;
 

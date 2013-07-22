@@ -106,5 +106,5 @@ HOW TO BUILD AND USE AN INVERTED INDEX
      This will read the query out of the HTTP GET parameter named "q", and
      print an HTTP response with a payload consisting of a JSON array of
      summaries.  The Content-Type will be reported as application/json.  To
-     prevent restrict the number of results returned, use the --limit
-     parameter.
+     restrict the number of results returned, possibly to lessen the impact of
+     DoS attacks, use the --limit parameter.

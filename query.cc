@@ -21,9 +21,11 @@
 #include "config.h"
 #endif
 
-#include <assert.h>
-#include <string.h>
-#include <time.h>
+#include <algorithm>
+#include <cassert>
+#include <cstring>
+#include <ctime>
+#include <limits>
 
 #include "ca-table.h"
 
@@ -147,7 +149,7 @@ CA_union_offsets_inplace (struct ca_offset_score **lhs, uint32_t *lhs_count,
 
   max_merged_size = *lhs_count + rhs_count;
 
-  if (!(merged_offsets = ca_malloc (sizeof (*merged_offsets) * max_merged_size)))
+  if (!(merged_offsets = reinterpret_cast<struct ca_offset_score*>(ca_malloc (sizeof (*merged_offsets) * max_merged_size))))
     return -1;
 
   merged_offset_count = CA_union_offsets (merged_offsets,
@@ -197,13 +199,13 @@ CA_intersect_offsets (struct ca_offset_score *lhs, size_t lhs_count,
 
 static size_t
 CA_filter_offsets (struct ca_offset_score *offsets, size_t count,
-                   int operator, float operand0, float operand1)
+                   int op, float operand0, float operand1)
 {
   size_t i, result = 0;
 
   for (i = 0; i < count; ++i)
     {
-      switch (operator)
+      switch (op)
         {
         case '[':
 
@@ -254,32 +256,6 @@ CA_filter_offsets (struct ca_offset_score *offsets, size_t count,
   return result;
 }
 
-static size_t
-CA_remove_duplicates (struct ca_offset_score *offsets, size_t count)
-{
-  struct ca_offset_score *input, *end, *output;
-  size_t prev_offset = SIZE_MAX;
-
-  output = offsets;
-  input = offsets;
-  end = offsets + count;
-
-  ca_sort_offset_score_by_offset (offsets, count);
-
-  while (input != end)
-    {
-      if (input->offset != prev_offset)
-        {
-          *output++ = *input;
-          prev_offset = input->offset;
-        }
-
-      ++input;
-    }
-
-  return output - offsets;
-}
-
 static float
 parse_value (char *string, char **endptr)
 {
@@ -326,7 +302,7 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
       uint32_t token_offset_count = 0;
       int invert_rank = 0, subtract = 0, add = 0;
 
-      int operator = 0;
+      int op = 0;
       float operand0 = 0, operand1 = 0;
 
       if (*token == '-')
@@ -343,20 +319,20 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
           || NULL != (ch = strchr (token, '[')))
         {
           char *endptr, *delimiter = NULL;
-          operator = *ch;
+          op = *ch;
           *ch++ = 0;
 
           if (*ch == '=')
             {
-              if (operator == '>')
-                operator = L'≥';
-              else if (operator == '<')
-                operator = L'≤';
+              if (op == '>')
+                op = L'≥';
+              else if (op == '<')
+                op = L'≤';
 
               ++ch;
             }
 
-          if (operator == '['
+          if (op == '['
               && NULL != (delimiter = strchr (ch, ',')))
             {
               *delimiter++ = 0;
@@ -392,7 +368,7 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
                   struct ca_offset_score *new_offsets;
                   uint32_t new_offset_count;
 
-                  key = data_iov.iov_base;
+                  key = reinterpret_cast<const char*>(data_iov.iov_base);
 
                   if (strncmp (key, key_match_begin, key_match_end - key_match_begin))
                     continue;
@@ -400,7 +376,7 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
                   if (!strstr (key + (key_match_end - key_match_begin), parameter))
                     continue;
 
-                  data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
+                  data = (const uint8_t *) strchr (reinterpret_cast<const char*>(data_iov.iov_base), '\0') + 1;
 
                   if (-1 == ca_offset_score_parse (&data, &new_offsets,
                                                    &new_offset_count))
@@ -440,7 +416,7 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
                   goto done;
                 }
 
-              data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
+              data = (const uint8_t *) strchr (reinterpret_cast<const char*>(data_iov.iov_base), '\0') + 1;
 
               if (-1 == ca_offset_score_parse (&data, &new_offsets,
                                                &new_offset_count))
@@ -452,10 +428,10 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
             }
         }
 
-      if (operator)
+      if (op)
         {
           token_offset_count =
-            CA_filter_offsets (token_offsets, token_offset_count, operator, operand0, operand1);
+            CA_filter_offsets (token_offsets, token_offset_count, op, operand0, operand1);
         }
 
       if (invert_rank)
@@ -484,7 +460,7 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
 
               max_merged_size = offset_count + token_offset_count;
 
-              if (!(merged_offsets = ca_malloc (sizeof (*merged_offsets) * max_merged_size)))
+              if (!(merged_offsets = reinterpret_cast<struct ca_offset_score*>(ca_malloc (sizeof (*merged_offsets) * max_merged_size))))
                 goto done;
 
               merged_offset_count = CA_union_offsets (merged_offsets,
@@ -508,9 +484,14 @@ CA_schema_subquery (struct ca_offset_score **ret_offsets,
       first = 0;
     }
 
-  offset_count = CA_remove_duplicates (offsets, offset_count);
+  struct ca_offset_score* end_unique_offsets;
+  end_unique_offsets = std::unique(
+    offsets, offsets + offset_count,
+    [](const ca_offset_score& lhs, const ca_offset_score& rhs) {
+      return lhs.offset == rhs.offset;
+    });
 
-  result = offset_count;
+  result = end_unique_offsets - offsets;
   *ret_offsets = offsets;
   offsets = NULL;
 
@@ -533,6 +514,12 @@ CA_schema_query (struct ca_offset_score **ret_offsets,
     return -1;
 
   return CA_schema_subquery (ret_offsets, query, index_tables, index_table_count);
+}
+
+static bool
+CA_scorecmp(const struct ca_offset_score& lhs, const struct ca_offset_score& rhs)
+{
+  return lhs.score > rhs.score;
 }
 
 int
@@ -573,14 +560,16 @@ ca_schema_query (struct ca_schema *schema, const char *query,
   if (-1 == (offset_count = CA_schema_query (&offsets, schema, query)))
     goto done;
 
-  ca_sort_offset_score_by_score (offsets, offset_count);
+  if (!limit)
+    limit = offset_count;
+  else if (limit > offset_count)
+    limit = offset_count;
 
-  if (limit >= 0 && limit < offset_count)
-    offset_count = limit;
+  std::partial_sort(offsets, offsets + limit, offsets + offset_count, CA_scorecmp);
 
   putchar ('[');
 
-  for (i = 0; i < offset_count; ++i)
+  for (i = 0; i < limit; ++i)
     {
       const char *begin, *end;
 
@@ -608,7 +597,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
 
       for (j = 0; j < summary_override_table_count; ++j)
         {
-          if (-1 == (ret = ca_table_seek_to_key (summary_override_tables[j], data_iov.iov_base)))
+          if (-1 == (ret = ca_table_seek_to_key (summary_override_tables[j], reinterpret_cast<const char*>(data_iov.iov_base))))
             goto done;
 
           if (!ret)
@@ -626,7 +615,7 @@ ca_schema_query (struct ca_schema *schema, const char *query,
           break;
         }
 
-      begin = data_iov.iov_base;
+      begin = reinterpret_cast<const char*>(data_iov.iov_base);
       end = begin + data_iov.iov_len;
 
       begin = strchr (begin, 0) + 1;
@@ -731,8 +720,8 @@ ca_schema_query_correlate (struct ca_schema *schema,
 
       size_t match_count_A = 0, match_count_B = 0;
 
-      key = data_iov.iov_base;
-      data = (const uint8_t *) strchr (data_iov.iov_base, 0) + 1;
+      key = reinterpret_cast<const char*>(data_iov.iov_base);
+      data = (const uint8_t *) strchr (reinterpret_cast<const char*>(data_iov.iov_base), '\0') + 1;
 
       if (-1 == ca_offset_score_parse (&data, &key_offsets,
                                        &key_offset_count))

@@ -65,5 +65,9 @@ AC_DEFINE_UNQUOTED([DVIDIR], ["$DVIDIR"], [dvi documentation])
 AC_DEFINE_UNQUOTED([PDFDIR], ["$PDFDIR"], [pdf documentation])
 AC_DEFINE_UNQUOTED([PSDIR], ["$PSDIR"], [ps documentation])
 
+AC_LANG_PUSH([C++])
+AX_CXX_COMPILE_STDCXX_11([noext])
+AC_LANG_POP([C++])
+
 AC_CONFIG_HEADERS([config.h])
 AC_OUTPUT([Makefile])

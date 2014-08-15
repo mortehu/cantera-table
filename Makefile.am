@@ -13,8 +13,8 @@ bin_PROGRAMS = \
 
 ACLOCAL_AMFLAGS = -I m4
 AM_CPPFLAGS = -I.
-AM_CFLAGS = -Wall -Werror -g
-AM_CXXFLAGS = -Wall -Werror -g
+AM_CFLAGS = -Wall -g
+AM_CXXFLAGS = -Wall -g
 
 libca_table_la_SOURCES = \
   arena.c arena.h \
@@ -29,7 +29,7 @@ libca_table_la_SOURCES = \
   merge.c \
   output.c \
   parse.c \
-  query.c \
+  query.cc \
   rle.c \
   sample.c \
   schema.c schema.h \

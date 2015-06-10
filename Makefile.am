@@ -1,76 +1,48 @@
-BUILT_SOURCES = query-lexer.c query-parser.c
-man1_MANS = doc/ca-shell.1 doc/ca-sql.1
+EXTRA_LTLIBRARIES =
+bin_PROGRAMS =
+bin_SCRIPTS =
+check_PROGRAMS =
+lib_LTLIBRARIES =
+man1_MANS =
+nobase_dist_pkgdata_DATA =
+nobase_lib_LTLIBRARIES =
+noinst_LIBRARIES =
+noinst_LTLIBRARIES =
+noinst_PROGRAMS =
+noinst_SCRIPTS =
 
-AM_YFLAGS = -d
+EXTRA_INSTALL_TARGETS =
 
-lib_LTLIBRARIES = libca-table.la
-include_HEADERS = ca-table.h ca-functions.h
+AM_TESTS_ENVIRONMENT = CPUPROFILE=; export CPUPROFILE; PYTHONPATH=$(srcdir)/generated/python:$(srcdir)/python/.libs; export PYTHONPATH; DATAROOTDIR=$(srcdir); export DATAROOTDIR;
 
-bin_PROGRAMS = \
-  ca-dump \
-  ca-load \
-  ca-shell
+BUILT_SOURCES =
+
+TESTSCRIPTS =
+
+ANALYZE_SRC =
+ANALYZE_CXX_SRC = $(filter %.cc, $(ANALYZE_SRC))
+ANALYZE_PLIST = $(ANALYZE_CXX_SRC:%.cc=%.plist)
+
+TESTS = $(check_PROGRAMS) $(TESTSCRIPTS)
+
+AM_CPPFLAGS = -I$(srcdir) -Igenerated -Ithird_party/capnproto/c++/src
+AM_CFLAGS = -g -Wall -march=native
+AM_CXXFLAGS = -g -Wall -march=native
+AM_LDFLAGS = -lpthread
 
 ACLOCAL_AMFLAGS = -I m4
-AM_CPPFLAGS = -I.
-AM_CFLAGS = -Wall -Werror -g
-AM_CXXFLAGS = -Wall -Werror -g
 
-libca_table_la_SOURCES = \
-  arena.c arena.h \
-  crc32c.c crc32c.h \
-  error.c error.h \
-  fifo.c \
-  file-buffer.c \
-  format.c \
-  functions.c \
-  hashmap.c hashmap.h \
-  memory.c memory.h \
-  merge.c \
-  output.c \
-  parse.c \
-  query.c \
-  rle.c \
-  sample.c \
-  schema.c schema.h \
-  table-sort.c \
-  sort.cc \
-  statement.c \
-  table-backend-log.c \
-  table-backend-writeonce.c \
-  table-write.c \
-  table.c \
-  type.c
-libca_table_la_LDFLAGS = -lpthread
+include $(srcdir)/base/Makefile.am
+include $(srcdir)/storage/ca-table/Makefile.am
+include $(srcdir)/third_party/capnproto/Makefile.am
+include $(srcdir)/third_party/gtest/Makefile.am
 
-ca_shell_SOURCES = ca-shell.c query-parser.y query-lexer.l
-ca_shell_LDFLAGS = -lreadline
-ca_shell_LDADD = libca-table.la
+install-exec-local: $(EXTRA_INSTALL_TARGETS)
 
-ca_load_SOURCES = ca-load.c
-ca_load_LDADD = libca-table.la
+$(ANALYZE_PLIST): %.plist: %.cc
+	@echo " CXXSA  " $@
+	@$(CXXCOMPILE) -Wall -Wextra --analyze $< $(OUTPUT_OPTION)
 
-ca_dump_SOURCES = ca-dump.c
-ca_dump_LDADD = libca-table.la
+analyze: $(ANALYZE_PLIST)
 
-TESTS = \
-  tests/arena-00 \
-  tests/correlation-00 \
-  tests/crc32c-00 \
-  tests/fifo-00 \
-  tests/format-00 \
-  tests/hashmap-00 \
-  tests/log-sort-00 \
-  tests/rank-correlation-00 \
-  tests/wo-sort-00
-check_PROGRAMS = $(TESTS)
-
-tests_arena_00_LDADD = libca-table.la
-tests_correlation_00_LDADD = libca-table.la
-tests_crc32c_00_LDADD = libca-table.la
-tests_fifo_00_LDADD = libca-table.la -lpthread
-tests_format_00_LDADD = libca-table.la
-tests_hashmap_00_LDADD = libca-table.la
-tests_log_sort_00_LDADD = libca-table.la
-tests_rank_correlation_00_LDADD = libca-table.la
-tests_wo_sort_00_LDADD = libca-table.la
+.PHONY: analyze

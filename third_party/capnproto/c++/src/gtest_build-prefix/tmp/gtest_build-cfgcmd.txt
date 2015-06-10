@@ -1,0 +1,1 @@
+cmd='/usr/bin/cmake;-DCMAKE_BUILD_TYPE=;-GUnix Makefiles;/home/mortehu/src/capnproto/c++/src/gtest_build-prefix/src/gtest_build'

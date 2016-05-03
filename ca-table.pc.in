@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+ 
+Name: ca-table
+Description: search index storage
+Version: @VERSION@
+Cflags: -I${includedir}
+Libs: -L${libdir} -lca-table

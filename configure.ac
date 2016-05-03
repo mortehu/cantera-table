@@ -24,13 +24,13 @@ AM_PROG_LEX
 
 LT_INIT
 
-AX_AC_EXPAND([DATAROOTDIR], $datarootdir)
-AC_DEFINE_UNQUOTED([DATAROOTDIR], ["$DATAROOTDIR"], [Path of data])
+AX_AC_EXPAND([SYSCONFDIR], $sysconfdir)
+AC_DEFINE_UNQUOTED([SYSCONFDIR], ["$SYSCONFDIR"], [read-only single-machine data])
 
 AC_LANG_PUSH([C++])
 AX_CXX_COMPILE_STDCXX_14([], [])
 AC_LANG_POP([C++])
 
 AC_CONFIG_HEADERS([config.h third_party/oroch/oroch/config.h])
-AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES([Makefile ca-table.pc])
 AC_OUTPUT

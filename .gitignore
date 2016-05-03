@@ -25,6 +25,7 @@
 /ca-dump
 /ca-load
 /ca-shell
+/ca-table.pc
 /compile
 /config.guess
 /config.h

@@ -50,7 +50,7 @@ auto Convert(const YAML::Node& node) {
 
 Keywords::Keywords() {
   auto config =
-      YAML::LoadFile(DATAROOTDIR "/san-francisco/config/keywords.yaml");
+      YAML::LoadFile(SYSCONFDIR "/ca-table/keywords.yaml");
   if (!config) return;
 
   ephemeral_ = Convert(config["ephemeral"]);

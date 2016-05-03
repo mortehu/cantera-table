@@ -15,6 +15,9 @@ noinst_PROGRAMS = \
 
 noinst_LIBRARIES =
 
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = ca-table.pc
+
 BUILT_SOURCES = \
   src/query-lexer.cc \
   src/query-parser.cc
@@ -30,6 +33,19 @@ include third_party/gtest/Makefile.am
 EXTRA_DIST = \
   LICENSE \
   README.md \
+  debian/ca-table.dirs \
+  debian/ca-table.install \
+  debian/changelog \
+  debian/compat \
+  debian/control \
+  debian/copyright \
+  debian/libca-table-dev.dirs \
+  debian/libca-table-dev.install \
+  debian/libca-table1.dirs \
+  debian/libca-table1.install \
+  debian/rules \
+  debian/source \
+  debian/source/format \
   third_party/oroch/LICENSE \
   third_party/oroch/README.md
 
@@ -75,7 +91,7 @@ libca_table_la_LIBADD = \
   -lre2
 libca_table_la_LDFLAGS = \
   -no-undefined \
-  -version-info 1:0:1 \
+  -version-info 1:0:0 \
   -export-symbols-regex '^_ZN7cantera5table.*'
 
 ca_shell_SOURCES = \

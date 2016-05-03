@@ -6,6 +6,7 @@
 *.log
 *.o
 *.plist
+*.pyc
 *.so
 *.so.*
 *.status
@@ -20,6 +21,9 @@
 /Makefile.in
 /aclocal.m4
 /ar-lib
+/ca-dump
+/ca-load
+/ca-shell
 /compile
 /config.guess
 /config.h
@@ -35,4 +39,4 @@
 /py-compile
 /test-driver
 /ylwrap
-stamp-h1
+stamp-h[0-9]*

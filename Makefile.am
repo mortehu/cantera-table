@@ -1,48 +1,88 @@
-EXTRA_LTLIBRARIES =
-bin_PROGRAMS =
-bin_SCRIPTS =
-check_PROGRAMS =
-lib_LTLIBRARIES =
-man1_MANS =
-nobase_dist_pkgdata_DATA =
-nobase_lib_LTLIBRARIES =
+lib_LTLIBRARIES = \
+  libca-table.la
+
+bin_PROGRAMS = \
+  ca-dump \
+  ca-load \
+  ca-shell
+
+noinst_PROGRAMS = \
+  src/format_benchmark
+
 noinst_LIBRARIES =
-noinst_LTLIBRARIES =
-noinst_PROGRAMS =
-noinst_SCRIPTS =
 
-EXTRA_INSTALL_TARGETS =
+BUILT_SOURCES = \
+  src/query-lexer.cc \
+  src/query-parser.cc
 
-AM_TESTS_ENVIRONMENT = CPUPROFILE=; export CPUPROFILE; PYTHONPATH=$(srcdir)/generated/python:$(srcdir)/python/.libs; export PYTHONPATH; DATAROOTDIR=$(srcdir); export DATAROOTDIR;
-
-BUILT_SOURCES =
-
-TESTSCRIPTS =
-
-ANALYZE_SRC =
-ANALYZE_CXX_SRC = $(filter %.cc, $(ANALYZE_SRC))
-ANALYZE_PLIST = $(ANALYZE_CXX_SRC:%.cc=%.plist)
-
-TESTS = $(check_PROGRAMS) $(TESTSCRIPTS)
-
-AM_CPPFLAGS = -I$(srcdir) -Igenerated -Ithird_party/capnproto/c++/src
-AM_CFLAGS = -g -Wall -march=native
-AM_CXXFLAGS = -g -Wall -march=native
-AM_LDFLAGS = -lpthread
+AM_YFLAGS = -d
 
 ACLOCAL_AMFLAGS = -I m4
+AM_CPPFLAGS = -Isrc $(JSONCPP_CFLAGS)
+AM_LDFLAGS = -lpthread
 
-include $(srcdir)/base/Makefile.am
-include $(srcdir)/storage/ca-table/Makefile.am
-include $(srcdir)/third_party/capnproto/Makefile.am
-include $(srcdir)/third_party/gtest/Makefile.am
+include third_party/gtest/Makefile.am
 
-install-exec-local: $(EXTRA_INSTALL_TARGETS)
+libca_table_la_SOURCES = \
+  src/format.cc \
+  src/keywords.cc \
+  src/merge.cc \
+  src/output.cc \
+  src/parse.cc \
+  src/rle.c \
+  src/schema.cc \
+  src/schema.h \
+  src/table-backend-leveldb-table.cc \
+  src/table-backend-writeonce.cc \
+  src/table-write.cc \
+  src/table.cc \
+  src/util.cc \
+  src/util.h
+libca_table_la_LIBADD = \
+  -lleveldb \
+  -lre2
+libca_table_la_LDFLAGS = \
+  -no-undefined \
+  -version-info 1:0:1 \
+  -export-symbols-regex '^_ZN7cantera5table.*'
 
-$(ANALYZE_PLIST): %.plist: %.cc
-	@echo " CXXSA  " $@
-	@$(CXXCOMPILE) -Wall -Wextra --analyze $< $(OUTPUT_OPTION)
+ca_shell_SOURCES = \
+  src/ca-shell.cc \
+  src/correlate.cc \
+  src/select.cc \
+  src/statement.cc \
+  src/query.cc \
+  src/query-parser.yy \
+  src/query-lexer.ll
+ca_shell_LDADD = \
+  libca-table.la \
+  $(CA_CAS_LIBS) \
+  $(CAPNP_RPC_LIBS) \
+  $(JSONCPP_LIBS) \
+  $(YAML_LIBS) \
+  -lreadline \
+  -ltcmalloc
 
-analyze: $(ANALYZE_PLIST)
+ca_load_SOURCES = \
+  src/ca-load.cc
+ca_load_LDADD = \
+  libca-table.la \
+  $(CAPNP_LIBS) \
+  $(LIBCOLUMNFILE_LIBS) \
+  $(YAML_LIBS) \
+  -lre2
 
-.PHONY: analyze
+ca_dump_SOURCES = \
+  src/ca-dump.cc
+ca_dump_LDADD = \
+  libca-table.la \
+  $(CAPNP_LIBS) \
+  $(YAML_LIBS) \
+  -lre2
+
+src_format_benchmark_SOURCES = \
+  src/format_benchmark.cc
+src_format_benchmark_LDADD = \
+  libca-table.la \
+  $(CAPNP_LIBS) \
+  $(YAML_LIBS)

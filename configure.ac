@@ -31,6 +31,6 @@ AC_LANG_PUSH([C++])
 AX_CXX_COMPILE_STDCXX_14([], [])
 AC_LANG_POP([C++])
 
-AC_CONFIG_HEADERS([config.h third_party/Oroch/oroch/config.h])
+AC_CONFIG_HEADERS([config.h third_party/oroch/oroch/config.h])
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

@@ -32,7 +32,7 @@
 #include "src/ca-table.h"
 #include "src/rle.h"
 
-#include "third_party/Oroch/oroch/integer_codec.h"
+#include "third_party/oroch/oroch/integer_codec.h"
 
 namespace cantera {
 namespace table {

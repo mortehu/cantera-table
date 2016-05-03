@@ -1,5 +1,6 @@
 *.a
 *.cache
+*.gz
 *.la
 *.lai
 *.lo

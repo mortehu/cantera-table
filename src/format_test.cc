@@ -6,6 +6,8 @@
 #include "src/ca-table.h"
 #include "third_party/gtest/gtest.h"
 
+using namespace cantera::table;
+
 namespace {
 
 void ValidateValues(ca_offset_score* values, size_t count) {
@@ -28,7 +30,7 @@ void ValidateValues(ca_offset_score* values, size_t count) {
   {
     std::vector<ca_offset_score> decompressed_values;
 
-    ca_offset_score_parse(compressed_data, &decompressed_values);
+    ca_offset_score_parse(cantera::string_view{reinterpret_cast<const char*>(compressed_data.data()), compressed_data.size()}, &decompressed_values);
 
     EXPECT_EQ(decompressed_values.size(), count);
     EXPECT_TRUE(std::equal(decompressed_values.begin(),
@@ -90,7 +92,7 @@ TEST_F(FormatTest, OffsetScoreFuzzTest) {
 
     buffer.resize(size);
 
-    ca_offset_score_parse(buffer, &decoded_values);
+    ca_offset_score_parse(cantera::string_view{reinterpret_cast<const char*>(buffer.data()), buffer.size()}, &decoded_values);
     ASSERT_EQ(decoded_values.size(), values.size());
 
     for (size_t i = 0; i < values.size(); ++i) {
@@ -208,4 +210,11 @@ TEST_F(FormatTest, LinearOffset3) {
   for (size_t i = 0; i < kValueCount; ++i) values[i].offset = i * 16 + 7;
 
   ValidateValues(values, kValueCount);
+}
+
+TEST_F(FormatTest, SingleValue) {
+  struct ca_offset_score value;
+  memset(&value, 0, sizeof(value));
+
+  ValidateValues(&value, 1);
 }

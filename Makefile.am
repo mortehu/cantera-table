@@ -10,6 +10,9 @@ ca_table_includedir = $(includedir)/ca-table
 ca_table_include_HEADERS = \
   src/ca-table.h
 
+check_PROGRAMS = \
+  src/format_test
+
 noinst_PROGRAMS = \
   src/format_benchmark
 
@@ -21,6 +24,8 @@ pkgconfig_DATA = ca-table.pc
 BUILT_SOURCES = \
   src/query-lexer.cc \
   src/query-parser.cc
+
+TESTS = $(check_PROGRAMS)
 
 AM_YFLAGS = -d
 
@@ -126,6 +131,13 @@ ca_dump_LDADD = \
   libca-table.la \
   $(CAPNP_LIBS) \
   -lre2
+
+src_format_test_SOURCES = \
+  src/format_test.cc
+src_format_test_LDADD = \
+  libca-table.la \
+  third_party/gtest/libgtest.a \
+  $(CAPNP_LIBS)
 
 src_format_benchmark_SOURCES = \
   src/format_benchmark.cc

@@ -1,3 +1,9 @@
+ca-table (1.2.1-1) unstable; urgency=medium
+
+  * Fix stack overflow issue detected by -fstack-protector-string.
+
+ -- Morten Hustveit <morten.hustveit@gmail.com>  Wed, 04 May 2016 11:43:33 -0400
+
 ca-table (1.2-1) unstable; urgency=medium
 
   * Initial release.

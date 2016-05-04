@@ -87,6 +87,7 @@ libca_table_la_SOURCES = \
   third_party/oroch/oroch/varint.h \
   third_party/oroch/oroch/zigzag.h
 libca_table_la_LIBADD = \
+  $(YAML_LIBS) \
   -lleveldb \
   -lre2
 libca_table_la_LDFLAGS = \
@@ -108,7 +109,6 @@ ca_shell_LDADD = \
   $(CA_CAS_LIBS) \
   $(CAPNP_RPC_LIBS) \
   $(JSONCPP_LIBS) \
-  $(YAML_LIBS) \
   -lreadline \
   -ltcmalloc
 
@@ -118,7 +118,6 @@ ca_load_LDADD = \
   libca-table.la \
   $(CAPNP_LIBS) \
   $(LIBCOLUMNFILE_LIBS) \
-  $(YAML_LIBS) \
   -lre2
 
 ca_dump_SOURCES = \
@@ -126,12 +125,10 @@ ca_dump_SOURCES = \
 ca_dump_LDADD = \
   libca-table.la \
   $(CAPNP_LIBS) \
-  $(YAML_LIBS) \
   -lre2
 
 src_format_benchmark_SOURCES = \
   src/format_benchmark.cc
 src_format_benchmark_LDADD = \
   libca-table.la \
-  $(CAPNP_LIBS) \
-  $(YAML_LIBS)
+  $(CAPNP_LIBS)

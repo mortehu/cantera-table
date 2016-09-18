@@ -30,7 +30,7 @@ TESTS = $(check_PROGRAMS)
 AM_YFLAGS = -d
 
 ACLOCAL_AMFLAGS = -I m4
-AM_CPPFLAGS = -Isrc $(JSONCPP_CFLAGS)
+AM_CPPFLAGS = -Isrc $(CAPNP_CFLAGS) $(JSONCPP_CFLAGS)
 AM_LDFLAGS = -lpthread
 
 include third_party/gtest/Makefile.am

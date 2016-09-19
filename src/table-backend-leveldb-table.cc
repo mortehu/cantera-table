@@ -49,6 +49,10 @@
 #include "src/ca-table.h"
 #include "src/util.h"
 
+#if !HAVE_FDATASYNC || !HAVE_DECL_FDATASYNC
+# define fdatasync fsync
+#endif
+
 #define TMP_SUFFIX ".tmp.XXXXXX"
 
 #define CHECK_STATUS(expr)                                       \

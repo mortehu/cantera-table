@@ -331,8 +331,13 @@ void WriteOnceTable::Sync() {
   index_bits = 64;
   index_size = entry_count * 2 + 1;
 
+#if HAVE_FALLOCATE
   KJ_SYSCALL(
       fallocate(fd, 0, header.index_offset, index_size * sizeof(uint64_t)));
+#else
+  KJ_SYSCALL(
+      ftruncate(fd, header.index_offset + index_size * sizeof(uint64_t)));
+#endif
 
   MemoryMap();
 

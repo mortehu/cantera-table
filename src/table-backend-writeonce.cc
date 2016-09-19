@@ -248,7 +248,7 @@ void WriteOnceTable::MAdviseIndex() {
 }
 
 void WriteOnceTable::BuildIndex() {
-  static const size_t kKeyBufferMax = 16 * 1024 * 1024;
+  static const uint64_t kKeyBufferMax = 16 * 1024 * 1024;
   struct iovec key_iov, value;
   std::string prev_key, key;
   unsigned int flags = CA_WO_FLAG_ASCENDING | CA_WO_FLAG_DESCENDING;

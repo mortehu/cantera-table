@@ -46,7 +46,7 @@ inline bool CompareUTF8(const string_view& lhs, const string_view& rhs) {
 }
 
 inline uint64_t StringToUInt64(const char* string) {
-  static_assert(std::is_same<unsigned long, uint64_t>::value, "");
+  static_assert(sizeof(unsigned long) == sizeof(uint64_t), "");
   KJ_REQUIRE(*string != 0);
   char* endptr = nullptr;
   errno = 0;

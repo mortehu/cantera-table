@@ -28,6 +28,7 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <random>
 #include <set>
 #include <unordered_map>
 
@@ -41,6 +42,10 @@
 #include "src/keywords.h"
 #include "src/query.h"
 #include "src/util.h"
+
+#if !HAVE_FWRITE_UNLOCKED
+# define fwrite_unlocked fwrite
+#endif
 
 namespace cantera {
 namespace table {
@@ -215,7 +220,7 @@ void LookupIndexKey(
     const std::vector<std::unique_ptr<Table>>& index_tables,
     const char* token, bool make_headers,
     std::function<void(std::vector<ca_offset_score>)>&& callback) {
-  auto delimiter = strchr(token, ':');
+  const char *delimiter = strchr(token, ':');
 
   if (delimiter > token + 3 && !memcmp(delimiter - 3, "-in", 3)) {
     // The "FIELD-in:KEY" keyword retrieves an object from CAS using the

@@ -24,6 +24,7 @@ AM_PROG_LEX
 
 AC_CHECK_FUNCS(fallocate)
 AC_CHECK_FUNCS(fdatasync)
+AC_CHECK_FUNCS(fputs_unlocked fwrite_unlocked)
 # Quite weirdly on Mac OS X the fdatasync() function is not declared
 # in system headers but it passes the above check. So check if it is
 # declared as well.

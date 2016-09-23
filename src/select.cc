@@ -6,6 +6,10 @@
 #include "src/select.h"
 #include "src/util.h"
 
+#if !HAVE_FPUTS_UNLOCKED
+# define fputs_unlocked fputs
+#endif
+
 namespace cantera {
 namespace table {
 

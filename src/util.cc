@@ -4,6 +4,8 @@
 
 #include "src/util.h"
 
+#include <cstring>
+#include <memory>
 #include <random>
 
 #include <fcntl.h>
@@ -60,7 +62,23 @@ size_t ReadWithOffset(int fd, void* dest, size_t size_min, size_t size_max,
 }
 
 kj::AutoCloseFd AnonTemporaryFile(const char* path, int mode) {
+#ifdef O_TMPFILE
   return OpenFile(path, O_TMPFILE | O_RDWR, mode);
+#else
+  size_t pathlen = std::strlen(path);
+  static const char suffix[] = "/ca-table-XXXXXX";
+  std::unique_ptr<char[]> pathname(new char[pathlen + sizeof(suffix)]);
+  std::memcpy((void *)(pathname.get()), path, pathlen);
+  std::memcpy((void *)(pathname.get() + pathlen), suffix, sizeof(suffix));
+
+  int fd;
+  KJ_SYSCALL(fd = ::mkstemp(pathname.get()), pathname.get());
+
+  kj::AutoCloseFd acfd(fd);
+  KJ_SYSCALL(unlink(pathname.get()), pathname.get());
+
+  return acfd;
+#endif
 }
 
 void LinkAnonTemporaryFile(int fd, const char* path) {

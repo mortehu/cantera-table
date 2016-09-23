@@ -92,13 +92,14 @@ libca_table_la_SOURCES = \
   third_party/oroch/oroch/varint.h \
   third_party/oroch/oroch/zigzag.h
 libca_table_la_LIBADD = \
+  $(CAPNP_LIBS) \
   $(YAML_LIBS) \
   -lleveldb \
   -lre2
 libca_table_la_LDFLAGS = \
   -no-undefined \
   -version-info 1:1:0 \
-  -export-symbols-regex '^_ZN7cantera5table.*'
+  -export-symbols-regex '^_ZNK?7cantera5table.*'
 
 ca_shell_SOURCES = \
   src/ca-shell.cc \
@@ -121,7 +122,6 @@ ca_load_SOURCES = \
   src/ca-load.cc
 ca_load_LDADD = \
   libca-table.la \
-  $(CAPNP_LIBS) \
   $(LIBCOLUMNFILE_LIBS) \
   -lre2
 
@@ -129,18 +129,15 @@ ca_dump_SOURCES = \
   src/ca-dump.cc
 ca_dump_LDADD = \
   libca-table.la \
-  $(CAPNP_LIBS) \
   -lre2
 
 src_format_test_SOURCES = \
   src/format_test.cc
 src_format_test_LDADD = \
   libca-table.la \
-  third_party/gtest/libgtest.a \
-  $(CAPNP_LIBS)
+  third_party/gtest/libgtest.a
 
 src_format_benchmark_SOURCES = \
   src/format_benchmark.cc
 src_format_benchmark_LDADD = \
-  libca-table.la \
-  $(CAPNP_LIBS)
+  libca-table.la

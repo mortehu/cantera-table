@@ -22,6 +22,8 @@ AC_PROG_YACC
 AM_PROG_AR
 AM_PROG_LEX
 
+AC_CHECK_FUNCS(get_current_dir_name)
+AC_CHECK_FUNCS(fmemopen)
 AC_CHECK_FUNCS(fallocate)
 AC_CHECK_FUNCS(fdatasync)
 AC_CHECK_FUNCS(fputs_unlocked fwrite_unlocked)

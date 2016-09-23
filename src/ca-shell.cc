@@ -27,6 +27,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <memory>
 
 #include <err.h>
 #include <getopt.h>
@@ -64,6 +65,34 @@ struct option kLongOptions[] = {
     {nullptr, 0, nullptr, 0}};
 
 }  // namespace
+
+static void stdout_error(const char *errmsg) {
+  Json::Value error;
+  error["error"] = errmsg;
+  std::cout << Json::FastWriter().write(error);
+}
+
+static void parse_string(ca_table::QueryParseContext &context, const char *command, bool use_std_err) {
+  FILE* file;
+
+#if HAVE_FMEMOPEN
+  if (!(file = fmemopen((void*)command, strlen(command), "r")))
+    throw KJ_EXCEPTION(FAILED, "fmemopen failed: %s\n", strerror(errno));
+#else
+  KJ_UNIMPLEMENTED("need a fallback for missing fmemopen()");
+#endif
+
+  try {
+    CA_parse_script(&context, file);
+  } catch (kj::Exception e) {
+    if (use_std_err)
+      stdout_error(e.getDescription().cStr());
+    else
+      KJ_LOG(ERROR, e);
+  }
+
+  fclose(file);
+}
 
 int main(int argc, char** argv) try {
   ca_table::QueryParseContext context;
@@ -120,20 +149,8 @@ int main(int argc, char** argv) try {
   if (command) {
     KJ_CONTEXT(command);
 
-    FILE* file;
+    parse_string(context, command, true);
 
-    if (!(file = fmemopen((void*)command, strlen(command), "r")))
-      fprintf(stderr, "fmemopen failed: %s\n", strerror(errno));
-
-    try {
-      CA_parse_script(&context, file);
-    } catch (kj::Exception e) {
-      Json::Value error;
-      error["error"] = e.getDescription().cStr();
-      std::cout << Json::FastWriter().write(error);
-    }
-
-    fclose(file);
   } else if (isatty(STDIN_FILENO)) {
     // Standard input is a TTY; enter interactive mode.
 
@@ -146,16 +163,19 @@ int main(int argc, char** argv) try {
     }
 
     for (;;) {
-      FILE* file;
       char* line = NULL;
 
       free(prompt);
 
+#if HAVE_GET_CURRENT_DIR_NAME
+      std::unique_ptr<char[], decltype(free) *> dir(getc_current_dir_name(), free);
+#else
+      std::unique_ptr<char[], decltype(free) *> dir(getcwd(NULL, 0), free);
+#endif
       if (-1 == asprintf(&prompt,
                          "[%1$c\033[32;1m%2$cca-table%1$c\033[00m%2$c:%1$c\033["
                          "1m%2$c%3$s%1$c\033[00m%2$c]$ ",
-                         RL_PROMPT_START_IGNORE, RL_PROMPT_END_IGNORE,
-                         get_current_dir_name()))
+                         RL_PROMPT_START_IGNORE, RL_PROMPT_END_IGNORE, dir.get()))
         err(EXIT_FAILURE, "asprintf failed");
 
       if (!(line = readline(prompt))) break;
@@ -164,16 +184,7 @@ int main(int argc, char** argv) try {
 
       add_history(line);
 
-      if (!(file = fmemopen((void*)line, strlen(line), "r")))
-        fprintf(stderr, "fmemopen failed: %s\n", strerror(errno));
-
-      try {
-        CA_parse_script(&context, file);
-      } catch (kj::Exception e) {
-        KJ_LOG(ERROR, e);
-      }
-
-      fclose(file);
+      parse_string(context, line, false);
 
       free(line);
     }
@@ -195,9 +206,7 @@ int main(int argc, char** argv) try {
     try {
       CA_parse_script(&context, stdin);
     } catch (kj::Exception e) {
-      Json::Value error;
-      error["error"] = e.getDescription().cStr();
-      std::cout << Json::FastWriter().write(error);
+      stdout_error(e.getDescription().cStr());
     }
   }
 } catch (kj::Exception e) {

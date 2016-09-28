@@ -10,6 +10,7 @@ namespace cantera {
 namespace table {
 
 class Table;
+class SeekableTable;
 
 class Schema {
  public:
@@ -18,7 +19,7 @@ class Schema {
 
   void Load();
 
-  std::vector<std::pair<uint64_t, std::unique_ptr<Table>>>
+  std::vector<std::pair<uint64_t, std::unique_ptr<SeekableTable>>>
       summary_tables;
 
   std::vector<std::unique_ptr<Table>> summary_override_tables;

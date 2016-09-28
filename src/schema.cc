@@ -103,7 +103,7 @@ void Schema::Load() {
 
     if (!strcmp(line, "summary")) {
       summary_tables.emplace_back(
-          offset, Table::Open(nullptr, table_path, O_RDONLY));
+          offset, SeekableTable::Open(nullptr, table_path, O_RDONLY));
     } else if (!strcmp(line, "summary-override")) {
       summary_override_tables.emplace_back(
           Table::Open(nullptr, table_path, O_RDONLY));

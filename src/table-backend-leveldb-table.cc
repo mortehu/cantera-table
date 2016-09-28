@@ -169,28 +169,15 @@ class LevelDBTable : public Table {
                        value[1].iov_len));
   }
 
-  void Seek(off_t offset, int whence) override {
-    if (offset >= 0) {
-      if (whence == SEEK_SET) {
-        KJ_REQUIRE(SeekToFirst());
-        whence = SEEK_CUR;
-      }
-
-      if (whence == SEEK_CUR) {
-        KJ_REQUIRE(Skip(offset));
-        return;
-      }
-    }
-
-    KJ_FAIL_REQUIRE("unsupported seek", offset, whence);
+  void SeekToFirst() override {
+    iterator_->SeekToFirst();
+    need_seek_ = false;
+    eof_ = !iterator_->Valid();
+    KJ_REQUIRE(!eof_);
   }
 
   bool SeekToKey(const string_view& key) override {
     return SeekToKey(leveldb::Slice(key.data(), key.size()));
-  }
-
-  off_t Offset() override {
-    KJ_FAIL_REQUIRE("Cannot get offset of LevelDB Table");
   }
 
   bool ReadRow(struct iovec* key, struct iovec* value) override {
@@ -211,13 +198,6 @@ class LevelDBTable : public Table {
     table_builder_->Add(key, value);
     prev_key_.assign(key_begin, key_end);
     CHECK_STATUS(table_builder_->status());
-  }
-
-  bool SeekToFirst() {
-    iterator_->SeekToFirst();
-    need_seek_ = false;
-    eof_ = !iterator_->Valid();
-    return !eof_;
   }
 
   bool Skip(size_t count) {
@@ -333,6 +313,11 @@ std::unique_ptr<Table> LevelDBTableBackend::Open(const char* path, int flags,
   }
 
   KJ_FAIL_REQUIRE("Invalid open flags for LevelDB Table backend", flags, mode);
+}
+
+std::unique_ptr<SeekableTable> LevelDBTableBackend::OpenSeekable(
+    const char* path, int flags, mode_t mode) {
+  KJ_FAIL_REQUIRE("LevelDB tables are not seekable");
 }
 
 }  // namespace table

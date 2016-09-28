@@ -75,7 +75,7 @@ struct CA_wo_header {
   uint64_t index_offset;
 };
 
-class WriteOnceTable : public Table {
+class WriteOnceTable : public SeekableTable {
  public:
   WriteOnceTable(const char* path, int flags, mode_t mode);
 
@@ -90,6 +90,8 @@ class WriteOnceTable : public Table {
   void InsertRow(const struct iovec* value, size_t value_count) override;
 
   void Seek(off_t offset, int whence) override;
+
+  void SeekToFirst() override { Seek(0, SEEK_SET); }
 
   bool SeekToKey(const string_view& key) override;
 
@@ -203,6 +205,11 @@ WriteOnceTable::WriteOnceTable(const char* path, int flags, mode_t mode)
 
 std::unique_ptr<Table> WriteOnceTableBackend::Open(const char* path, int flags,
                                                    mode_t mode) {
+  return std::make_unique<WriteOnceTable>(path, flags, mode);
+}
+
+std::unique_ptr<SeekableTable> WriteOnceTableBackend::OpenSeekable(
+    const char* path, int flags, mode_t mode) {
   return std::make_unique<WriteOnceTable>(path, flags, mode);
 }
 

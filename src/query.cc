@@ -313,7 +313,7 @@ void LookupIndexKey(
     std::set<uint64_t> offset_buffer;
 
     for (size_t i = 0; i < index_tables.size(); ++i) {
-      index_tables[i]->Seek(0, SEEK_SET);
+      index_tables[i]->SeekToFirst();
 
       // Seek to first key in range.
       index_tables[i]->SeekToKey(key);

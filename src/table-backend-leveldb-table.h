@@ -7,8 +7,12 @@ namespace cantera {
 namespace table {
 
 class LevelDBTableBackend : public Backend {
+ public:
   std::unique_ptr<Table> Open(const char* path, int flags,
                               mode_t mode) override;
+
+  std::unique_ptr<SeekableTable> OpenSeekable(const char* path, int flags,
+                                              mode_t mode) override;
 };
 
 }  // namespace table

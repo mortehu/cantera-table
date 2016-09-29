@@ -534,8 +534,8 @@ int main(int argc, char** argv) try {
   const char* output_path;
 
   const char* output_backend = nullptr;
-  ca_table::TableCompression output_compression
-      = ca_table::kTableCompressionDefault;
+  ca_table::TableCompression output_compression =
+      ca_table::kTableCompressionDefault;
 
   const char* schema_path = NULL;
 
@@ -717,8 +717,7 @@ int main(int argc, char** argv) try {
   ca_table::TableOptions output_options = ca_table::TableOptions::Create();
   output_options.SetFileMode(0444).SetCompression(output_compression);
 
-  if (!output_backend)
-    output_backend = "leveldb-table";
+  if (!output_backend) output_backend = "leveldb-table";
 
   if (optind + 1 > argc)
     errx(EX_USAGE, "Usage: %s [OPTION]... TABLE [INPUT]...", argv[0]);
@@ -741,8 +740,8 @@ int main(int argc, char** argv) try {
         inputs.emplace_back(ca_table::internal::OpenFile(argv[optind++], O_RDONLY));
     }
 
-    table_handle =
-        ca_table::TableFactory::Create(output_backend, output_path, output_options);
+    table_handle = ca_table::TableFactory::Create(output_backend, output_path,
+                                                  output_options);
 
     for (auto& input : inputs) {
       cantera::ColumnFileReader reader(std::move(input));
@@ -826,8 +825,8 @@ int main(int argc, char** argv) try {
   } else if (optind == argc) {
     KJ_REQUIRE(input_format == kFormatAuto || input_format == kFormatCSV);
 
-    table_handle =
-        ca_table::TableFactory::Create(output_backend, output_path, output_options);
+    table_handle = ca_table::TableFactory::Create(output_backend, output_path,
+                                                  output_options);
 
     kj::AutoCloseFd input(STDIN_FILENO);
 
@@ -874,8 +873,8 @@ int main(int argc, char** argv) try {
       tables.emplace_back(std::move(table));
     }
 
-    table_handle =
-        ca_table::TableFactory::Create(output_backend, output_path, output_options);
+    table_handle = ca_table::TableFactory::Create(output_backend, output_path,
+                                                  output_options);
 
     if (tables.size() == 1) {
       CopyTable(tables[0].get(), table_handle.get());

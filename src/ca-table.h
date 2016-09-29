@@ -160,11 +160,61 @@ Backend* ca_table_backend(const char* name);
 
 /*****************************************************************************/
 
+enum TableCompression : uint8_t {
+  // No compression.
+  kTableCompressionNone = 0,
+
+  // Backend-specific default compression.
+  kTableCompressionDefault = uint8_t(-1),
+
+  // Zstandard compression. https://github.com/facebook/zstd
+  kTableCompressionZSTD = 1,
+};
+
+class TableOptions {
+ public:
+  static TableOptions Create() { return TableOptions(); }
+
+  TableOptions& SetFileFlags(int file_flags) {
+    file_flags_ = file_flags;
+    return *this;
+  }
+
+  TableOptions& SetFileMode(mode_t file_mode) {
+    file_flags_ = file_mode;
+    return *this;
+  }
+
+  TableOptions& SetCompression(TableCompression compression) {
+    compression_ = compression;
+    return *this;
+  }
+
+  TableOptions& SetCompressionLevel(uint8_t compression_level) {
+    compression_level_ = compression_level;
+    return *this;
+  }
+
+  int GetFileFlags() const { return file_flags_; }
+  mode_t GetFileMode() const { return file_mode_; }
+
+  TableCompression GetCompression() const { return compression_; }
+  uint8_t GetCompressionLevel() const { return compression_level_; }
+
+ private:
+  // File creation options.
+  int file_flags_ = 0;
+  mode_t file_mode_ = 0666;
+
+  // Data compression options.
+  TableCompression compression_ = kTableCompressionDefault;
+  uint8_t compression_level_ = 0;
+};
+
+/*****************************************************************************/
+
 class Table {
  public:
-  static std::unique_ptr<Table> Open(const char* backend_name, const char* path,
-                                     int flags, mode_t mode = 0666);
-
   Table();
 
   virtual ~Table();
@@ -217,10 +267,6 @@ class Table {
 
 class SeekableTable : public Table {
  public:
-  static std::unique_ptr<SeekableTable> Open(const char* backend_name,
-                                             const char* path, int flags,
-                                             mode_t mode = 0666);
-
   virtual off_t Offset() = 0;
 
   virtual void Seek(off_t offset, int whence) = 0;
@@ -229,6 +275,20 @@ class SeekableTable : public Table {
 int ca_table_stat(Table* table, struct stat* buf);
 
 int ca_table_utime(Table* table, const struct timeval tv[2]);
+
+/*****************************************************************************/
+
+class TableFactory {
+ public:
+  static std::unique_ptr<Table> Create(const char* backend_name,
+                                       const char* path, TableOptions options);
+
+  static std::unique_ptr<Table> Open(const char* backend_name,
+                                     const char* path);
+
+  static std::unique_ptr<SeekableTable> OpenSeekable(const char* backend_name,
+                                                     const char* path);
+};
 
 /*****************************************************************************/
 

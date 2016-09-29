@@ -33,12 +33,9 @@ const char* detect_table_format(const char* path) {
   KJ_FAIL_REQUIRE("Unrecognized table format", path);
 }
 
-static void init_stat(struct stat &st, const char* path, int flags) {
+static void init_stat(struct stat &st, const char* path) {
   std::memset(&st, 0, sizeof(st));
-
-  if (!(flags & O_CREAT)) {
-    KJ_SYSCALL(stat(path, &st), path);
-  }
+  KJ_SYSCALL(stat(path, &st), path);
 }
 
 static Backend* get_backend(const char* backend_name, const char* path) {
@@ -85,24 +82,39 @@ Backend* ca_table_backend(const char* name) {
 
 /*****************************************************************************/
 
-std::unique_ptr<Table> Table::Open(const char* backend_name, const char* path, int flags, mode_t mode) {
-  struct stat st;
-  init_stat(st, path, flags);
+std::unique_ptr<Table> TableFactory::Create(const char* backend_name,
+                                            const char* path,
+                                            TableOptions options) {
+  int flags = options.GetFileFlags();
+  KJ_REQUIRE((flags & ~(O_EXCL | O_CLOEXEC)) == 0);
+  flags |= O_CREAT | O_TRUNC | O_WRONLY;
 
   Backend *backend = get_backend(backend_name, path);
-  auto result = backend->Open(path, flags, mode);
+  auto result = backend->Open(path, flags, options.GetFileMode());
+
+  std::memset(&result->st, 0, sizeof(result->st));
+
+  return result;
+}
+
+std::unique_ptr<Table> TableFactory::Open(const char* backend_name, const char* path) {
+  struct stat st;
+  init_stat(st, path);
+
+  Backend *backend = get_backend(backend_name, path);
+  auto result = backend->Open(path, O_RDONLY, 0666);
 
   result->st = st;
 
   return result;
 }
 
-std::unique_ptr<SeekableTable> SeekableTable::Open(const char* backend_name, const char* path, int flags, mode_t mode) {
+std::unique_ptr<SeekableTable> TableFactory::OpenSeekable(const char* backend_name, const char* path) {
   struct stat st;
-  init_stat(st, path, flags);
+  init_stat(st, path);
 
   Backend *backend = get_backend(backend_name, path);
-  auto result = backend->OpenSeekable(path, flags, mode);
+  auto result = backend->OpenSeekable(path, O_RDONLY, 0666);
 
   result->st = st;
 

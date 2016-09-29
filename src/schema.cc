@@ -103,10 +103,10 @@ void Schema::Load() {
 
     if (!strcmp(line, "summary")) {
       summary_tables.emplace_back(
-          offset, SeekableTable::Open(nullptr, table_path, O_RDONLY));
+          offset,TableFactory::OpenSeekable(nullptr, table_path));
     } else if (!strcmp(line, "summary-override")) {
       summary_override_tables.emplace_back(
-          Table::Open(nullptr, table_path, O_RDONLY));
+          TableFactory::Open(nullptr, table_path));
     } else if (!strcmp(line, "index")) {
       index_table_paths_.emplace_back(table_path);
     } else {
@@ -123,7 +123,7 @@ std::vector<std::unique_ptr<Table>>& Schema::IndexTables() {
   if (index_table_paths_.size() != index_tables_.size()) {
     for (const auto& path : index_table_paths_) {
       index_tables_.emplace_back(
-          Table::Open(nullptr, path.c_str(), O_RDONLY));
+          TableFactory::Open(nullptr, path.c_str()));
     }
   }
 

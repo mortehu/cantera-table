@@ -699,8 +699,10 @@ int main(int argc, char** argv) try {
         inputs.emplace_back(ca_table::internal::OpenFile(argv[optind++], O_RDONLY));
     }
 
-    table_handle = ca_table::Table::Open(output_binary_format, output_path,
-                                 O_CREAT | O_TRUNC | O_WRONLY, 0444);
+    ca_table::TableOptions opts =
+        ca_table::TableOptions::Create().SetFileMode(0444);
+    table_handle =
+        ca_table::TableFactory::Create(output_binary_format, output_path, opts);
 
     for (auto& input : inputs) {
       cantera::ColumnFileReader reader(std::move(input));
@@ -784,8 +786,10 @@ int main(int argc, char** argv) try {
   } else if (optind == argc) {
     KJ_REQUIRE(input_format == kFormatAuto || input_format == kFormatCSV);
 
-    table_handle = ca_table::Table::Open(output_binary_format, output_path,
-                                 O_CREAT | O_TRUNC | O_WRONLY, 0444);
+    ca_table::TableOptions opts =
+        ca_table::TableOptions::Create().SetFileMode(0444);
+    table_handle =
+        ca_table::TableFactory::Create(output_binary_format, output_path, opts);
 
     kj::AutoCloseFd input(STDIN_FILENO);
 
@@ -823,7 +827,7 @@ int main(int argc, char** argv) try {
 
     for (i = optind; i < argc; ++i) {
       KJ_CONTEXT(argv[i]);
-      auto table = ca_table::Table::Open(NULL, argv[i], O_RDONLY);
+      auto table = ca_table::TableFactory::Open(NULL, argv[i]);
 
       KJ_REQUIRE(table->IsSorted());
 
@@ -832,8 +836,10 @@ int main(int argc, char** argv) try {
       tables.emplace_back(std::move(table));
     }
 
-    table_handle = ca_table::Table::Open(output_binary_format, output_path,
-                                 O_CREAT | O_TRUNC | O_WRONLY, 0444);
+    ca_table::TableOptions opts =
+        ca_table::TableOptions::Create().SetFileMode(0444);
+    table_handle =
+        ca_table::TableFactory::Create(output_binary_format, output_path, opts);
 
     if (tables.size() == 1) {
       CopyTable(tables[0].get(), table_handle.get());

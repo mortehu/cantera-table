@@ -31,6 +31,7 @@ class Query;
 class Schema;
 class Table;
 class SeekableTable;
+class TableOptions;
 
 // Escape string for use in tab delimited format.
 std::string Escape(const string_view& str);
@@ -39,12 +40,12 @@ class Backend {
  public:
   virtual ~Backend();
 
-  virtual std::unique_ptr<Table> Open(const char* path, int flags,
-                                      mode_t mode) = 0;
+  virtual std::unique_ptr<Table> Create(const char* path,
+                                        const TableOptions &options) = 0;
 
-  virtual std::unique_ptr<SeekableTable> OpenSeekable(const char* path,
-                                                      int flags,
-                                                      mode_t mode) = 0;
+  virtual std::unique_ptr<Table> Open(const char* path) = 0;
+
+  virtual std::unique_ptr<SeekableTable> OpenSeekable(const char* path) = 0;
 };
 
 void LookupKey(const std::vector<Table*>& index_tables,
@@ -281,7 +282,8 @@ int ca_table_utime(Table* table, const struct timeval tv[2]);
 class TableFactory {
  public:
   static std::unique_ptr<Table> Create(const char* backend_name,
-                                       const char* path, TableOptions options);
+                                       const char* path,
+                                       const TableOptions &options);
 
   static std::unique_ptr<Table> Open(const char* backend_name,
                                      const char* path);

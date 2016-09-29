@@ -84,13 +84,9 @@ Backend* ca_table_backend(const char* name) {
 
 std::unique_ptr<Table> TableFactory::Create(const char* backend_name,
                                             const char* path,
-                                            TableOptions options) {
-  int flags = options.GetFileFlags();
-  KJ_REQUIRE((flags & ~(O_EXCL | O_CLOEXEC)) == 0);
-  flags |= O_CREAT | O_TRUNC | O_WRONLY;
-
+                                            const TableOptions &options) {
   Backend *backend = get_backend(backend_name, path);
-  auto result = backend->Open(path, flags, options.GetFileMode());
+  auto result = backend->Create(path, options);
 
   std::memset(&result->st, 0, sizeof(result->st));
 
@@ -102,7 +98,7 @@ std::unique_ptr<Table> TableFactory::Open(const char* backend_name, const char* 
   init_stat(st, path);
 
   Backend *backend = get_backend(backend_name, path);
-  auto result = backend->Open(path, O_RDONLY, 0666);
+  auto result = backend->Open(path);
 
   result->st = st;
 
@@ -114,7 +110,7 @@ std::unique_ptr<SeekableTable> TableFactory::OpenSeekable(const char* backend_na
   init_stat(st, path);
 
   Backend *backend = get_backend(backend_name, path);
-  auto result = backend->OpenSeekable(path, O_RDONLY, 0666);
+  auto result = backend->OpenSeekable(path);
 
   result->st = st;
 

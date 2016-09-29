@@ -132,10 +132,10 @@ class LevelDBFile : public leveldb::RandomAccessFile,
 class LevelDBTable : public Table {
  public:
   LevelDBTable(std::unique_ptr<leveldb::WritableFile>&& writable_file,
-               int temp_fd, std::string path)
+               leveldb::Options& leveldb_options, int temp_fd, std::string path)
       : writable_file_(std::move(writable_file)),
         table_builder_(std::make_unique<leveldb::TableBuilder>(
-            leveldb::Options(), writable_file_.get())),
+            leveldb_options, writable_file_.get())),
         temp_fd_(temp_fd),
         path_(std::move(path)) {}
 
@@ -264,7 +264,7 @@ class LevelDBTable : public Table {
 
   // File descriptor of anonymous temporary file used during construction of
   // table.
-  int temp_fd_;
+  int temp_fd_ = -1;
 
   // Path used after table has been finalized.
   std::string path_;
@@ -279,44 +279,56 @@ class LevelDBTable : public Table {
 
 }  // namespace
 
-std::unique_ptr<Table> LevelDBTableBackend::Open(const char* path, int flags,
-                                                 mode_t mode) {
-  if ((flags & (O_CREAT | O_TRUNC | O_WRONLY)) ==
-      (O_CREAT | O_TRUNC | O_WRONLY)) {
-    auto mask = umask(0);
-    umask(mask);
+std::unique_ptr<Table> LevelDBTableBackend::Create(
+    const char* path, const TableOptions& options) {
+  int flags = options.GetFileFlags();
+  KJ_REQUIRE((flags & ~(O_EXCL | O_CLOEXEC)) == 0);
+  flags |= O_CREAT | O_TRUNC | O_WRONLY;
 
-    std::string temp_dir(".");
-    if (const auto last_slash = strrchr(path, '/'))
-      temp_dir = std::string(path, last_slash - path);
-    auto temp_file = AnonTemporaryFile(temp_dir.c_str());
+  auto mode = options.GetFileMode();
+  auto mask = umask(0);
+  umask(mask);
 
-    KJ_SYSCALL(fchmod(temp_file, mode & ~mask));
+  std::string temp_dir(".");
+  if (const auto last_slash = strrchr(path, '/'))
+    temp_dir = std::string(path, last_slash - path);
+  auto temp_file = AnonTemporaryFile(temp_dir.c_str());
 
-    auto temp_fd = temp_file.get();
+  KJ_SYSCALL(fchmod(temp_file, mode & ~mask));
 
-    auto file_object = std::make_unique<LevelDBFile>(std::move(temp_file));
+  auto temp_fd = temp_file.get();
 
-    return std::make_unique<LevelDBTable>(std::move(file_object), temp_fd,
-                                          path);
+  auto file = std::make_unique<LevelDBFile>(std::move(temp_file));
+
+  leveldb::Options leveldb_options;
+  switch (options.GetCompression()) {
+    case kTableCompressionNone:
+      leveldb_options.compression = leveldb::kNoCompression;
+      break;
+    case kTableCompressionDefault:
+      leveldb_options.compression = leveldb::kSnappyCompression;
+      break;
+    default:
+      KJ_FAIL_REQUIRE("LevelDB tables do not support given compression method");
   }
 
-  if (flags == O_RDONLY) {
-    auto file_object =
-        std::make_unique<LevelDBFile>(OpenFile(path, O_RDONLY | O_CLOEXEC));
+  return std::make_unique<LevelDBTable>(std::move(file), leveldb_options,
+                                        temp_fd, path);
+}
 
-    leveldb::Table* table;
-    CHECK_STATUS(leveldb::Table::Open(leveldb::Options(), file_object.get(),
-                                      file_object->FileSize(), &table));
+std::unique_ptr<Table> LevelDBTableBackend::Open(const char* path) {
+  auto file =
+      std::make_unique<LevelDBFile>(OpenFile(path, O_RDONLY | O_CLOEXEC));
 
-    return std::make_unique<LevelDBTable>(std::move(file_object), table);
-  }
+  leveldb::Table* table;
+  CHECK_STATUS(leveldb::Table::Open(leveldb::Options(), file.get(),
+                                    file->FileSize(), &table));
 
-  KJ_FAIL_REQUIRE("Invalid open flags for LevelDB Table backend", flags, mode);
+  return std::make_unique<LevelDBTable>(std::move(file), table);
 }
 
 std::unique_ptr<SeekableTable> LevelDBTableBackend::OpenSeekable(
-    const char* path, int flags, mode_t mode) {
+    const char* path) {
   KJ_FAIL_REQUIRE("LevelDB tables are not seekable");
 }
 

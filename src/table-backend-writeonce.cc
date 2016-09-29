@@ -77,7 +77,8 @@ struct CA_wo_header {
 
 class WriteOnceTable : public SeekableTable {
  public:
-  WriteOnceTable(const char* path, int flags, mode_t mode);
+  WriteOnceTable(const char* path, const TableOptions& options);
+  WriteOnceTable(const char* path);
 
   ~WriteOnceTable();
 
@@ -156,61 +157,59 @@ uint64_t CA_wo_hash(const string_view& str) {
   return result;
 }
 
-WriteOnceTable::WriteOnceTable(const char* path, int flags, mode_t mode)
-    : path(path) {
-  if ((flags & O_WRONLY) == O_WRONLY) {
-    flags &= ~O_WRONLY;
-    flags |= O_RDWR;
-  }
+WriteOnceTable::WriteOnceTable(const char* path, const TableOptions& options)
+    : path(path), fd(-1), buffer(MAP_FAILED) {
+  int flags = options.GetFileFlags();
+  KJ_REQUIRE((flags & ~(O_EXCL | O_CLOEXEC)) == 0);
+  flags |= O_CREAT | O_TRUNC | O_RDWR;
 
-  fd = -1;
-  buffer = MAP_FAILED;
   open_flags = flags;
 
-  if (flags & O_CREAT) {
-    struct CA_wo_header dummy_header;
-    mode_t mask;
+  auto mode = options.GetFileMode();
+  auto mask = umask(0);
+  umask(mask);
 
-    mask = umask(0);
-    umask(mask);
+  KJ_SYSCALL(asprintf(&tmp_path, "%s.tmp.%u.XXXXXX", path, getpid()));
 
-    KJ_REQUIRE(flags & O_TRUNC, "O_CREAT requires O_TRUNC");
-    KJ_REQUIRE(flags & O_RDWR, "O_CREAT requires O_RDWR");
+  KJ_SYSCALL(fd = mkstemp(tmp_path), tmp_path);
 
-    KJ_SYSCALL(asprintf(&tmp_path, "%s.tmp.%u.XXXXXX", path, getpid()));
+  KJ_SYSCALL(fchmod(fd, mode & ~mask), tmp_path);
 
-    KJ_SYSCALL(fd = mkstemp(tmp_path), tmp_path);
+  write_buffer = fdopen(fd, "w");
+  if (!write_buffer) KJ_FAIL_SYSCALL("fdopen", errno, tmp_path);
 
-    KJ_SYSCALL(fchmod(fd, mode & ~mask), tmp_path);
+  struct CA_wo_header dummy_header;
+  memset(&dummy_header, 0, sizeof(dummy_header));
 
-    write_buffer = fdopen(fd, "w");
-    if (!write_buffer) KJ_FAIL_SYSCALL("fdopen", errno, tmp_path);
+  if (0 == fwrite(&dummy_header, sizeof(dummy_header), 1, write_buffer))
+    KJ_FAIL_SYSCALL("fwrite", errno);
 
-    memset(&dummy_header, 0, sizeof(dummy_header));
+  write_offset = sizeof(dummy_header);
+}
 
-    if (0 == fwrite(&dummy_header, sizeof(dummy_header), 1, write_buffer))
-      KJ_FAIL_SYSCALL("fwrite", errno);
+WriteOnceTable::WriteOnceTable(const char* path)
+    : path(path), fd(-1), buffer(MAP_FAILED) {
+  open_flags = O_RDONLY | O_CLOEXEC;
 
-    write_offset = sizeof(dummy_header);
-  } else {
-    KJ_SYSCALL((flags & O_RDWR) != O_RDWR, "O_RDWR only allowed with O_CREAT");
+  KJ_SYSCALL(fd = open(path, open_flags));
 
-    KJ_SYSCALL(fd = open(path, O_RDONLY | O_CLOEXEC));
-
-    MemoryMap();
-  }
+  MemoryMap();
 }
 
 }  // namespace
 
-std::unique_ptr<Table> WriteOnceTableBackend::Open(const char* path, int flags,
-                                                   mode_t mode) {
-  return std::make_unique<WriteOnceTable>(path, flags, mode);
+std::unique_ptr<Table> WriteOnceTableBackend::Create(
+    const char* path, const TableOptions& options) {
+  return std::make_unique<WriteOnceTable>(path, options);
+}
+
+std::unique_ptr<Table> WriteOnceTableBackend::Open(const char* path) {
+  return std::make_unique<WriteOnceTable>(path);
 }
 
 std::unique_ptr<SeekableTable> WriteOnceTableBackend::OpenSeekable(
-    const char* path, int flags, mode_t mode) {
-  return std::make_unique<WriteOnceTable>(path, flags, mode);
+    const char* path) {
+  return std::make_unique<WriteOnceTable>(path);
 }
 
 WriteOnceTable::~WriteOnceTable() {

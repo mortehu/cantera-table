@@ -182,7 +182,7 @@ class TableOptions {
   }
 
   TableOptions& SetFileMode(mode_t file_mode) {
-    file_flags_ = file_mode;
+    file_mode_ = file_mode;
     return *this;
   }
 

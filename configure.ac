@@ -34,6 +34,11 @@ AC_CHECK_DECLS(fdatasync)
 
 LT_INIT
 
+# Debian patches libtool to reset these to no.
+# Cancel the effect of Debian's patch here.
+link_all_deplibs=yes
+link_all_deplibs_CXX=yes
+
 AX_AC_EXPAND([SYSCONFDIR], $sysconfdir)
 AC_DEFINE_UNQUOTED([SYSCONFDIR], ["$SYSCONFDIR"], [read-only single-machine data])
 

@@ -170,6 +170,9 @@ enum TableCompression : uint8_t {
 
   // Zstandard compression. https://github.com/facebook/zstd
   kTableCompressionZSTD = 1,
+
+  // Keep this equal to the numerically last compression method.
+  kTableCompressionLast = kTableCompressionZSTD
 };
 
 class TableOptions {

@@ -77,7 +77,7 @@ static void parse_string(ca_table::QueryParseContext &context, const char *comma
 
 #if HAVE_FMEMOPEN
   if (!(file = fmemopen((void*)command, strlen(command), "r")))
-    throw KJ_EXCEPTION(FAILED, "fmemopen failed: %s\n", strerror(errno));
+    KJ_FAIL_REQUIRE("fmemopen failed", strerror(errno));
 #else
   KJ_UNIMPLEMENTED("need a fallback for missing fmemopen()");
 #endif

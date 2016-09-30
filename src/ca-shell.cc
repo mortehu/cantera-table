@@ -168,7 +168,7 @@ int main(int argc, char** argv) try {
       free(prompt);
 
 #if HAVE_GET_CURRENT_DIR_NAME
-      std::unique_ptr<char[], decltype(free) *> dir(getc_current_dir_name(), free);
+      std::unique_ptr<char[], decltype(free) *> dir(get_current_dir_name(), free);
 #else
       std::unique_ptr<char[], decltype(free) *> dir(getcwd(NULL, 0), free);
 #endif

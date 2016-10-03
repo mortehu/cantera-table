@@ -13,6 +13,7 @@ PKG_CHECK_MODULES([CAPNP_RPC], [capnp-rpc >= 0.6])
 PKG_CHECK_MODULES([JSONCPP], [jsoncpp])
 PKG_CHECK_MODULES([LIBCOLUMNFILE], [libcolumnfile])
 PKG_CHECK_MODULES([YAML], [yaml-cpp >= 0.5])
+PKG_CHECK_MODULES([ZSTD], [libzstd >= 1.0])
 
 AC_PROG_CC
 AC_PROG_CXX

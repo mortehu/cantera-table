@@ -44,13 +44,15 @@
 
 #include <kj/debug.h>
 
-//#include <zstd.h>
+#include <zstd.h>
 
 #include "src/ca-table.h"
 #include "src/util.h"
 
+#include "third_party/oroch/oroch/integer_codec.h"
+
 #define MAGIC UINT64_C(0x6c6261742e692e70)
-#define MAJOR_VERSION 3
+#define MAJOR_VERSION 4
 #define MINOR_VERSION 0
 
 #define TMP_SUFFIX ".tmp.XXXXXX"
@@ -62,6 +64,15 @@ namespace table {
 using namespace internal;
 
 namespace {
+
+static constexpr size_t kBlockSizeMin = 16 * 1024;
+static constexpr size_t kBlockSizeMax = 2 * kBlockSizeMin - 1;
+
+// The maximum entry size that is kept in normal blocks.
+// Larger entries are kept in individual blocks.
+static constexpr size_t kEntrySizeLimit = kBlockSizeMin / 2;
+
+static const size_t kCompressedSizeMax = ZSTD_compressBound(kBlockSizeMax);
 
 enum CA_wo_flags {
   CA_WO_FLAG_ASCENDING = 0x0001,
@@ -77,6 +88,482 @@ struct CA_wo_header {
   uint8_t compression_level;
   uint16_t data_reserved;
   uint64_t index_offset;
+};
+
+class DataBuffer {
+ public:
+  using uchar = unsigned char;
+
+  DataBuffer(size_t capacity = 0) { reserve(capacity); }
+
+  DataBuffer(const DataBuffer&) = delete;
+  DataBuffer& operator=(const DataBuffer&) = delete;
+
+  size_t capacity() const { return capacity_; }
+
+  size_t size() const { return size_; }
+
+  char* data() { return data_.get(); }
+  const char* data() const { return data_.get(); }
+
+  uchar* udata() { return reinterpret_cast<uchar*>(data()); }
+  const uchar* udata() const { return reinterpret_cast<const uchar*>(data()); }
+
+  void clear() { size_ = 0; }
+
+  void reserve(size_t capacity) {
+    if (capacity <= capacity_) return;
+
+    std::unique_ptr<char[]> tmp(new char[capacity]);
+    if (size_) std::copy_n(data_.get(), size_, tmp.get());
+    data_.swap(tmp);
+
+    capacity_ = capacity;
+  }
+
+  void resize(size_t size) {
+    reserve(size);
+    size_ = size;
+  }
+
+  template <typename T>
+  void append(const std::vector<T>& vector) {
+    size_t offset = size();
+    size_t length = vector.size() * sizeof(T);
+    resize(offset + length);
+    memcpy(data() + offset, vector.data(), length);
+  }
+
+ private:
+  size_t size_ = 0;
+  size_t capacity_ = 0;
+  std::unique_ptr<char[]> data_;
+};
+
+class RandomIO {
+ public:
+  RandomIO(int fd) : fd_(fd) {}
+
+  RandomIO(const RandomIO&) = delete;
+  RandomIO& operator=(const RandomIO&) = delete;
+
+  void Read(void* buffer, off_t offset, size_t length) {
+    ssize_t n = pread(fd_, buffer, length, offset);
+    if (n != length) {
+      if (n < 0)
+        KJ_FAIL_SYSCALL("pread", errno);
+      else
+        KJ_FAIL_REQUIRE("pread incomplete");
+    }
+  }
+
+  void Write(const void* buffer, off_t offset, size_t length) {
+    ssize_t n = pwrite(fd_, buffer, length, offset);
+    if (n != length) {
+      if (n < 0)
+        KJ_FAIL_SYSCALL("pwrite", errno);
+      else
+        KJ_FAIL_REQUIRE("pwrite incomplete");
+    }
+  }
+
+  void Read(DataBuffer& buffer, off_t offset) {
+    Read(buffer.data(), offset, buffer.size());
+  }
+
+  void Write(const DataBuffer& buffer, off_t offset) {
+    Write(buffer.data(), offset, buffer.size());
+  }
+
+ private:
+  // File descriptor.
+  int fd_;
+};
+
+class ZstdCompressor {
+ public:
+  void Go(DataBuffer& dst, const DataBuffer& src, int level) {
+    size_t size = ZSTD_compressCCtx(context_.get(), dst.data(), dst.capacity(),
+                                    src.data(), src.size(), level);
+    if (ZSTD_isError(size))
+      KJ_FAIL_REQUIRE("compression error", ZSTD_getErrorName(size));
+    dst.resize(size);
+  }
+
+ private:
+  // Compression context.
+  typedef std::unique_ptr<ZSTD_CCtx, decltype(ZSTD_freeCCtx)*> ContextPtr;
+  ContextPtr context_ = ContextPtr(CreateContext(), ZSTD_freeCCtx);
+
+  static ZSTD_CCtx* CreateContext() {
+    ZSTD_CCtx* ctx = ZSTD_createCCtx();
+    if (ctx == NULL) KJ_FAIL_REQUIRE("out of memory");
+    return ctx;
+  }
+};
+
+class ZstdDecompressor {
+ public:
+  void Go(DataBuffer& dst, const DataBuffer& src) {
+    size_t size = ZSTD_decompressDCtx(context_.get(), dst.data(),
+                                      dst.capacity(), src.data(), src.size());
+    if (ZSTD_isError(size))
+      KJ_FAIL_REQUIRE("decompression error", ZSTD_getErrorName(size));
+    dst.resize(size);
+  }
+
+ private:
+  // Decompression context.
+  using ContextPtr = std::unique_ptr<ZSTD_DCtx, decltype(ZSTD_freeDCtx)*>;
+  ContextPtr context_ = ContextPtr(CreateContext(), ZSTD_freeDCtx);
+
+  static ZSTD_DCtx* CreateContext() {
+    ZSTD_DCtx* ctx = ZSTD_createDCtx();
+    if (ctx == NULL) KJ_FAIL_REQUIRE("out of memory");
+    return ctx;
+  }
+};
+
+class WriteOnceIndex {
+ public:
+  void Clear() {}
+
+  void Marshal(DataBuffer& buffer) {}
+
+  void Unmarshal(DataBuffer& buffer) { Clear(); }
+
+ private:
+};
+
+class WriteOnceBlock {
+ public:
+  bool Add(const string_view& key, const string_view& value) {
+    size_t kts = key_data_.size() + key.size();
+    size_t vts = value_data_.size() + value.size();
+    if ((kts + vts) > kBlockSizeMax) return false;
+
+    key_size_.push_back(key.size());
+    key_data_.insert(key_data_.end(), key.begin(), key.end());
+
+    value_size_.push_back(value.size());
+    value_data_.insert(value_data_.end(), value.begin(), value.end());
+
+    return true;
+  }
+
+  void Clear() {
+    key_size_.clear();
+    key_data_.clear();
+
+    value_size_.clear();
+    value_data_.clear();
+  }
+
+  bool Marshal(DataBuffer& buffer) const {
+    buffer.clear();
+
+    size_t num = key_data_.size();
+    if (!num) return false;
+
+    size_t size = key_data_.size() + value_data_.size();
+    size += oroch::varint_codec<size_t>::value_space(num);
+    size += 2 * num * sizeof(uint32_t);
+    buffer.reserve(size);
+
+    unsigned char* ptr = buffer.udata();
+    oroch::varint_codec<size_t>::value_encode(ptr, num);
+    buffer.resize(ptr - buffer.udata());
+    buffer.append(key_size_);
+    buffer.append(value_size_);
+    buffer.append(key_data_);
+    buffer.append(value_data_);
+
+    return true;
+  }
+
+  void Unmarshal(DataBuffer& buffer) { Clear(); }
+
+ private:
+  // Accumulated key data.
+  std::vector<uint32_t> key_size_;
+  std::vector<char> key_data_;
+
+  // Accumulated value data.
+  std::vector<uint32_t> value_size_;
+  std::vector<char> value_data_;
+};
+
+class WriteOnceBuilder {
+ public:
+  WriteOnceBuilder(const char* path, const TableOptions& options)
+      : path_(path), options_(options) {
+    compression_ = options.GetCompression();
+    if (compression_ == kTableCompressionDefault)
+      compression_ = kTableCompressionNone;
+    KJ_REQUIRE(compression_ <= kTableCompressionLast,
+               "unsupported compression method");
+
+    std::string dir(".");
+    if (const char* last_slash = strrchr(path, '/')) {
+      KJ_REQUIRE(path != last_slash);
+      dir = std::string(path, last_slash - 1);
+    }
+
+    raw_fd_ = AnonTemporaryFile(dir.c_str());
+
+    raw_stream_ = fdopen(raw_fd_.get(), "w");
+    if (!raw_stream_) KJ_FAIL_SYSCALL("fdopen", errno, path);
+
+    index_.reserve(12 * 1024 * 1024);
+  }
+
+  ~WriteOnceBuilder() {
+    raw_fd_ = nullptr;
+    if (raw_stream_) fclose(raw_stream_);
+  }
+
+  void NoFSync(bool value = true) {
+    no_fsync_ = value;
+  }
+
+  void Add(const string_view& key, const string_view& value) {
+    AddEntry(key, value);
+    WriteEntryData(key, value);
+  }
+
+  void Build() {
+    FlushEntryData();
+    SortEntries();
+
+    CreateFile();
+    try {
+      WriteFinalData();
+      CommitFile();
+    } catch (...) {
+      RemoveFile();
+      throw;
+    }
+  }
+
+ private:
+  struct Entry {
+    uint64_t offset;
+    uint32_t value_size;
+    uint32_t key_size;
+    char prefix[24];
+  };
+
+  void AddEntry(const string_view& key, const string_view& value) {
+    KJ_REQUIRE(key.size() <= std::numeric_limits<uint32_t>::max(),
+               "too long key");
+    KJ_REQUIRE(value.size() <= std::numeric_limits<uint32_t>::max(),
+               "too long value");
+
+    struct Entry entry;
+    size_t count = std::min(sizeof entry.prefix, key.size());
+    entry.offset = offset_;
+    entry.key_size = key.size();
+    entry.value_size = value.size();
+    std::copy_n(key.begin(), count, entry.prefix);
+    index_.push_back(entry);
+
+    offset_ += key.size() + value.size();
+    if (key_size_max_ < key.size()) key_size_max_ = key.size();
+  }
+
+  void WriteEntryData(const string_view& key, const string_view& value) {
+    KJ_REQUIRE(raw_stream_ != nullptr);
+
+    if (0 == fwrite(key.data(), key.size(), 1, raw_stream_) ||
+        0 == fwrite(value.data(), value.size(), 1, raw_stream_))
+      KJ_FAIL_SYSCALL("fwrite", errno);
+  }
+
+  void FlushEntryData() {
+    KJ_REQUIRE(raw_stream_ != nullptr);
+    int ret = fflush(raw_stream_);
+    if (ret) KJ_FAIL_SYSCALL("fflush", errno);
+  }
+
+  bool Compare(const Entry& lhs, const Entry& rhs) {
+    size_t lhs_count = std::min(sizeof lhs.prefix, size_t{lhs.key_size});
+    size_t rhs_count = std::min(sizeof rhs.prefix, size_t{rhs.key_size});
+    const string_view lhs_prefix(lhs.prefix, lhs_count);
+    const string_view rhs_prefix(rhs.prefix, rhs_count);
+
+    int fast_result = lhs_prefix.compare(rhs_prefix);
+    if (fast_result) return fast_result < 0;
+
+    RandomIO fd(raw_fd_.get());
+    fd.Read(lhs_buffer_.get(), lhs.offset, lhs.key_size);
+    fd.Read(rhs_buffer_.get(), rhs.offset, rhs.key_size);
+    read_count_ += 2;
+
+    string_view lhs_view(lhs_buffer_.get(), lhs.key_size);
+    string_view rhs_view(rhs_buffer_.get(), rhs.key_size);
+    return lhs_view < rhs_view;
+  }
+
+  void SortEntries() {
+    lhs_buffer_ = std::make_unique<char[]>(key_size_max_);
+    rhs_buffer_ = std::make_unique<char[]>(key_size_max_);
+
+    // Use stable_sort here. It is usually implemented using merge sort
+    // algorithm that is preferred over quick sort when disk access is
+    // involved.
+    std::stable_sort(index_.begin(), index_.end(),
+                     [this](const auto& lhs, const auto& rhs) {
+      return this->Compare(lhs, rhs);
+    });
+
+    KJ_LOG(DBG, index_.size(), read_count_);
+
+    lhs_buffer_.reset();
+    rhs_buffer_.reset();
+  }
+
+  void CreateFile() {
+    char* temp = NULL;
+    KJ_SYSCALL(asprintf(&temp, "%s.tmp.%u.XXXXXX", path_.c_str(), getpid()));
+    std::unique_ptr<char[], decltype(free)*> temp_name_free(temp, free);
+
+    int fd;
+    KJ_SYSCALL(fd = mkstemp(temp), temp);
+    fd_ = kj::AutoCloseFd(fd);
+    tmp_path_ = std::string(temp);
+
+    int nflags = options_.GetFileFlags();
+    KJ_REQUIRE((nflags & ~(O_CLOEXEC)) == 0);
+
+    int oflags;
+    KJ_SYSCALL(oflags = fcntl(fd, F_GETFD));
+    if ((oflags & nflags) != nflags)
+      KJ_SYSCALL(fcntl(fd, F_SETFD, oflags | nflags));
+
+    struct CA_wo_header header;
+    header.magic = MAGIC;  // Will implicitly store endianness
+    header.major_version = MAJOR_VERSION;
+    header.minor_version = MINOR_VERSION;
+    header.flags = CA_WO_FLAG_ASCENDING;
+    header.compression = compression_;
+    header.compression_level = options_.GetCompressionLevel();
+    header.data_reserved = 0;
+    //header.index_offset = (write_offset + 0xfff) & ~0xfffULL;
+
+    kj::FdOutputStream output(fd);
+    output.write(&header, sizeof(header));
+  }
+
+  void CommitFile() {
+    auto mode = options_.GetFileMode();
+    auto mask = umask(0);
+    umask(mask);
+
+    KJ_SYSCALL(fchmod(fd_.get(), mode & ~mask), tmp_path_);
+    KJ_SYSCALL(rename(tmp_path_.c_str(), path_.c_str()), tmp_path_, path_);
+
+    if (!no_fsync_) {
+      // TODO(mortehu): fsync all ancestor directories too.
+      KJ_SYSCALL(fsync(fd_.get()), path_);
+    }
+  }
+
+  void RemoveFile() {
+    unlink(tmp_path_.c_str());
+  }
+
+  void WriteFinalData() {
+    WriteOnceBlock block;
+    DataBuffer input_buffer(kEntrySizeLimit);
+
+    size_t block_count = 0, large_count = 0;
+
+    RandomIO raw_fd(raw_fd_.get());
+
+    for (const Entry& entry : index_) {
+      size_t size = entry.key_size + entry.value_size;
+      if (size > kEntrySizeLimit) {
+        // TODO: store large entries separately
+        large_count++;
+        continue;
+      }
+
+      input_buffer.resize(size);
+      raw_fd.Read(input_buffer, entry.offset);
+
+      const char* data = input_buffer.data();
+      const string_view key(data, entry.key_size);
+      const string_view value(data + entry.key_size, entry.value_size);
+
+      if (!block.Add(key, value)) {
+        WriteBlock(block);
+        block_count++;
+
+        block.Clear();
+        if (!block.Add(key, value))
+          KJ_FAIL_REQUIRE("an entry does not fit a block");
+      }
+    }
+
+    if (WriteBlock(block))
+      block_count++;
+
+    KJ_LOG(DBG, block_count, large_count);
+  }
+
+  bool WriteBlock(const WriteOnceBlock& block) {
+    if (!block.Marshal(block_buffer_))
+      return false;
+
+    ssize_t n = write(fd_, block_buffer_.data(), block_buffer_.size());
+    if (n != block_buffer_.size()) {
+      if (n < 0)
+        KJ_FAIL_SYSCALL("write", errno);
+      else
+        KJ_FAIL_REQUIRE("write incomplete");
+    }
+
+    return true;
+  }
+
+  // Final file path.
+  const std::string path_;
+  // Temporary file name.
+  std::string tmp_path_;
+
+  // Saved table creation options.
+  const TableOptions options_;
+  TableCompression compression_ = TableCompression::kTableCompressionNone;
+
+  // Whether to fsync the data.
+  bool no_fsync_ = false;
+
+  // Result file.
+  kj::AutoCloseFd fd_;
+
+  // Temporary file for all added key/value pairs.
+  kj::AutoCloseFd raw_fd_;
+  FILE* raw_stream_ = nullptr;
+
+  // Index of all added key/value pairs.
+  std::vector<Entry> index_;
+
+  // Running file offset.
+  uint64_t offset_ = 0;
+
+  // Longest encountered key size.
+  uint32_t key_size_max_ = 0;
+  uint32_t entry_size_max_ = 0;
+
+  // Buffers for key comparison.
+  std::unique_ptr<char[]> lhs_buffer_;
+  std::unique_ptr<char[]> rhs_buffer_;
+
+  // A buffer for block marshaling and writing.
+  DataBuffer block_buffer_;
+
+  // Read statistics.
+  uint64_t read_count_ = 0;
 };
 
 class WriteOnceTable : public SeekableTable {
@@ -116,16 +603,12 @@ class WriteOnceTable : public SeekableTable {
   void MemoryMap();
 
   std::string path;
-  char* tmp_path = nullptr;
 
   int fd = -1;
   int open_flags = 0;
 
   TableCompression compression_ = TableCompression::kTableCompressionNone;
-  uint8_t compression_level_ = 0;
-  uint16_t reserved_ = 0;
 
-  FILE* write_buffer = nullptr;
   uint64_t write_offset = 0;
 
   void* buffer = MAP_FAILED;
@@ -146,13 +629,15 @@ class WriteOnceTable : public SeekableTable {
   bool has_madvised_index = false;
 
   int no_relative = 0;
-  int no_fsync = 0;
 
   // Used for read, seek, offset and delete.
   uint64_t offset_ = 0;
 
   // Unflushed hash map keys.
   std::vector<std::pair<uint64_t, uint64_t>> key_buffer;
+
+  // Table builder.
+  std::unique_ptr<WriteOnceBuilder> builder_;
 };
 
 uint64_t CA_wo_hash(const string_view& str) {
@@ -171,36 +656,7 @@ WriteOnceTable::WriteOnceTable(const char* path, const TableOptions& options)
 
   open_flags = flags;
 
-  compression_ = options.GetCompression();
-  if (compression_ == kTableCompressionDefault)
-    compression_ = kTableCompressionNone;
-  KJ_REQUIRE(compression_ <= kTableCompressionLast,
-             "unsupported compression method");
-  compression_level_ = options.GetCompressionLevel();
-
-  if (compression_ != TableCompression::kTableCompressionNone)
-    KJ_UNIMPLEMENTED("compression is not implemented yet");
-
-  auto mode = options.GetFileMode();
-  auto mask = umask(0);
-  umask(mask);
-
-  KJ_SYSCALL(asprintf(&tmp_path, "%s.tmp.%u.XXXXXX", path, getpid()));
-
-  KJ_SYSCALL(fd = mkstemp(tmp_path), tmp_path);
-
-  KJ_SYSCALL(fchmod(fd, mode & ~mask), tmp_path);
-
-  write_buffer = fdopen(fd, "w");
-  if (!write_buffer) KJ_FAIL_SYSCALL("fdopen", errno, tmp_path);
-
-  struct CA_wo_header dummy_header;
-  memset(&dummy_header, 0, sizeof(dummy_header));
-
-  if (0 == fwrite(&dummy_header, sizeof(dummy_header), 1, write_buffer))
-    KJ_FAIL_SYSCALL("fwrite", errno);
-
-  write_offset = sizeof(dummy_header);
+  builder_ = std::make_unique<WriteOnceBuilder>(path, options);
 }
 
 WriteOnceTable::WriteOnceTable(const char* path) : path(path) {
@@ -214,7 +670,6 @@ WriteOnceTable::WriteOnceTable(const char* path) : path(path) {
   compression_ = TableCompression(header->compression);
   KJ_REQUIRE(compression_ <= kTableCompressionLast,
              "unsupported compression method");
-  compression_level_ = header->compression_level;
 
   if (compression_ != TableCompression::kTableCompressionNone)
     KJ_UNIMPLEMENTED("decompression is not implemented yet");
@@ -239,14 +694,7 @@ std::unique_ptr<SeekableTable> WriteOnceTableBackend::OpenSeekable(
 WriteOnceTable::~WriteOnceTable() {
   if (fd != -1) close(fd);
 
-  if (write_buffer) fclose(write_buffer);
-
   if (buffer != MAP_FAILED) munmap(buffer, buffer_size);
-
-  if (tmp_path) {
-    unlink(tmp_path);
-    free(tmp_path);
-  }
 }
 
 void WriteOnceTable::FlushKeyBuffer() {
@@ -285,6 +733,7 @@ void WriteOnceTable::BuildIndex() {
 
   Seek(0, SEEK_SET);
 
+  printf("entry_count: %llu\n", entry_count);
   key_buffer.reserve(std::min(entry_count, kKeyBufferMax));
 
   KJ_SYSCALL(madvise(buffer, header->index_offset, MADV_SEQUENTIAL));
@@ -339,53 +788,8 @@ void WriteOnceTable::BuildIndex() {
 }
 
 void WriteOnceTable::Sync() {
-  struct CA_wo_header header;
-
-  if (!tmp_path) return;
-
-  memset(&header, 0, sizeof(header));
-  header.magic = MAGIC;  // Will implicitly store endianness
-  header.major_version = MAJOR_VERSION;
-  header.minor_version = MINOR_VERSION;
-  header.index_offset = (write_offset + 0xfff) & ~0xfffULL;
-
-  if (0 != fflush(write_buffer)) KJ_FAIL_SYSCALL("fflush", errno);
-
-  header.data_reserved = reserved_;
-
-  KJ_SYSCALL(lseek(fd, 0, SEEK_SET), tmp_path);
-
-  kj::FdOutputStream output(fd);
-  output.write(&header, sizeof(header));
-
-  index_bits = 64;
-  index_size = entry_count * 2 + 1;
-
-#if HAVE_FALLOCATE
-  KJ_SYSCALL(
-      fallocate(fd, 0, header.index_offset, index_size * sizeof(uint64_t)));
-#else
-  KJ_SYSCALL(
-      ftruncate(fd, header.index_offset + index_size * sizeof(uint64_t)));
-#endif
-
-  MemoryMap();
-
-  BuildIndex();
-
-  if (!no_fsync) {
-    // TODO(mortehu): fsync all ancestor directories too.
-    KJ_SYSCALL(fsync(fd), tmp_path);
-  }
-
-  KJ_SYSCALL(rename(tmp_path, path.c_str()), tmp_path, path);
-
-  free(tmp_path);
-  tmp_path = nullptr;
-
-  fclose(write_buffer);
-  write_buffer = nullptr;
-  fd = -1;
+  if (builder_)
+    builder_->Build();
 }
 
 void WriteOnceTable::SetFlag(enum ca_table_flag flag) {
@@ -395,7 +799,8 @@ void WriteOnceTable::SetFlag(enum ca_table_flag flag) {
       break;
 
     case CA_TABLE_NO_FSYNC:
-      no_fsync = 1;
+      if (builder_)
+        builder_->NoFSync();
       break;
 
     default:
@@ -410,26 +815,13 @@ int WriteOnceTable::IsSorted() {
 void WriteOnceTable::InsertRow(const struct iovec* value, size_t value_count) {
   KJ_REQUIRE(value_count == 2);
 
-  uint8_t size_buf[10], *p = size_buf;
-
-  uint64_t size = value[0].iov_len + value[1].iov_len + 1;
-  ca_format_integer(&p, size);
-
-  ++entry_count;
-
-  const char nul_byte = 0;
-
-  if (0 == fwrite(size_buf, p - size_buf, 1, write_buffer) ||
-      0 == fwrite(value[0].iov_base, value[0].iov_len, 1, write_buffer) ||
-      0 == fwrite(&nul_byte, 1, 1, write_buffer) ||
-      0 == fwrite(value[1].iov_base, value[1].iov_len, 1, write_buffer)) {
-    KJ_FAIL_SYSCALL("fwrite", errno);
+  if (builder_) {
+    const string_view k(reinterpret_cast<const char*>(value[0].iov_base),
+                        value[0].iov_len);
+    const string_view v(reinterpret_cast<const char*>(value[1].iov_base),
+                        value[1].iov_len);
+    builder_->Add(k, v);
   }
-
-  write_offset += p - size_buf;
-  write_offset += value[0].iov_len;
-  write_offset += 1;
-  write_offset += value[1].iov_len;
 }
 
 void WriteOnceTable::Seek(off_t rel_offset, int whence) {
@@ -579,7 +971,8 @@ void WriteOnceTable::MemoryMap() {
 
   header = (struct CA_wo_header*)buffer;
 
-  KJ_REQUIRE(header->major_version <= 3 || header->major_version >= 2);
+  KJ_REQUIRE(header->major_version <= MAJOR_VERSION ||
+             header->major_version >= 2);
 
   KJ_REQUIRE(header->magic == MAGIC, header->magic, MAGIC);
 

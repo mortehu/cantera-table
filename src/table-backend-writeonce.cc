@@ -65,14 +65,19 @@ using namespace internal;
 
 namespace {
 
-static constexpr size_t kBlockSizeMin = 16 * 1024;
-static constexpr size_t kBlockSizeMax = 2 * kBlockSizeMin - 1;
+// If a block gets larger than this value then it is closed.
+static constexpr size_t kBlockSizeMax = 32 * 1024;
 
-// The maximum entry size that is kept in normal blocks.
-// Larger entries are kept in individual blocks.
-static constexpr size_t kEntrySizeLimit = kBlockSizeMin / 2;
+// If an entry is larger than this limit then it is stored in a separate
+// block unless the preceding block is too small.
+static constexpr size_t kEntrySizeLimit = kBlockSizeMax - 4;
 
-static const size_t kCompressedSizeMax = ZSTD_compressBound(kBlockSizeMax);
+// If a block is larger than this value and the next entry is larger than
+// the limit above then this block is closed and the next entry will be
+// really stored in a separate block.
+static constexpr size_t kBlockSizeMin = 12 * 1024;
+
+// static const size_t kCompressedSizeMax = ZSTD_compressBound(kBlockSizeMax);
 
 enum CA_wo_flags {
   CA_WO_FLAG_ASCENDING = 0x0001,
@@ -189,25 +194,19 @@ class FileIO {
     }
   }
 
-  void Read(DataBuffer& buffer) {
-    Read(buffer.data(), buffer.size());
-  }
+  void Read(DataBuffer& buffer) { Read(buffer.data(), buffer.size()); }
 
   void Read(DataBuffer& buffer, off_t offset) {
     Read(buffer.data(), offset, buffer.size());
   }
 
-  void Write(const DataBuffer& buffer) {
-    Write(buffer.data(), buffer.size());
-  }
+  void Write(const DataBuffer& buffer) { Write(buffer.data(), buffer.size()); }
 
   void Write(const DataBuffer& buffer, off_t offset) {
     Write(buffer.data(), offset, buffer.size());
   }
 
-  void Write(const string_view& buffer) {
-    Write(buffer.data(), buffer.size());
-  }
+  void Write(const string_view& buffer) { Write(buffer.data(), buffer.size()); }
 
   void Write(const string_view& buffer, off_t offset) {
     Write(buffer.data(), offset, buffer.size());
@@ -264,39 +263,50 @@ class ZstdDecompressor {
 
 class WriteOnceBlock {
  public:
-  bool Add(const string_view& key, const string_view& value) {
-    size_t kts = key_data_.size() + key.size();
-    size_t vts = value_data_.size() + value.size();
-    if ((kts + vts) > kBlockSizeMax) return false;
+  size_t num_entries() const { return key_size_.size(); }
 
+  size_t EstimateSize() const {
+    const size_t num = num_entries();
+    size_t size = key_data_.size() + value_data_.size();
+    size += oroch::varint_codec<size_t>::value_space(num);
+    size += 2 * num * sizeof(uint32_t);
+    return size;
+  }
+
+  const string_view GetFirstKey() const {
+    KJ_REQUIRE(num_entries());
+    const size_t size = key_size_.front();
+    const char* data = key_data_.data();
+    return string_view(data, size);
+  }
+
+  const string_view GetLaskKey() const {
+    KJ_REQUIRE(num_entries());
+    const size_t size = key_size_.back();
+    const char* data = key_data_.data() + key_data_.size() - size;
+    return string_view(data, size);
+  }
+
+  void Add(const string_view& key, const string_view& value) {
     key_size_.push_back(key.size());
     key_data_.insert(key_data_.end(), key.begin(), key.end());
-
     value_size_.push_back(value.size());
     value_data_.insert(value_data_.end(), value.begin(), value.end());
-
-    return true;
   }
 
   void Clear() {
     key_size_.clear();
     key_data_.clear();
-
     value_size_.clear();
     value_data_.clear();
   }
 
   void Marshal(DataBuffer& buffer) const {
     buffer.clear();
-
-    size_t num = key_size_.size();
+    const size_t num = num_entries();
     if (!num) return;
 
-    size_t size = key_data_.size() + value_data_.size();
-    size += oroch::varint_codec<size_t>::value_space(num);
-    size += 2 * num * sizeof(uint32_t);
-    buffer.reserve(size);
-
+    buffer.reserve(EstimateSize());
     unsigned char* ptr = buffer.udata();
     oroch::varint_codec<size_t>::value_encode(ptr, num);
     buffer.resize(ptr - buffer.udata());
@@ -322,24 +332,28 @@ class WriteOnceIndex {
  public:
   void Clear() {}
 
+  size_t num_blocks() const { return key_size_.size(); }
+
+  size_t EstimateSize() const {
+    const size_t num = num_blocks();
+    size_t size = key_data_.size();
+    size += oroch::varint_codec<size_t>::value_space(num);
+    size += 2 * num * sizeof(uint32_t);
+    return size;
+  }
+
   void Add(uint32_t block_size, const string_view& last_key) {
     block_size_.push_back(block_size);
-
     key_size_.push_back(last_key.size());
     key_data_.insert(key_data_.end(), last_key.begin(), last_key.end());
   }
 
   void Marshal(DataBuffer& buffer) const {
     buffer.clear();
-
-    size_t num = key_size_.size();
+    const size_t num = num_blocks();
     if (!num) return;
 
-    size_t size = key_data_.size();
-    size += oroch::varint_codec<size_t>::value_space(num);
-    size += 2 * num * sizeof(uint32_t);
-    buffer.reserve(size);
-
+    buffer.reserve(EstimateSize());
     unsigned char* ptr = buffer.udata();
     oroch::varint_codec<size_t>::value_encode(ptr, num);
     buffer.resize(ptr - buffer.udata());
@@ -388,9 +402,7 @@ class WriteOnceBuilder {
     if (raw_stream_) fclose(raw_stream_);
   }
 
-  void NoFSync(bool value = true) {
-    no_fsync_ = value;
-  }
+  void NoFSync(bool value = true) { no_fsync_ = value; }
 
   void Add(const string_view& key, const string_view& value) {
     AddEntry(key, value);
@@ -479,8 +491,8 @@ class WriteOnceBuilder {
     // involved.
     std::stable_sort(index_.begin(), index_.end(),
                      [this](const auto& lhs, const auto& rhs) {
-      return this->Compare(lhs, rhs);
-    });
+                       return this->Compare(lhs, rhs);
+                     });
 
     KJ_LOG(DBG, index_.size(), read_count_);
 
@@ -514,7 +526,7 @@ class WriteOnceBuilder {
     header.compression = compression_;
     header.compression_level = options_.GetCompressionLevel();
     header.data_reserved = 0;
-    //header.index_offset = (write_offset + 0xfff) & ~0xfffULL;
+    // header.index_offset = (write_offset + 0xfff) & ~0xfffULL;
 
     kj::FdOutputStream output(fd);
     output.write(&header, sizeof(header));
@@ -534,73 +546,54 @@ class WriteOnceBuilder {
     }
   }
 
-  void RemoveFile() {
-    unlink(tmp_path_.c_str());
-  }
+  void RemoveFile() { unlink(tmp_path_.c_str()); }
 
   void WriteFinalData() {
     WriteOnceIndex index;
     WriteOnceBlock block;
 
-    FileIO raw_fd(raw_fd_.get());
-    DataBuffer buffer(kEntrySizeLimit);
-    std::string last_key;
-
-    size_t block_count = 0, large_count = 0;
-
+    DataBuffer buffer;
     for (const Entry& entry : index_) {
-      size_t size = entry.key_size + entry.value_size;
-      if (size > kEntrySizeLimit) {
-        // TODO: store large entries separately
-        large_count++;
-        continue;
+      const size_t size = entry.key_size + entry.value_size;
+      if (size > kEntrySizeLimit && block.EstimateSize() > kBlockSizeMin) {
+        WriteBlock(block, index);
+        block.Clear();
       }
 
       buffer.resize(size);
-      raw_fd.Read(buffer, entry.offset);
+      FileIO(raw_fd_).Read(buffer, entry.offset);
 
       const char* data = buffer.data();
       const string_view key(data, entry.key_size);
       const string_view value(data + entry.key_size, entry.value_size);
+      block.Add(key, value);
 
-      if (!block.Add(key, value)) {
-        WriteBlock(block, index, last_key);
+      if (block.EstimateSize() > kBlockSizeMax) {
+        WriteBlock(block, index);
         block.Clear();
-        block_count++;
-
-        if (!block.Add(key, value))
-          KJ_FAIL_REQUIRE("an entry does not fit a block");
       }
-
-      last_key.assign(key.data(), key.size());
     }
 
-    if (WriteBlock(block, index, last_key))
-      block_count++;
+    WriteBlock(block, index);
     WriteIndex(index);
-
-    KJ_LOG(DBG, block_count, large_count);
   }
 
-  bool WriteBlock(const WriteOnceBlock& block, WriteOnceIndex& index,
-                  const std::string &last_key) {
+  void WriteBlock(const WriteOnceBlock& block, WriteOnceIndex& index) {
     block.Marshal(write_buffer_);
-    if (!write_buffer_.size())
-      return false;
-
-    index.Add(write_buffer_.size(), string_view(last_key));
-
+    if (!write_buffer_.size()) return;
     FileIO(fd_).Write(write_buffer_);
-    return true;
+
+    index.Add(write_buffer_.size(), block.GetLaskKey());
+
+    KJ_LOG(DBG, block.num_entries(), write_buffer_.size());
   }
 
-  bool WriteIndex(const WriteOnceIndex& index) {
+  void WriteIndex(const WriteOnceIndex& index) {
     index.Marshal(write_buffer_);
-    if (!write_buffer_.size())
-      return false;
-
+    if (!write_buffer_.size()) return;
     FileIO(fd_).Write(write_buffer_);
-    return true;
+
+    KJ_LOG(DBG, index.num_blocks(), write_buffer_.size());
   }
 
   // Final file path.
@@ -641,6 +634,11 @@ class WriteOnceBuilder {
 
   // Read statistics.
   uint64_t read_count_ = 0;
+};
+
+class WriteOnceReader {
+ public:
+ private:
 };
 
 class WriteOnceTable : public SeekableTable {
@@ -865,8 +863,7 @@ void WriteOnceTable::BuildIndex() {
 }
 
 void WriteOnceTable::Sync() {
-  if (builder_)
-    builder_->Build();
+  if (builder_) builder_->Build();
 }
 
 void WriteOnceTable::SetFlag(enum ca_table_flag flag) {
@@ -876,8 +873,7 @@ void WriteOnceTable::SetFlag(enum ca_table_flag flag) {
       break;
 
     case CA_TABLE_NO_FSYNC:
-      if (builder_)
-        builder_->NoFSync();
+      if (builder_) builder_->NoFSync();
       break;
 
     default:

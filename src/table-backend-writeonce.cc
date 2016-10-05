@@ -65,6 +65,9 @@ using namespace internal;
 
 namespace {
 
+using vsz_codec = oroch::varint_codec<size_t>;
+using v32_codec = oroch::varint_codec<uint32_t>;
+
 // If a block gets larger than this value then it is closed.
 static constexpr size_t kBlockSizeMax = 32 * 1024;
 
@@ -266,10 +269,12 @@ class WriteOnceBlock {
   size_t num_entries() const { return key_size_.size(); }
 
   size_t EstimateSize() const {
-    const size_t num = num_entries();
     size_t size = key_data_.size() + value_data_.size();
-    size += oroch::varint_codec<size_t>::value_space(num);
-    size += 2 * num * sizeof(uint32_t);
+    size += oroch::varint_codec<size_t>::value_space(num_entries());
+    size += oroch::varint_codec<uint32_t>::space(key_size_.begin(),
+                                                 key_size_.end());
+    size += oroch::varint_codec<uint32_t>::space(value_size_.begin(),
+                                                 value_size_.end());
     return size;
   }
 
@@ -309,9 +314,11 @@ class WriteOnceBlock {
     buffer.reserve(EstimateSize());
     unsigned char* ptr = buffer.udata();
     oroch::varint_codec<size_t>::value_encode(ptr, num);
+    oroch::varint_codec<uint32_t>::encode(ptr, key_size_.begin(),
+                                          key_size_.end());
+    oroch::varint_codec<uint32_t>::encode(ptr, value_size_.begin(),
+                                          value_size_.end());
     buffer.resize(ptr - buffer.udata());
-    buffer.append(key_size_);
-    buffer.append(value_size_);
     buffer.append(key_data_);
     buffer.append(value_data_);
   }
@@ -335,10 +342,12 @@ class WriteOnceIndex {
   size_t num_blocks() const { return key_size_.size(); }
 
   size_t EstimateSize() const {
-    const size_t num = num_blocks();
     size_t size = key_data_.size();
-    size += oroch::varint_codec<size_t>::value_space(num);
-    size += 2 * num * sizeof(uint32_t);
+    size += oroch::varint_codec<size_t>::value_space(num_blocks());
+    size += oroch::varint_codec<size_t>::space(block_size_.begin(),
+                                               block_size_.end());
+    size += oroch::varint_codec<uint32_t>::space(key_size_.begin(),
+                                                 key_size_.end());
     return size;
   }
 
@@ -356,9 +365,11 @@ class WriteOnceIndex {
     buffer.reserve(EstimateSize());
     unsigned char* ptr = buffer.udata();
     oroch::varint_codec<size_t>::value_encode(ptr, num);
+    oroch::varint_codec<size_t>::encode(ptr, block_size_.begin(),
+                                        block_size_.end());
+    oroch::varint_codec<uint32_t>::encode(ptr, key_size_.begin(),
+                                          key_size_.end());
     buffer.resize(ptr - buffer.udata());
-    buffer.append(block_size_);
-    buffer.append(key_size_);
     buffer.append(key_data_);
   }
 
@@ -366,7 +377,7 @@ class WriteOnceIndex {
 
  private:
   // Block sizes.
-  std::vector<uint32_t> block_size_;
+  std::vector<size_t> block_size_;
 
   // Last key in a block data.
   std::vector<uint32_t> key_size_;
@@ -585,7 +596,7 @@ class WriteOnceBuilder {
 
     index.Add(write_buffer_.size(), block.GetLaskKey());
 
-    KJ_LOG(DBG, block.num_entries(), write_buffer_.size());
+    //KJ_LOG(DBG, block.num_entries(), write_buffer_.size());
   }
 
   void WriteIndex(const WriteOnceIndex& index) {

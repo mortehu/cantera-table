@@ -224,17 +224,6 @@ class ZstdDecompressor {
   }
 };
 
-class WriteOnceIndex {
- public:
-  void Clear() {}
-
-  void Marshal(DataBuffer& buffer) {}
-
-  void Unmarshal(DataBuffer& buffer) { Clear(); }
-
- private:
-};
-
 class WriteOnceBlock {
  public:
   bool Add(const string_view& key, const string_view& value) {
@@ -259,11 +248,11 @@ class WriteOnceBlock {
     value_data_.clear();
   }
 
-  bool Marshal(DataBuffer& buffer) const {
+  void Marshal(DataBuffer& buffer) const {
     buffer.clear();
 
-    size_t num = key_data_.size();
-    if (!num) return false;
+    size_t num = key_size_.size();
+    if (!num) return;
 
     size_t size = key_data_.size() + value_data_.size();
     size += oroch::varint_codec<size_t>::value_space(num);
@@ -277,8 +266,6 @@ class WriteOnceBlock {
     buffer.append(value_size_);
     buffer.append(key_data_);
     buffer.append(value_data_);
-
-    return true;
   }
 
   void Unmarshal(DataBuffer& buffer) { Clear(); }
@@ -291,6 +278,47 @@ class WriteOnceBlock {
   // Accumulated value data.
   std::vector<uint32_t> value_size_;
   std::vector<char> value_data_;
+};
+
+class WriteOnceIndex {
+ public:
+  void Clear() {}
+
+  void Add(uint32_t block_size, const string_view& last_key) {
+    block_size_.push_back(block_size);
+
+    key_size_.push_back(last_key.size());
+    key_data_.insert(key_data_.end(), last_key.begin(), last_key.end());
+  }
+
+  void Marshal(DataBuffer& buffer) const {
+    buffer.clear();
+
+    size_t num = key_size_.size();
+    if (!num) return;
+
+    size_t size = key_data_.size();
+    size += oroch::varint_codec<size_t>::value_space(num);
+    size += 2 * num * sizeof(uint32_t);
+    buffer.reserve(size);
+
+    unsigned char* ptr = buffer.udata();
+    oroch::varint_codec<size_t>::value_encode(ptr, num);
+    buffer.resize(ptr - buffer.udata());
+    buffer.append(block_size_);
+    buffer.append(key_size_);
+    buffer.append(key_data_);
+  }
+
+  void Unmarshal(DataBuffer& buffer) { Clear(); }
+
+ private:
+  // Block sizes.
+  std::vector<uint32_t> block_size_;
+
+  // Last key in a block data.
+  std::vector<uint32_t> key_size_;
+  std::vector<char> key_data_;
 };
 
 class WriteOnceBuilder {
@@ -473,12 +501,14 @@ class WriteOnceBuilder {
   }
 
   void WriteFinalData() {
+    WriteOnceIndex index;
     WriteOnceBlock block;
-    DataBuffer input_buffer(kEntrySizeLimit);
-
-    size_t block_count = 0, large_count = 0;
 
     RandomIO raw_fd(raw_fd_.get());
+    DataBuffer buffer(kEntrySizeLimit);
+    std::string last_key;
+
+    size_t block_count = 0, large_count = 0;
 
     for (const Entry& entry : index_) {
       size_t size = entry.key_size + entry.value_size;
@@ -488,42 +518,61 @@ class WriteOnceBuilder {
         continue;
       }
 
-      input_buffer.resize(size);
-      raw_fd.Read(input_buffer, entry.offset);
+      buffer.resize(size);
+      raw_fd.Read(buffer, entry.offset);
 
-      const char* data = input_buffer.data();
+      const char* data = buffer.data();
       const string_view key(data, entry.key_size);
       const string_view value(data + entry.key_size, entry.value_size);
 
       if (!block.Add(key, value)) {
-        WriteBlock(block);
+        WriteBlock(block, index, last_key);
+        block.Clear();
         block_count++;
 
-        block.Clear();
         if (!block.Add(key, value))
           KJ_FAIL_REQUIRE("an entry does not fit a block");
       }
+
+      last_key.assign(key.data(), key.size());
     }
 
-    if (WriteBlock(block))
+    if (WriteBlock(block, index, last_key))
       block_count++;
+    WriteIndex(index);
 
     KJ_LOG(DBG, block_count, large_count);
   }
 
-  bool WriteBlock(const WriteOnceBlock& block) {
-    if (!block.Marshal(block_buffer_))
+  bool WriteBlock(const WriteOnceBlock& block, WriteOnceIndex& index,
+                  const std::string &last_key) {
+    block.Marshal(write_buffer_);
+    if (!write_buffer_.size())
       return false;
 
-    ssize_t n = write(fd_, block_buffer_.data(), block_buffer_.size());
-    if (n != block_buffer_.size()) {
+    index.Add(write_buffer_.size(), string_view(last_key));
+
+    Write(write_buffer_);
+    return true;
+  }
+
+  bool WriteIndex(const WriteOnceIndex& index) {
+    index.Marshal(write_buffer_);
+    if (!write_buffer_.size())
+      return false;
+
+    Write(write_buffer_);
+    return true;
+  }
+
+  void Write(const DataBuffer& buffer) {
+    ssize_t n = write(fd_.get(), buffer.data(), buffer.size());
+    if (n != buffer.size()) {
       if (n < 0)
         KJ_FAIL_SYSCALL("write", errno);
       else
         KJ_FAIL_REQUIRE("write incomplete");
     }
-
-    return true;
   }
 
   // Final file path.
@@ -560,7 +609,7 @@ class WriteOnceBuilder {
   std::unique_ptr<char[]> rhs_buffer_;
 
   // A buffer for block marshaling and writing.
-  DataBuffer block_buffer_;
+  DataBuffer write_buffer_;
 
   // Read statistics.
   uint64_t read_count_ = 0;

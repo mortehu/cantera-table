@@ -65,9 +65,6 @@ using namespace internal;
 
 namespace {
 
-using vsz_codec = oroch::varint_codec<size_t>;
-using v32_codec = oroch::varint_codec<uint32_t>;
-
 // If a block gets larger than this value then it is closed.
 static constexpr size_t kBlockSizeMax = 32 * 1024;
 
@@ -79,8 +76,6 @@ static constexpr size_t kEntrySizeLimit = kBlockSizeMax - 4;
 // the limit above then this block is closed and the next entry will be
 // really stored in a separate block.
 static constexpr size_t kBlockSizeMin = 12 * 1024;
-
-// static const size_t kCompressedSizeMax = ZSTD_compressBound(kBlockSizeMax);
 
 enum CA_wo_flags {
   CA_WO_FLAG_ASCENDING = 0x0001,
@@ -394,6 +389,10 @@ class WriteOnceBuilder {
     KJ_REQUIRE(compression_ <= kTableCompressionLast,
                "unsupported compression method");
 
+    compression_level_ = options.GetCompressionLevel();
+    if (compression_level_ == 0 && compression_ != kTableCompressionNone)
+      compression_level_ = 3;
+
     std::string dir(".");
     if (const char* last_slash = strrchr(path, '/')) {
       KJ_REQUIRE(path != last_slash);
@@ -535,7 +534,7 @@ class WriteOnceBuilder {
     header.minor_version = MINOR_VERSION;
     header.flags = CA_WO_FLAG_ASCENDING;
     header.compression = compression_;
-    header.compression_level = options_.GetCompressionLevel();
+    header.compression_level = compression_level_;
     header.data_reserved = 0;
     // header.index_offset = (write_offset + 0xfff) & ~0xfffULL;
 
@@ -590,21 +589,36 @@ class WriteOnceBuilder {
   }
 
   void WriteBlock(const WriteOnceBlock& block, WriteOnceIndex& index) {
-    block.Marshal(write_buffer_);
-    if (!write_buffer_.size()) return;
-    FileIO(fd_).Write(write_buffer_);
+    block.Marshal(marshal_buffer_);
+    if (!marshal_buffer_.size()) return;
 
-    index.Add(write_buffer_.size(), block.GetLaskKey());
+    DataBuffer& buffer = CompressMarshalBuffer();
+    FileIO(fd_).Write(buffer);
 
-    //KJ_LOG(DBG, block.num_entries(), write_buffer_.size());
+    index.Add(buffer.size(), block.GetLaskKey());
+
+    //KJ_LOG(DBG, block.num_entries(), buffer.size());
   }
 
   void WriteIndex(const WriteOnceIndex& index) {
-    index.Marshal(write_buffer_);
-    if (!write_buffer_.size()) return;
-    FileIO(fd_).Write(write_buffer_);
+    index.Marshal(marshal_buffer_);
+    if (!marshal_buffer_.size()) return;
 
-    KJ_LOG(DBG, index.num_blocks(), write_buffer_.size());
+    DataBuffer& buffer = CompressMarshalBuffer();
+    FileIO(fd_).Write(buffer);
+
+    //KJ_LOG(DBG, index.num_blocks(), buffer.size());
+  }
+
+  DataBuffer& CompressMarshalBuffer() {
+    if (compression_ == TableCompression::kTableCompressionNone)
+      return marshal_buffer_;
+
+    size_t size = ZSTD_compressBound(marshal_buffer_.size());
+    compress_buffer_.resize(size);
+    compressor_.Go(compress_buffer_, marshal_buffer_, compression_level_);
+
+    return compress_buffer_;
   }
 
   // Final file path.
@@ -615,6 +629,7 @@ class WriteOnceBuilder {
   // Saved table creation options.
   const TableOptions options_;
   TableCompression compression_ = TableCompression::kTableCompressionNone;
+  int compression_level_ = 0;
 
   // Whether to fsync the data.
   bool no_fsync_ = false;
@@ -634,14 +649,16 @@ class WriteOnceBuilder {
 
   // Longest encountered key size.
   uint32_t key_size_max_ = 0;
-  uint32_t entry_size_max_ = 0;
-
   // Buffers for key comparison.
   std::unique_ptr<char[]> lhs_buffer_;
   std::unique_ptr<char[]> rhs_buffer_;
 
-  // A buffer for block marshaling and writing.
-  DataBuffer write_buffer_;
+  // A buffer for block marshaling.
+  DataBuffer marshal_buffer_;
+  // A buffer for block compression.
+  DataBuffer compress_buffer_;
+  // Compression context.
+  ZstdCompressor compressor_;
 
   // Read statistics.
   uint64_t read_count_ = 0;

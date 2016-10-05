@@ -140,12 +140,24 @@ class DataBuffer {
   std::unique_ptr<char[]> data_;
 };
 
-class RandomIO {
+class FileIO {
  public:
-  RandomIO(int fd) : fd_(fd) {}
+  FileIO(int fd) : fd_(fd) {}
 
-  RandomIO(const RandomIO&) = delete;
-  RandomIO& operator=(const RandomIO&) = delete;
+  FileIO(const FileIO&) = delete;
+  FileIO& operator=(const FileIO&) = delete;
+
+  operator int() const { return fd_; }
+
+  void Read(void* buffer, size_t length) {
+    ssize_t n = read(fd_, buffer, length);
+    if (n != length) {
+      if (n < 0)
+        KJ_FAIL_SYSCALL("read", errno);
+      else
+        KJ_FAIL_REQUIRE("read incomplete");
+    }
+  }
 
   void Read(void* buffer, off_t offset, size_t length) {
     ssize_t n = pread(fd_, buffer, length, offset);
@@ -154,6 +166,16 @@ class RandomIO {
         KJ_FAIL_SYSCALL("pread", errno);
       else
         KJ_FAIL_REQUIRE("pread incomplete");
+    }
+  }
+
+  void Write(const void* buffer, size_t length) {
+    ssize_t n = write(fd_, buffer, length);
+    if (n != length) {
+      if (n < 0)
+        KJ_FAIL_SYSCALL("write", errno);
+      else
+        KJ_FAIL_REQUIRE("write incomplete");
     }
   }
 
@@ -167,11 +189,27 @@ class RandomIO {
     }
   }
 
+  void Read(DataBuffer& buffer) {
+    Read(buffer.data(), buffer.size());
+  }
+
   void Read(DataBuffer& buffer, off_t offset) {
     Read(buffer.data(), offset, buffer.size());
   }
 
+  void Write(const DataBuffer& buffer) {
+    Write(buffer.data(), buffer.size());
+  }
+
   void Write(const DataBuffer& buffer, off_t offset) {
+    Write(buffer.data(), offset, buffer.size());
+  }
+
+  void Write(const string_view& buffer) {
+    Write(buffer.data(), buffer.size());
+  }
+
+  void Write(const string_view& buffer, off_t offset) {
     Write(buffer.data(), offset, buffer.size());
   }
 
@@ -422,7 +460,7 @@ class WriteOnceBuilder {
     int fast_result = lhs_prefix.compare(rhs_prefix);
     if (fast_result) return fast_result < 0;
 
-    RandomIO fd(raw_fd_.get());
+    FileIO fd(raw_fd_.get());
     fd.Read(lhs_buffer_.get(), lhs.offset, lhs.key_size);
     fd.Read(rhs_buffer_.get(), rhs.offset, rhs.key_size);
     read_count_ += 2;
@@ -504,7 +542,7 @@ class WriteOnceBuilder {
     WriteOnceIndex index;
     WriteOnceBlock block;
 
-    RandomIO raw_fd(raw_fd_.get());
+    FileIO raw_fd(raw_fd_.get());
     DataBuffer buffer(kEntrySizeLimit);
     std::string last_key;
 
@@ -552,7 +590,7 @@ class WriteOnceBuilder {
 
     index.Add(write_buffer_.size(), string_view(last_key));
 
-    Write(write_buffer_);
+    FileIO(fd_).Write(write_buffer_);
     return true;
   }
 
@@ -561,18 +599,8 @@ class WriteOnceBuilder {
     if (!write_buffer_.size())
       return false;
 
-    Write(write_buffer_);
+    FileIO(fd_).Write(write_buffer_);
     return true;
-  }
-
-  void Write(const DataBuffer& buffer) {
-    ssize_t n = write(fd_.get(), buffer.data(), buffer.size());
-    if (n != buffer.size()) {
-      if (n < 0)
-        KJ_FAIL_SYSCALL("write", errno);
-      else
-        KJ_FAIL_REQUIRE("write incomplete");
-    }
   }
 
   // Final file path.

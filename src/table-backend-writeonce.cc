@@ -32,6 +32,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <numeric>
 
 #include <err.h>
 #include <fcntl.h>
@@ -346,6 +347,10 @@ class WriteOnceIndex {
     return size;
   }
 
+  uint64_t GetBlocksSize() const {
+    return std::accumulate(block_size_.begin(), block_size_.end(), uint64_t(0));
+  }
+
   void Add(uint32_t block_size, const string_view& last_key) {
     block_size_.push_back(block_size);
     key_size_.push_back(last_key.size());
@@ -528,18 +533,7 @@ class WriteOnceBuilder {
     if ((oflags & nflags) != nflags)
       KJ_SYSCALL(fcntl(fd, F_SETFD, oflags | nflags));
 
-    struct CA_wo_header header;
-    header.magic = MAGIC;  // Will implicitly store endianness
-    header.major_version = MAJOR_VERSION;
-    header.minor_version = MINOR_VERSION;
-    header.flags = CA_WO_FLAG_ASCENDING;
-    header.compression = compression_;
-    header.compression_level = compression_level_;
-    header.data_reserved = 0;
-    // header.index_offset = (write_offset + 0xfff) & ~0xfffULL;
-
-    kj::FdOutputStream output(fd);
-    output.write(&header, sizeof(header));
+    WriteHeader(0);
   }
 
   void CommitFile() {
@@ -557,6 +551,22 @@ class WriteOnceBuilder {
   }
 
   void RemoveFile() { unlink(tmp_path_.c_str()); }
+
+  void WriteHeader(uint64_t index_offset) {
+    struct CA_wo_header header;
+    header.magic = MAGIC;  // Will implicitly store endianness
+    header.major_version = MAJOR_VERSION;
+    header.minor_version = MINOR_VERSION;
+    header.flags = CA_WO_FLAG_ASCENDING;
+    header.compression = compression_;
+    header.compression_level = compression_level_;
+    header.data_reserved = 0;
+    header.index_offset = index_offset;
+
+    FileIO fd(fd_);
+    KJ_SYSCALL(lseek(fd, 0, SEEK_SET), tmp_path_);
+    fd.Write(&header, sizeof(header));
+  }
 
   void WriteFinalData() {
     WriteOnceIndex index;
@@ -607,7 +617,9 @@ class WriteOnceBuilder {
     DataBuffer& buffer = CompressMarshalBuffer();
     FileIO(fd_).Write(buffer);
 
-    //KJ_LOG(DBG, index.num_blocks(), buffer.size());
+    WriteHeader(index.GetBlocksSize());
+
+    KJ_LOG(DBG, index.num_blocks(), buffer.size());
   }
 
   DataBuffer& CompressMarshalBuffer() {
@@ -617,6 +629,9 @@ class WriteOnceBuilder {
     size_t size = ZSTD_compressBound(marshal_buffer_.size());
     compress_buffer_.resize(size);
     compressor_.Go(compress_buffer_, marshal_buffer_, compression_level_);
+
+    if (compress_buffer_.size() > marshal_buffer_.size())
+      KJ_LOG(DBG, compress_buffer_.size() - marshal_buffer_.size());
 
     return compress_buffer_;
   }
@@ -697,11 +712,7 @@ class WriteOnceTable : public SeekableTable {
  private:
   friend class WriteOnceTableBackend;
 
-  void FlushKeyBuffer();
-
   void MAdviseIndex();
-
-  void BuildIndex();
 
   void MemoryMap();
 
@@ -735,9 +746,6 @@ class WriteOnceTable : public SeekableTable {
 
   // Used for read, seek, offset and delete.
   uint64_t offset_ = 0;
-
-  // Unflushed hash map keys.
-  std::vector<std::pair<uint64_t, uint64_t>> key_buffer;
 
   // Table builder.
   std::unique_ptr<WriteOnceBuilder> builder_;
@@ -800,24 +808,6 @@ WriteOnceTable::~WriteOnceTable() {
   if (buffer != MAP_FAILED) munmap(buffer, buffer_size);
 }
 
-void WriteOnceTable::FlushKeyBuffer() {
-  MAdviseIndex();
-
-  std::sort(key_buffer.begin(), key_buffer.end());
-
-  for (auto& hash_offset : key_buffer) {
-    uint64_t hash = hash_offset.first;
-
-    while (index.u64[hash]) {
-      if (++hash == index_size) hash = 0;
-    }
-
-    index.u64[hash] = hash_offset.second;
-  }
-
-  key_buffer.clear();
-}
-
 void WriteOnceTable::MAdviseIndex() {
   auto base = reinterpret_cast<ptrdiff_t>(buffer) + header->index_offset;
   auto end = reinterpret_cast<ptrdiff_t>(buffer) + buffer_fill;
@@ -826,68 +816,6 @@ void WriteOnceTable::MAdviseIndex() {
   KJ_SYSCALL(madvise(reinterpret_cast<void*>(base), end - base, MADV_WILLNEED),
              base, end, (ptrdiff_t)buffer, buffer_size);
   has_madvised_index = true;
-}
-
-void WriteOnceTable::BuildIndex() {
-  static const uint64_t kKeyBufferMax = 16 * 1024 * 1024;
-  struct iovec key_iov, value;
-  std::string prev_key, key;
-  unsigned int flags = CA_WO_FLAG_ASCENDING | CA_WO_FLAG_DESCENDING;
-
-  Seek(0, SEEK_SET);
-
-  printf("entry_count: %llu\n", entry_count);
-  key_buffer.reserve(std::min(entry_count, kKeyBufferMax));
-
-  KJ_SYSCALL(madvise(buffer, header->index_offset, MADV_SEQUENTIAL));
-
-  for (;;) {
-    uint64_t hash;
-
-    int cmp;
-
-    auto tmp_offset = offset_;
-
-    if (!ReadRow(&key_iov, &value)) break;
-
-    key.assign(reinterpret_cast<const char*>(key_iov.iov_base),
-               key_iov.iov_len);
-
-    if (flags && !prev_key.empty()) {
-      cmp = prev_key.compare(key);
-
-      if (cmp < 0) {
-        flags &= CA_WO_FLAG_ASCENDING;
-      } else if (cmp > 0) {
-        flags &= CA_WO_FLAG_DESCENDING;
-      }
-    }
-
-    if (header->major_version < 2) {
-      hash = CA_wo_hash(key);
-    } else {
-      hash = Hash(key);
-    }
-
-    hash %= index_size;
-
-    prev_key.swap(key);
-
-    key_buffer.emplace_back(hash, tmp_offset);
-
-    if (key_buffer.size() >= kKeyBufferMax) {
-      // Discard the keys we've already read.
-      if (0 != (tmp_offset & ~0xfff)) {
-        KJ_SYSCALL(madvise(buffer, tmp_offset & ~0xfff, MADV_DONTNEED));
-      }
-
-      FlushKeyBuffer();
-    }
-  }
-
-  FlushKeyBuffer();
-
-  header->flags = flags;
 }
 
 void WriteOnceTable::Sync() {

@@ -743,7 +743,9 @@ int main(int argc, char** argv) try {
   ca_table::TableOptions output_options = ca_table::TableOptions::Create();
   output_options.SetFileMode(0444)
       .SetCompression(output_compression)
-      .SetCompressionLevel(output_compression_level);
+      .SetCompressionLevel(output_compression_level)
+      .SetInputUnsorted(input_unsorted)
+      .SetOutputSeekable(output_seekable);
 
   if (!output_backend) output_backend = "leveldb-table";
 

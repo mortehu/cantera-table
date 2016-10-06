@@ -199,11 +199,24 @@ class TableOptions {
     return *this;
   }
 
+  TableOptions& SetInputUnsorted(bool value = true) {
+    input_unsorted_ = value;
+    return *this;
+  }
+
+  TableOptions& SetOutputSeekable(bool value = true) {
+    output_seekable_ = value;
+    return *this;
+  }
+
   int GetFileFlags() const { return file_flags_; }
   mode_t GetFileMode() const { return file_mode_; }
 
   TableCompression GetCompression() const { return compression_; }
   uint8_t GetCompressionLevel() const { return compression_level_; }
+
+  bool GetInputUnsorted() const { return input_unsorted_; }
+  bool GetOutputSeekable() const { return output_seekable_; }
 
  private:
   // File creation options.
@@ -213,6 +226,10 @@ class TableOptions {
   // Data compression options.
   TableCompression compression_ = kTableCompressionDefault;
   uint8_t compression_level_ = 0;
+
+  // Miscellaneous flags.
+  bool input_unsorted_ = false;
+  bool output_seekable_ = false;
 };
 
 /*****************************************************************************/

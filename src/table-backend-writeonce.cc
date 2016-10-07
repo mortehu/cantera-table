@@ -137,7 +137,7 @@ class DataBuffer {
     size_ = size;
   }
 
-  void append(const void *buffer, size_t length) {
+  void append(const void* buffer, size_t length) {
     size_t offset = size();
     resize(offset + length);
     memcpy(data() + offset, buffer, length);
@@ -286,15 +286,15 @@ class ZstdDecompressor {
 
 class WriteOnceBlock {
  public:
+  using array_codec = oroch::varint_codec<uint32_t>;
+  using value_codec = oroch::varint_codec<uint32_t>;
+
   size_t num_entries() const { return key_size_.size(); }
 
   size_t EstimateSize() const {
     size_t size = key_data_.size() + value_data_.size();
-    size += oroch::varint_codec<size_t>::value_space(num_entries());
-    size += oroch::varint_codec<uint32_t>::space(key_size_.begin(),
-                                                 key_size_.end());
-    size += oroch::varint_codec<uint32_t>::space(value_size_.begin(),
-                                                 value_size_.end());
+    size += array_codec::space(key_size_.begin(), key_size_.end());
+    size += array_codec::space(value_size_.begin(), value_size_.end());
     return size;
   }
 
@@ -328,17 +328,15 @@ class WriteOnceBlock {
 
   void Marshal(DataBuffer& buffer, bool seekable) const {
     buffer.clear();
+
     const size_t num = num_entries();
     if (!num) return;
 
     buffer.reserve(EstimateSize());
     unsigned char* ptr = buffer.udata();
-    oroch::varint_codec<size_t>::value_encode(ptr, num);
     if (!seekable) {
-      oroch::varint_codec<uint32_t>::encode(ptr, key_size_.begin(),
-                                            key_size_.end());
-      oroch::varint_codec<uint32_t>::encode(ptr, value_size_.begin(),
-                                            value_size_.end());
+      array_codec::encode(ptr, key_size_.begin(), key_size_.end());
+      array_codec::encode(ptr, value_size_.begin(), value_size_.end());
       buffer.resize(ptr - buffer.udata());
       buffer.append(key_data_);
       buffer.append(value_data_);
@@ -346,17 +344,49 @@ class WriteOnceBlock {
       size_t k_offset = 0, v_offset = 0;
       for (size_t i = 0; i < num; i++) {
         size_t k_length = key_size_[i], v_length = value_size_[i];
-        oroch::varint_codec<uint32_t>::value_encode(ptr, k_length);
-        oroch::varint_codec<uint32_t>::value_encode(ptr, v_length);
-        buffer.append(string_view(key_data_.data() + k_offset, k_length));
-        buffer.append(string_view(value_data_.data() + v_offset, v_length));
+        value_codec::value_encode(ptr, k_length);
+        value_codec::value_encode(ptr, v_length);
+        buffer.append(key_data_.data() + k_offset, k_length);
+        buffer.append(value_data_.data() + v_offset, v_length);
         k_offset += k_length;
         v_offset += v_length;
       }
     }
   }
 
-  void Unmarshal(DataBuffer& buffer) { Clear(); }
+  void Unmarshal(DataBuffer& buffer, size_t num, bool seekable) {
+    Clear();
+
+    if (!num) return;
+
+    const unsigned char* ptr = buffer.udata();
+    if (!seekable) {
+      key_size_.resize(num);
+      value_size_.resize(num);
+
+      array_codec::decode(key_size_.begin(), key_size_.end(), ptr);
+      array_codec::decode(value_size_.begin(), value_size_.end(), ptr);
+
+      size_t k_total =
+          std::accumulate(key_size_.begin(), key_size_.end(), size_t(0));
+      size_t v_total =
+          std::accumulate(value_size_.begin(), value_size_.end(), size_t(0));
+      KJ_REQUIRE((ptr + k_total + v_total) <= (buffer.udata() + buffer.size()));
+
+      key_data_.insert(key_data_.end(), ptr, ptr + k_total);
+      ptr += k_total;
+      value_data_.insert(value_data_.end(), ptr, ptr + v_total);
+    } else {
+      size_t k_offset = 0, v_offset = 0;
+      for (size_t i = 0; i < num; i++) {
+        size_t k_length = value_codec::value_decode(ptr);
+        size_t v_length = value_codec::value_decode(ptr);
+        key_data_.insert(key_data_.end(), ptr, ptr + k_length);
+        ptr += k_length;
+        value_data_.insert(value_data_.end(), ptr, ptr + v_length);
+      }
+    }
+  }
 
  private:
   // Accumulated key data.
@@ -372,15 +402,21 @@ class WriteOnceBlock {
 
 class WriteOnceIndex {
  public:
-  void Clear() {}
+  void Clear() {
+    size_.clear();
+    num_entries_.clear();
+    key_size_.clear();
+    key_data_.clear();
+  }
 
   size_t num_blocks() const { return key_size_.size(); }
 
   size_t EstimateSize() const {
     size_t size = key_data_.size();
     size += oroch::varint_codec<size_t>::value_space(num_blocks());
-    size += oroch::varint_codec<size_t>::space(block_size_.begin(),
-                                               block_size_.end());
+    size += oroch::varint_codec<size_t>::space(size_.begin(), size_.end());
+    size += oroch::varint_codec<uint32_t>::space(num_entries_.begin(),
+                                                 num_entries_.end());
     size += oroch::varint_codec<uint32_t>::space(key_size_.begin(),
                                                  key_size_.end());
     return size;
@@ -388,38 +424,66 @@ class WriteOnceIndex {
 
   uint64_t GetIndexOffset() const {
     uint64_t offset = sizeof(struct CA_wo_header);
-    return std::accumulate(block_size_.begin(), block_size_.end(), offset);
+    return std::accumulate(size_.begin(), size_.end(), offset);
   }
 
-  void Add(uint32_t block_size, const string_view& last_key) {
-    block_size_.push_back(block_size);
+  void Add(const WriteOnceBlock& block, uint32_t size) {
+    string_view last_key = block.GetLaskKey();
+    size_.push_back(size);
+    size_.push_back(block.num_entries());
     key_size_.push_back(last_key.size());
     key_data_.insert(key_data_.end(), last_key.begin(), last_key.end());
   }
 
   void Marshal(DataBuffer& buffer) const {
     buffer.clear();
+
     const size_t num = num_blocks();
     if (!num) return;
 
     buffer.reserve(EstimateSize());
     unsigned char* ptr = buffer.udata();
     oroch::varint_codec<size_t>::value_encode(ptr, num);
-    oroch::varint_codec<size_t>::encode(ptr, block_size_.begin(),
-                                        block_size_.end());
+    oroch::varint_codec<size_t>::encode(ptr, size_.begin(), size_.end());
+    oroch::varint_codec<uint32_t>::encode(ptr, num_entries_.begin(),
+                                          num_entries_.end());
     oroch::varint_codec<uint32_t>::encode(ptr, key_size_.begin(),
                                           key_size_.end());
     buffer.resize(ptr - buffer.udata());
     buffer.append(key_data_);
   }
 
-  void Unmarshal(DataBuffer& buffer) { Clear(); }
+  void Unmarshal(DataBuffer& buffer) {
+    Clear();
+
+    const unsigned char* ptr = buffer.udata();
+    size_t num = oroch::varint_codec<size_t>::value_decode(ptr);
+    if (num == 0) return;
+
+    size_.resize(num);
+    num_entries_.resize(num);
+    key_size_.resize(num);
+
+    oroch::varint_codec<size_t>::decode(size_.begin(), size_.end(), ptr);
+    oroch::varint_codec<uint32_t>::decode(num_entries_.begin(),
+                                          num_entries_.end(), ptr);
+    oroch::varint_codec<uint32_t>::decode(key_size_.begin(), key_size_.end(),
+                                          ptr);
+
+    size_t key_size =
+        std::accumulate(key_size_.begin(), key_size_.end(), size_t(0));
+    KJ_REQUIRE((ptr + key_size) <= (buffer.udata() + buffer.size()));
+    key_data_.insert(key_data_.end(), ptr, ptr + key_size);
+  }
 
  private:
   // Block sizes.
-  std::vector<size_t> block_size_;
+  std::vector<size_t> size_;
 
-  // Last key in a block data.
+  // Number of entries in blocks.
+  std::vector<uint32_t> num_entries_;
+
+  // Last keys in blocks.
   std::vector<uint32_t> key_size_;
   std::vector<char> key_data_;
 };
@@ -655,7 +719,7 @@ class WriteOnceBuilder {
     DataBuffer& buffer = seekable ? marshal_buffer_ : CompressMarshalBuffer();
     FileIO(fd_).Write(buffer);
 
-    index.Add(buffer.size(), block.GetLaskKey());
+    index.Add(block, buffer.size());
 
     // KJ_LOG(DBG, block.num_entries(), buffer.size());
   }

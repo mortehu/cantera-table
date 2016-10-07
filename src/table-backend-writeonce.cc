@@ -137,12 +137,23 @@ class DataBuffer {
     size_ = size;
   }
 
+  void append(const void *buffer, size_t length) {
+    size_t offset = size();
+    resize(offset + length);
+    memcpy(data() + offset, buffer, length);
+  }
+
+  void append(const std::string& string) {
+    append(string.data(), string.size());
+  }
+
+  void append(const string_view& string) {
+    append(string.data(), string.size());
+  }
+
   template <typename T>
   void append(const std::vector<T>& vector) {
-    size_t offset = size();
-    size_t length = vector.size() * sizeof(T);
-    resize(offset + length);
-    memcpy(data() + offset, vector.data(), length);
+    append(vector.data(), vector.size() * sizeof(T));
   }
 
  private:
@@ -315,7 +326,7 @@ class WriteOnceBlock {
     value_data_.clear();
   }
 
-  void Marshal(DataBuffer& buffer) const {
+  void Marshal(DataBuffer& buffer, bool seekable) const {
     buffer.clear();
     const size_t num = num_entries();
     if (!num) return;
@@ -323,13 +334,26 @@ class WriteOnceBlock {
     buffer.reserve(EstimateSize());
     unsigned char* ptr = buffer.udata();
     oroch::varint_codec<size_t>::value_encode(ptr, num);
-    oroch::varint_codec<uint32_t>::encode(ptr, key_size_.begin(),
-                                          key_size_.end());
-    oroch::varint_codec<uint32_t>::encode(ptr, value_size_.begin(),
-                                          value_size_.end());
-    buffer.resize(ptr - buffer.udata());
-    buffer.append(key_data_);
-    buffer.append(value_data_);
+    if (!seekable) {
+      oroch::varint_codec<uint32_t>::encode(ptr, key_size_.begin(),
+                                            key_size_.end());
+      oroch::varint_codec<uint32_t>::encode(ptr, value_size_.begin(),
+                                            value_size_.end());
+      buffer.resize(ptr - buffer.udata());
+      buffer.append(key_data_);
+      buffer.append(value_data_);
+    } else {
+      size_t k_offset = 0, v_offset = 0;
+      for (size_t i = 0; i < num; i++) {
+        size_t k_length = key_size_[i], v_length = value_size_[i];
+        oroch::varint_codec<uint32_t>::value_encode(ptr, k_length);
+        oroch::varint_codec<uint32_t>::value_encode(ptr, v_length);
+        buffer.append(string_view(key_data_.data() + k_offset, k_length));
+        buffer.append(string_view(value_data_.data() + v_offset, v_length));
+        k_offset += k_length;
+        v_offset += v_length;
+      }
+    }
   }
 
   void Unmarshal(DataBuffer& buffer) { Clear(); }
@@ -577,11 +601,13 @@ class WriteOnceBuilder {
   void RemoveFile() { unlink(tmp_path_.c_str()); }
 
   void WriteHeader(uint64_t index_offset) {
+    bool seekable = options_.GetOutputSeekable();
+
     struct CA_wo_header header;
     header.magic = MAGIC;  // Will implicitly store endianness
     header.major_version = MAJOR_VERSION;
     header.minor_version = MINOR_VERSION;
-    header.flags = 0;
+    header.flags = seekable ? CA_WO_FLAG_SEEKABLE : 0;
     header.compression = compression_;
     header.data_reserved = 0;
     header.index_offset = index_offset;
@@ -622,10 +648,11 @@ class WriteOnceBuilder {
   }
 
   void WriteBlock(const WriteOnceBlock& block, WriteOnceIndex& index) {
-    block.Marshal(marshal_buffer_);
+    bool seekable = options_.GetOutputSeekable();
+    block.Marshal(marshal_buffer_, seekable);
     if (!marshal_buffer_.size()) return;
 
-    DataBuffer& buffer = CompressMarshalBuffer();
+    DataBuffer& buffer = seekable ? marshal_buffer_ : CompressMarshalBuffer();
     FileIO(fd_).Write(buffer);
 
     index.Add(buffer.size(), block.GetLaskKey());

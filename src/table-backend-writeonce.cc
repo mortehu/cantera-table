@@ -44,8 +44,6 @@
 
 #include <kj/debug.h>
 
-//#include <zstd.h>
-
 #include "src/ca-table.h"
 #include "src/util.h"
 

@@ -155,8 +155,6 @@ struct ca_score {
 
 /*****************************************************************************/
 
-enum ca_table_flag { CA_TABLE_NO_RELATIVE, CA_TABLE_NO_FSYNC };
-
 Backend* ca_table_backend(const char* name);
 
 /*****************************************************************************/
@@ -199,6 +197,11 @@ class TableOptions {
     return *this;
   }
 
+  TableOptions& SetNoFSync(bool value = true) {
+    no_fsync_ = value;
+    return *this;
+  }
+
   TableOptions& SetInputUnsorted(bool value = true) {
     input_unsorted_ = value;
     return *this;
@@ -215,6 +218,7 @@ class TableOptions {
   TableCompression GetCompression() const { return compression_; }
   uint8_t GetCompressionLevel() const { return compression_level_; }
 
+  bool GetNoFSync() const { return no_fsync_; }
   bool GetInputUnsorted() const { return input_unsorted_; }
   bool GetOutputSeekable() const { return output_seekable_; }
 
@@ -228,6 +232,7 @@ class TableOptions {
   uint8_t compression_level_ = 0;
 
   // Miscellaneous flags.
+  bool no_fsync_ = false;
   bool input_unsorted_ = false;
   bool output_seekable_ = false;
 };
@@ -241,8 +246,6 @@ class Table {
   virtual ~Table();
 
   virtual void Sync() = 0;
-
-  virtual void SetFlag(enum ca_table_flag flag) = 0;
 
   virtual int IsSorted() = 0;
 

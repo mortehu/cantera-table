@@ -527,23 +527,18 @@ class WriteOnceBuilder {
 
   const std::string& path() const { return path_; }
 
-  uint64_t GetIndexOffset() const { return index_offset_; }
-
-  void NoFSync(bool value = true) { no_fsync_ = value; }
-
   void Add(const string_view& key, const string_view& value) {
     AddEntry(key, value);
     WriteEntryData(key, value);
   }
 
-  void Build() {
+  uint64_t Build() {
     FlushEntryData();
     SortEntries();
 
     CreateFile();
     try {
-      WriteFinalData();
-      CommitFile();
+      return WriteFile();
     } catch (...) {
       RemoveFile();
       throw;
@@ -656,7 +651,7 @@ class WriteOnceBuilder {
     KJ_SYSCALL(fchmod(fd_.get(), mode & ~mask), tmp_path_);
     KJ_SYSCALL(rename(tmp_path_.c_str(), path_.c_str()), tmp_path_, path_);
 
-    if (!no_fsync_) {
+    if (!options_.GetNoFSync()) {
       // TODO(mortehu): fsync all ancestor directories too.
       KJ_SYSCALL(fsync(fd_.get()), path_);
     }
@@ -681,7 +676,7 @@ class WriteOnceBuilder {
     fd.Write(&header, sizeof(header));
   }
 
-  void WriteFinalData() {
+  uint64_t WriteFile() {
     WriteOnceIndex index;
     WriteOnceBlock block;
 
@@ -708,7 +703,7 @@ class WriteOnceBuilder {
     }
 
     WriteBlock(block, index);
-    WriteIndex(index);
+    return WriteIndex(index);
   }
 
   void WriteBlock(const WriteOnceBlock& block, WriteOnceIndex& index) {
@@ -724,17 +719,20 @@ class WriteOnceBuilder {
     // KJ_LOG(DBG, block.num_entries(), buffer.size());
   }
 
-  void WriteIndex(const WriteOnceIndex& index) {
+  uint64_t WriteIndex(const WriteOnceIndex& index) {
     index.Marshal(marshal_buffer_);
-    if (!marshal_buffer_.size()) return;
+    if (!marshal_buffer_.size()) return 0;
 
     DataBuffer& buffer = CompressMarshalBuffer();
     FileIO(fd_).Write(buffer);
 
-    index_offset_ = index.GetIndexOffset();
-    WriteHeader(index_offset_);
+    uint64_t index_offset = index.GetIndexOffset();
+    WriteHeader(index_offset);
+
+    CommitFile();
 
     KJ_LOG(DBG, index.num_blocks(), buffer.size());
+    return index_offset;
   }
 
   DataBuffer& CompressMarshalBuffer() {
@@ -760,9 +758,6 @@ class WriteOnceBuilder {
   TableCompression compression_ = TableCompression::kTableCompressionNone;
   int compression_level_ = 0;
 
-  // Whether to fsync the data.
-  bool no_fsync_ = false;
-
   // Result file.
   kj::AutoCloseFd fd_;
 
@@ -775,8 +770,6 @@ class WriteOnceBuilder {
 
   // Running file offset.
   uint64_t offset_ = 0;
-
-  uint64_t index_offset_ = 0;
 
   // Longest encountered key size.
   uint32_t key_size_max_ = 0;
@@ -1087,30 +1080,13 @@ class WriteOnceTable : public SeekableTable {
 
   void Sync() override {
     if (builder_) {
-      builder_->Build();
+      uint64_t index_offset = builder_->Build();
       std::string path = builder_->path();
-      uint64_t index_offset = builder_->GetIndexOffset();
       builder_.reset();
 
       kj::AutoCloseFd fd = OpenFile(path.c_str());
       reader_ = std::make_unique<WriteOnceReader_v4>(path, std::move(fd),
                                                      index_offset);
-    }
-  }
-
-  void SetFlag(enum ca_table_flag flag) override {
-    switch (flag) {
-      case CA_TABLE_NO_RELATIVE:
-        // FIXME(ademakov): what is this?
-        // no_relative = 1;
-        break;
-
-      case CA_TABLE_NO_FSYNC:
-        if (builder_) builder_->NoFSync();
-        break;
-
-      default:
-        KJ_FAIL_REQUIRE("unknown flag", flag);
     }
   }
 

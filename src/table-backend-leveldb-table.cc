@@ -154,10 +154,6 @@ class LevelDBTable : public Table {
     LinkAnonTemporaryFile(temp_fd_, path_.c_str());
   }
 
-  void SetFlag(enum ca_table_flag flag) override {
-    KJ_FAIL_REQUIRE(!"Operation not supported");
-  }
-
   int IsSorted() override { return true; }
 
   void InsertRow(const struct iovec* value, size_t value_count) override {

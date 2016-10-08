@@ -1,14 +1,14 @@
 #ifndef STORAGE_CA_TABLE_CA_TABLE_H_
 #define STORAGE_CA_TABLE_CA_TABLE_H_ 1
 
-#include <cstdio>
-#include <cstdint>
-#include <cstdlib>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <experimental/string_view>
 #include <functional>
-#include <string>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <fcntl.h>
@@ -30,6 +30,8 @@ struct ca_offset_score;
 class Query;
 class Schema;
 class Table;
+class SeekableTable;
+class TableOptions;
 
 // Escape string for use in tab delimited format.
 std::string Escape(const string_view& str);
@@ -38,8 +40,12 @@ class Backend {
  public:
   virtual ~Backend();
 
-  virtual std::unique_ptr<Table> Open(const char* path, int flags,
-                                                mode_t mode) = 0;
+  virtual std::unique_ptr<Table> Create(const char* path,
+                                        const TableOptions &options) = 0;
+
+  virtual std::unique_ptr<Table> Open(const char* path) = 0;
+
+  virtual std::unique_ptr<SeekableTable> OpenSeekable(const char* path) = 0;
 };
 
 void LookupKey(const std::vector<Table*>& index_tables,
@@ -155,10 +161,64 @@ Backend* ca_table_backend(const char* name);
 
 /*****************************************************************************/
 
+enum TableCompression : uint8_t {
+  // No compression.
+  kTableCompressionNone = 0,
+
+  // Backend-specific default compression.
+  kTableCompressionDefault = uint8_t(-1),
+
+  // Zstandard compression. https://github.com/facebook/zstd
+  kTableCompressionZSTD = 1,
+
+  // Keep this equal to the numerically last compression method.
+  kTableCompressionLast = kTableCompressionZSTD
+};
+
+class TableOptions {
+ public:
+  static TableOptions Create() { return TableOptions(); }
+
+  TableOptions& SetFileFlags(int file_flags) {
+    file_flags_ = file_flags;
+    return *this;
+  }
+
+  TableOptions& SetFileMode(mode_t file_mode) {
+    file_mode_ = file_mode;
+    return *this;
+  }
+
+  TableOptions& SetCompression(TableCompression compression) {
+    compression_ = compression;
+    return *this;
+  }
+
+  TableOptions& SetCompressionLevel(uint8_t compression_level) {
+    compression_level_ = compression_level;
+    return *this;
+  }
+
+  int GetFileFlags() const { return file_flags_; }
+  mode_t GetFileMode() const { return file_mode_; }
+
+  TableCompression GetCompression() const { return compression_; }
+  uint8_t GetCompressionLevel() const { return compression_level_; }
+
+ private:
+  // File creation options.
+  int file_flags_ = 0;
+  mode_t file_mode_ = 0666;
+
+  // Data compression options.
+  TableCompression compression_ = kTableCompressionDefault;
+  uint8_t compression_level_ = 0;
+};
+
+/*****************************************************************************/
+
 class Table {
  public:
-  static std::unique_ptr<Table> Open(const char* backend_name, const char* path, int flags, mode_t mode = 0666);
-
   Table();
 
   virtual ~Table();
@@ -186,11 +246,9 @@ class Table {
   // If the key was not found, the cursor MAY have moved, but not beyond any
   // alphanumerically larger keys.  This allows using this function to be used
   // for speeding up prefix key searches.
-  virtual void Seek(off_t offset, int whence) = 0;
+  virtual void SeekToFirst() = 0;
 
   virtual bool SeekToKey(const string_view& key) = 0;
-
-  virtual off_t Offset() = 0;
 
   virtual bool ReadRow(struct iovec* key, struct iovec* value) = 0;
 
@@ -211,9 +269,31 @@ class Table {
   struct stat st;
 };
 
+class SeekableTable : public Table {
+ public:
+  virtual off_t Offset() = 0;
+
+  virtual void Seek(off_t offset, int whence) = 0;
+};
+
 int ca_table_stat(Table* table, struct stat* buf);
 
 int ca_table_utime(Table* table, const struct timeval tv[2]);
+
+/*****************************************************************************/
+
+class TableFactory {
+ public:
+  static std::unique_ptr<Table> Create(const char* backend_name,
+                                       const char* path,
+                                       const TableOptions &options);
+
+  static std::unique_ptr<Table> Open(const char* backend_name,
+                                     const char* path);
+
+  static std::unique_ptr<SeekableTable> OpenSeekable(const char* backend_name,
+                                                     const char* path);
+};
 
 /*****************************************************************************/
 

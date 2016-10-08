@@ -73,6 +73,8 @@ enum Option {
   kKeyFilterOption,
   kMergeModeMotion,
   kOutputTypeOption,
+  kOutputBackend,
+  kOutputCompression,
   kSchemaOption,
   kShardCountOption,
   kShardIndexOption,
@@ -90,6 +92,8 @@ struct option kLongOptions[] = {
     {"no-unescape", no_argument, &no_unescape, 1},
     {"output-type", required_argument, nullptr, kOutputTypeOption},
     {"output-format", required_argument, nullptr, kOutputTypeOption},
+    {"output-backend", required_argument, nullptr, kOutputBackend},
+    {"output-compression", required_argument, nullptr, kOutputCompression},
     {"schema", required_argument, nullptr, kSchemaOption},
     {"shard-count", required_argument, nullptr, kShardCountOption},
     {"shard-index", required_argument, nullptr, kShardIndexOption},
@@ -529,6 +533,10 @@ int main(int argc, char** argv) try {
   DataType output_type = kDataTypeTimeSeries;
   const char* output_path;
 
+  const char* output_backend = nullptr;
+  ca_table::TableCompression output_compression =
+      ca_table::kTableCompressionDefault;
+
   const char* schema_path = NULL;
 
   int i;
@@ -600,6 +608,20 @@ int main(int argc, char** argv) try {
         }
         break;
 
+      case kOutputBackend:
+        output_backend = optarg;
+        break;
+
+      case kOutputCompression:
+        if (!strcmp(optarg, "none")) {
+          output_compression = ca_table::kTableCompressionNone;
+        } else if (!strcmp(optarg, "zstd")) {
+          output_compression = ca_table::kTableCompressionZSTD;
+        } else if (strcmp(optarg, "default")) {
+          errx(EX_USAGE, "Unknown compression type '%s'", optarg);
+        }
+        break;
+
       case kSchemaOption:
         schema_path = optarg;
         break;
@@ -640,6 +662,11 @@ int main(int argc, char** argv) try {
         "      --no-unescape          don't apply any unescaping logic\n"
         "      --output-type=TYPE     type of output table\n"
         "                               (index|summaries|time-series)\n"
+        "      --output-backend=TYPE  type of output storage backend\n"
+        "                               (leveldb-table|write-once)\n"
+        "      --output-compression=TYPE\n"
+        "                             output compression method\n"
+        "                               (default|none|zstd)\n"
         "      --schema=PATH          schema file for index building\n"
         "      --strip-key-prefix=PREFIX\n"
         "                             remove PREFIX from keys\n"
@@ -660,11 +687,11 @@ int main(int argc, char** argv) try {
     return EXIT_SUCCESS;
   }
 
-  const char* output_binary_format = "leveldb-table";
-
   if (output_type == kDataTypeIndex) {
-    KJ_REQUIRE(schema_path != nullptr,
-               "--output-format=index can only be used with --schema=PATH");
+    if (schema_path == nullptr) {
+      errx(EX_USAGE,
+           "--output-format=index can only be used with --schema=PATH");
+    }
 
     schema = std::make_unique<ca_table::Schema>(schema_path);
     schema->Load();
@@ -673,10 +700,24 @@ int main(int argc, char** argv) try {
   } else if (output_type == kDataTypeSummaries) {
     // Summary tables need to be quickly seekable, which LevelDB Tables are
     // not.
-    output_binary_format = "write-once";
+    if (!output_backend) {
+      output_backend = "write-once";
+    } else if (!!strcmp(output_backend, "write-once")) {
+      errx(EX_USAGE, "summary tables can only be used with write-once backend");
+    }
+
+    if (output_compression != ca_table::kTableCompressionNone &&
+        output_compression != ca_table::kTableCompressionDefault) {
+      errx(EX_USAGE, "summary tables cannot be compressed");
+    }
 
     do_summaries = 1;
   }
+
+  ca_table::TableOptions output_options = ca_table::TableOptions::Create();
+  output_options.SetFileMode(0444).SetCompression(output_compression);
+
+  if (!output_backend) output_backend = "leveldb-table";
 
   if (optind + 1 > argc)
     errx(EX_USAGE, "Usage: %s [OPTION]... TABLE [INPUT]...", argv[0]);
@@ -699,8 +740,8 @@ int main(int argc, char** argv) try {
         inputs.emplace_back(ca_table::internal::OpenFile(argv[optind++], O_RDONLY));
     }
 
-    table_handle = ca_table::Table::Open(output_binary_format, output_path,
-                                 O_CREAT | O_TRUNC | O_WRONLY, 0444);
+    table_handle = ca_table::TableFactory::Create(output_backend, output_path,
+                                                  output_options);
 
     for (auto& input : inputs) {
       cantera::ColumnFileReader reader(std::move(input));
@@ -784,8 +825,8 @@ int main(int argc, char** argv) try {
   } else if (optind == argc) {
     KJ_REQUIRE(input_format == kFormatAuto || input_format == kFormatCSV);
 
-    table_handle = ca_table::Table::Open(output_binary_format, output_path,
-                                 O_CREAT | O_TRUNC | O_WRONLY, 0444);
+    table_handle = ca_table::TableFactory::Create(output_backend, output_path,
+                                                  output_options);
 
     kj::AutoCloseFd input(STDIN_FILENO);
 
@@ -823,7 +864,7 @@ int main(int argc, char** argv) try {
 
     for (i = optind; i < argc; ++i) {
       KJ_CONTEXT(argv[i]);
-      auto table = ca_table::Table::Open(NULL, argv[i], O_RDONLY);
+      auto table = ca_table::TableFactory::Open(NULL, argv[i]);
 
       KJ_REQUIRE(table->IsSorted());
 
@@ -832,8 +873,8 @@ int main(int argc, char** argv) try {
       tables.emplace_back(std::move(table));
     }
 
-    table_handle = ca_table::Table::Open(output_binary_format, output_path,
-                                 O_CREAT | O_TRUNC | O_WRONLY, 0444);
+    table_handle = ca_table::TableFactory::Create(output_backend, output_path,
+                                                  output_options);
 
     if (tables.size() == 1) {
       CopyTable(tables[0].get(), table_handle.get());

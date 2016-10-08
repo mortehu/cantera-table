@@ -33,6 +33,16 @@ const char* detect_table_format(const char* path) {
   KJ_FAIL_REQUIRE("Unrecognized table format", path);
 }
 
+static void init_stat(struct stat &st, const char* path) {
+  std::memset(&st, 0, sizeof(st));
+  KJ_SYSCALL(stat(path, &st), path);
+}
+
+static Backend* get_backend(const char* backend_name, const char* path) {
+  if (!backend_name) backend_name = detect_table_format(path);
+  return ca_table_backend(backend_name);
+}
+
 std::unique_ptr<Backend> leveldb_table_backend;
 std::unique_ptr<Backend> writeonce_backend;
 
@@ -72,17 +82,35 @@ Backend* ca_table_backend(const char* name) {
 
 /*****************************************************************************/
 
-std::unique_ptr<Table> Table::Open(const char* backend_name, const char* path, int flags, mode_t mode) {
+std::unique_ptr<Table> TableFactory::Create(const char* backend_name,
+                                            const char* path,
+                                            const TableOptions &options) {
+  Backend *backend = get_backend(backend_name, path);
+  auto result = backend->Create(path, options);
+
+  std::memset(&result->st, 0, sizeof(result->st));
+
+  return result;
+}
+
+std::unique_ptr<Table> TableFactory::Open(const char* backend_name, const char* path) {
   struct stat st;
-  memset(&st, 0, sizeof(st));
+  init_stat(st, path);
 
-  if (!(flags & O_CREAT)) {
-    KJ_SYSCALL(stat(path, &st), path);
-  }
+  Backend *backend = get_backend(backend_name, path);
+  auto result = backend->Open(path);
 
-  if (!backend_name) backend_name = detect_table_format(path);
+  result->st = st;
 
-  auto result = ca_table_backend(backend_name)->Open(path, flags, mode);
+  return result;
+}
+
+std::unique_ptr<SeekableTable> TableFactory::OpenSeekable(const char* backend_name, const char* path) {
+  struct stat st;
+  init_stat(st, path);
+
+  Backend *backend = get_backend(backend_name, path);
+  auto result = backend->OpenSeekable(path);
 
   result->st = st;
 

@@ -522,7 +522,7 @@ void ca_schema_query_correlate(Schema* schema, const Query* query_A,
   std::mutex output_mutex;
 
   for (auto& index_table : schema->IndexTables()) {
-    index_table->Seek(0, SEEK_SET);
+    index_table->SeekToFirst();
 
     string_view key, data;
 

@@ -71,13 +71,16 @@ struct CA_wo_header {
   uint8_t major_version;
   uint8_t minor_version;
   uint16_t flags;
-  uint32_t data_reserved;
+  uint8_t compression;
+  uint8_t compression_level;
+  uint16_t data_reserved;
   uint64_t index_offset;
 };
 
-class WriteOnceTable : public Table {
+class WriteOnceTable : public SeekableTable {
  public:
-  WriteOnceTable(const char* path, int flags, mode_t mode);
+  WriteOnceTable(const char* path, const TableOptions& options);
+  WriteOnceTable(const char* path);
 
   ~WriteOnceTable();
 
@@ -90,6 +93,8 @@ class WriteOnceTable : public Table {
   void InsertRow(const struct iovec* value, size_t value_count) override;
 
   void Seek(off_t offset, int whence) override;
+
+  void SeekToFirst() override { Seek(0, SEEK_SET); }
 
   bool SeekToKey(const string_view& key) override;
 
@@ -114,13 +119,15 @@ class WriteOnceTable : public Table {
   int fd = -1;
   int open_flags = 0;
 
+  TableCompression compression_ = TableCompression::kTableCompressionNone;
+  uint8_t compression_level_ = 0;
+  uint16_t reserved_ = 0;
+
   FILE* write_buffer = nullptr;
   uint64_t write_offset = 0;
 
-  void* buffer = nullptr;
+  void* buffer = MAP_FAILED;
   size_t buffer_size = 0, buffer_fill = 0;
-
-  uint32_t reserved = 0;
 
   struct CA_wo_header* header = nullptr;
 
@@ -154,56 +161,77 @@ uint64_t CA_wo_hash(const string_view& str) {
   return result;
 }
 
-WriteOnceTable::WriteOnceTable(const char* path, int flags, mode_t mode)
+WriteOnceTable::WriteOnceTable(const char* path, const TableOptions& options)
     : path(path) {
-  if ((flags & O_WRONLY) == O_WRONLY) {
-    flags &= ~O_WRONLY;
-    flags |= O_RDWR;
-  }
+  int flags = options.GetFileFlags();
+  KJ_REQUIRE((flags & ~(O_EXCL | O_CLOEXEC)) == 0);
+  flags |= O_CREAT | O_TRUNC | O_RDWR;
 
-  fd = -1;
-  buffer = MAP_FAILED;
   open_flags = flags;
 
-  if (flags & O_CREAT) {
-    struct CA_wo_header dummy_header;
-    mode_t mask;
+  compression_ = options.GetCompression();
+  if (compression_ == kTableCompressionDefault)
+    compression_ = kTableCompressionNone;
+  KJ_REQUIRE(compression_ <= kTableCompressionLast,
+             "unsupported compression method");
+  compression_level_ = options.GetCompressionLevel();
 
-    mask = umask(0);
-    umask(mask);
+  if (compression_ != TableCompression::kTableCompressionNone)
+    KJ_UNIMPLEMENTED("compression is not implemented yet");
 
-    KJ_REQUIRE(flags & O_TRUNC, "O_CREAT requires O_TRUNC");
-    KJ_REQUIRE(flags & O_RDWR, "O_CREAT requires O_RDWR");
+  auto mode = options.GetFileMode();
+  auto mask = umask(0);
+  umask(mask);
 
-    KJ_SYSCALL(asprintf(&tmp_path, "%s.tmp.%u.XXXXXX", path, getpid()));
+  KJ_SYSCALL(asprintf(&tmp_path, "%s.tmp.%u.XXXXXX", path, getpid()));
 
-    KJ_SYSCALL(fd = mkstemp(tmp_path), tmp_path);
+  KJ_SYSCALL(fd = mkstemp(tmp_path), tmp_path);
 
-    KJ_SYSCALL(fchmod(fd, mode & ~mask), tmp_path);
+  KJ_SYSCALL(fchmod(fd, mode & ~mask), tmp_path);
 
-    write_buffer = fdopen(fd, "w");
-    if (!write_buffer) KJ_FAIL_SYSCALL("fdopen", errno, tmp_path);
+  write_buffer = fdopen(fd, "w");
+  if (!write_buffer) KJ_FAIL_SYSCALL("fdopen", errno, tmp_path);
 
-    memset(&dummy_header, 0, sizeof(dummy_header));
+  struct CA_wo_header dummy_header;
+  memset(&dummy_header, 0, sizeof(dummy_header));
 
-    if (0 == fwrite(&dummy_header, sizeof(dummy_header), 1, write_buffer))
-      KJ_FAIL_SYSCALL("fwrite", errno);
+  if (0 == fwrite(&dummy_header, sizeof(dummy_header), 1, write_buffer))
+    KJ_FAIL_SYSCALL("fwrite", errno);
 
-    write_offset = sizeof(dummy_header);
-  } else {
-    KJ_SYSCALL((flags & O_RDWR) != O_RDWR, "O_RDWR only allowed with O_CREAT");
+  write_offset = sizeof(dummy_header);
+}
 
-    KJ_SYSCALL(fd = open(path, O_RDONLY | O_CLOEXEC));
+WriteOnceTable::WriteOnceTable(const char* path) : path(path) {
+  open_flags = O_RDONLY | O_CLOEXEC;
 
-    MemoryMap();
-  }
+  KJ_SYSCALL(fd = open(path, open_flags));
+
+  MemoryMap();
+
+  KJ_REQUIRE(header != nullptr);
+  compression_ = TableCompression(header->compression);
+  KJ_REQUIRE(compression_ <= kTableCompressionLast,
+             "unsupported compression method");
+  compression_level_ = header->compression_level;
+
+  if (compression_ != TableCompression::kTableCompressionNone)
+    KJ_UNIMPLEMENTED("decompression is not implemented yet");
 }
 
 }  // namespace
 
-std::unique_ptr<Table> WriteOnceTableBackend::Open(const char* path, int flags,
-                                                   mode_t mode) {
-  return std::make_unique<WriteOnceTable>(path, flags, mode);
+std::unique_ptr<Table> WriteOnceTableBackend::Create(
+    const char* path, const TableOptions& options) {
+  return std::make_unique<WriteOnceTable>(path, options);
+}
+
+std::unique_ptr<Table> WriteOnceTableBackend::Open(const char* path) {
+  return std::make_unique<WriteOnceTable>(path);
+}
+
+std::unique_ptr<SeekableTable> WriteOnceTableBackend::OpenSeekable(
+    const char* path) {
+  return std::make_unique<WriteOnceTable>(path);
 }
 
 WriteOnceTable::~WriteOnceTable() {
@@ -321,7 +349,7 @@ void WriteOnceTable::Sync() {
 
   if (0 != fflush(write_buffer)) KJ_FAIL_SYSCALL("fflush", errno);
 
-  header.data_reserved = reserved;
+  header.data_reserved = reserved_;
 
   KJ_SYSCALL(lseek(fd, 0, SEEK_SET), tmp_path);
 
@@ -549,7 +577,7 @@ void WriteOnceTable::MemoryMap() {
 
   header = (struct CA_wo_header*)buffer;
 
-  KJ_REQUIRE(header->major_version == 3 || header->major_version == 2);
+  KJ_REQUIRE(header->major_version <= 3 || header->major_version >= 2);
 
   KJ_REQUIRE(header->magic == MAGIC, header->magic, MAGIC);
 

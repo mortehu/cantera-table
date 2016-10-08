@@ -309,7 +309,7 @@ int main(int argc, char** argv) try {
   if (optind + 1 != argc)
     errx(EX_USAGE, "Usage: %s [OPTION]... TABLE", argv[0]);
 
-  table_handle = ca_table::Table::Open(nullptr, argv[optind], O_RDONLY);
+  table_handle = ca_table::TableFactory::Open(nullptr, argv[optind]);
 
   if (key_filter) {
     KJ_REQUIRE(key_filter->PossibleMatchRange(&first_key, &last_key, 64));

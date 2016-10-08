@@ -87,6 +87,7 @@ void LinkAnonTemporaryFile(int fd, const char* path) {
 
 void LinkAnonTemporaryFile(int dir_fd, int fd, const char* path) {
   KJ_CONTEXT(path);
+#if __linux__
   char temp_path[32];
   snprintf(temp_path, sizeof(temp_path), "/proc/self/fd/%d", fd);
   auto ret = linkat(AT_FDCWD, temp_path, dir_fd, path, AT_SYMLINK_FOLLOW);
@@ -122,6 +123,9 @@ void LinkAnonTemporaryFile(int dir_fd, int fd, const char* path) {
   }
 
   KJ_FAIL_REQUIRE("all temporary file creation attempts failed", kMaxAttempts);
+#else
+  KJ_UNIMPLEMENTED("linking an unlinked file");
+#endif
 }
 
 uint64_t Hash(const string_view& key) {

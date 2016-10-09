@@ -289,6 +289,8 @@ class WriteOnceBlock {
   using array_codec = oroch::varint_codec<uint32_t>;
   using value_codec = oroch::varint_codec<uint32_t>;
 
+  bool empty() const { return !num_entries(); }
+
   size_t num_entries() const { return key_size_.size(); }
 
   size_t EstimateSize() const {
@@ -506,6 +508,165 @@ class WriteOnceBuilder {
     if (compression_level_ == 0 && compression_ != kTableCompressionNone)
       compression_level_ = 3;
 
+    CreateFile();
+  }
+
+  virtual ~WriteOnceBuilder() {
+    if (incomplete_file_) unlink(tmp_path_.get());
+  }
+
+  const std::string& path() const { return path_; }
+
+  virtual void Add(const string_view& key, const string_view& value) {
+    KJ_REQUIRE(block_.empty() || block_.GetLaskKey() <= key,
+               "unsorted input data");
+
+    const size_t size = key.size() + value.size();
+    const size_t block_size = block_.EstimateSize();
+    if ((block_size > kBlockSizeMax) ||
+        (block_size > kBlockSizeMin && size > kEntrySizeLimit)) {
+      WriteBlock(block_, index_);
+      block_.Clear();
+    }
+
+    block_.Add(key, value);
+  }
+
+  virtual uint64_t Build() {
+    WriteBlock(block_, index_);
+    return WriteIndex(index_);
+  }
+
+ private:
+  void CreateFile() {
+    char* tmp = NULL;
+    KJ_SYSCALL(asprintf(&tmp, "%s.tmp.%u.XXXXXX", path_.c_str(), getpid()));
+    tmp_path_ = std::unique_ptr<char, decltype(free)*>(tmp, free);
+
+    int fd;
+    KJ_SYSCALL(fd = mkstemp(tmp), tmp);
+    fd_ = kj::AutoCloseFd(fd);
+    incomplete_file_ = true;
+
+    int nflags = options_.GetFileFlags();
+    nflags &= O_CLOEXEC;
+
+    int oflags;
+    KJ_SYSCALL(oflags = fcntl(fd, F_GETFD));
+    if ((oflags & nflags) != nflags)
+      KJ_SYSCALL(fcntl(fd, F_SETFD, oflags | nflags));
+
+    WriteHeader(0);
+  }
+
+  void CommitFile() {
+    auto mode = options_.GetFileMode();
+    auto mask = umask(0);
+    umask(mask);
+
+    KJ_SYSCALL(fchmod(fd_.get(), mode & ~mask), tmp_path_.get());
+    KJ_SYSCALL(rename(tmp_path_.get(), path_.c_str()), tmp_path_.get(), path_);
+
+    incomplete_file_ = false;
+
+    if (!options_.GetNoFSync()) {
+      // TODO(mortehu): fsync all ancestor directories too.
+      KJ_SYSCALL(fsync(fd_.get()), path_);
+    }
+  }
+
+  void WriteHeader(uint64_t index_offset) {
+    bool seekable = options_.GetOutputSeekable();
+
+    struct CA_wo_header header;
+    header.magic = MAGIC;  // Will implicitly store endianness
+    header.major_version = MAJOR_VERSION;
+    header.minor_version = MINOR_VERSION;
+    header.flags = seekable ? CA_WO_FLAG_SEEKABLE : 0;
+    header.compression = compression_;
+    header.data_reserved = 0;
+    header.index_offset = index_offset;
+
+    FileIO fd(fd_);
+    KJ_SYSCALL(lseek(fd, 0, SEEK_SET), tmp_path_.get());
+    fd.Write(&header, sizeof(header));
+  }
+
+  void WriteBlock(const WriteOnceBlock& block, WriteOnceIndex& index) {
+    bool seekable = options_.GetOutputSeekable();
+    block.Marshal(marshal_buffer_, seekable);
+    if (!marshal_buffer_.size()) return;
+
+    DataBuffer& buffer = seekable ? marshal_buffer_ : CompressMarshalBuffer();
+    FileIO(fd_).Write(buffer);
+
+    index.Add(block, buffer.size());
+
+    // KJ_LOG(DBG, block.num_entries(), buffer.size());
+  }
+
+  uint64_t WriteIndex(const WriteOnceIndex& index) {
+    index.Marshal(marshal_buffer_);
+    if (!marshal_buffer_.size()) return 0;
+
+    DataBuffer& buffer = CompressMarshalBuffer();
+    FileIO(fd_).Write(buffer);
+
+    uint64_t index_offset = index.GetIndexOffset();
+    WriteHeader(index_offset);
+
+    CommitFile();
+
+    KJ_LOG(DBG, index.num_blocks(), buffer.size());
+    return index_offset;
+  }
+
+  DataBuffer& CompressMarshalBuffer() {
+    if (compression_ == TableCompression::kTableCompressionNone)
+      return marshal_buffer_;
+
+    compress_buffer_.reserve(ZSTD_compressBound(marshal_buffer_.size()));
+    compressor_.Go(compress_buffer_, marshal_buffer_, compression_level_);
+
+    if (compress_buffer_.size() > marshal_buffer_.size())
+      KJ_LOG(DBG, compress_buffer_.size() - marshal_buffer_.size());
+
+    return compress_buffer_;
+  }
+
+  // Final file path.
+  const std::string path_;
+  // Temporary file name.
+  std::unique_ptr<char, decltype(free)*> tmp_path_ =
+      std::unique_ptr<char, decltype(free)*>(NULL, free);
+
+  // Saved table creation options.
+  const TableOptions options_;
+  TableCompression compression_ = TableCompression::kTableCompressionNone;
+  int compression_level_ = 0;
+
+  // Result file.
+  kj::AutoCloseFd fd_;
+  bool incomplete_file_ = false;
+
+  // Result data.
+  WriteOnceIndex index_;
+  WriteOnceBlock block_;
+
+  // A buffer for block marshaling.
+  DataBuffer marshal_buffer_;
+  // A buffer for block compression.
+  DataBuffer compress_buffer_;
+  // Compression context.
+  ZstdCompressor compressor_;
+};
+
+/*****************************************************************************/
+
+class WriteOnceSortingBuilder : public WriteOnceBuilder {
+ public:
+  WriteOnceSortingBuilder(const char* path, const TableOptions& options)
+      : WriteOnceBuilder(path, options) {
     std::string dir(".");
     if (const char* last_slash = strrchr(path, '/')) {
       KJ_REQUIRE(path != last_slash);
@@ -520,29 +681,32 @@ class WriteOnceBuilder {
     index_.reserve(12 * 1024 * 1024);
   }
 
-  ~WriteOnceBuilder() {
+  virtual ~WriteOnceSortingBuilder() {
     raw_fd_ = nullptr;
     if (raw_stream_) fclose(raw_stream_);
   }
 
-  const std::string& path() const { return path_; }
-
-  void Add(const string_view& key, const string_view& value) {
+  void Add(const string_view& key, const string_view& value) override {
     AddEntry(key, value);
     WriteEntryData(key, value);
   }
 
-  uint64_t Build() {
+  uint64_t Build() override {
     FlushEntryData();
     SortEntries();
 
-    CreateFile();
-    try {
-      return WriteFile();
-    } catch (...) {
-      RemoveFile();
-      throw;
+    DataBuffer buffer;
+    for (const Entry& entry : index_) {
+      buffer.resize(entry.key_size + entry.value_size);
+      FileIO(raw_fd_).Read(buffer, entry.offset);
+
+      const char* data = buffer.data();
+      const string_view key(data, entry.key_size);
+      const string_view value(data + entry.key_size, entry.value_size);
+      WriteOnceBuilder::Add(key, value);
     }
+
+    return WriteOnceBuilder::Build();
   }
 
  private:
@@ -622,145 +786,6 @@ class WriteOnceBuilder {
     rhs_buffer_.reset();
   }
 
-  void CreateFile() {
-    char* temp = NULL;
-    KJ_SYSCALL(asprintf(&temp, "%s.tmp.%u.XXXXXX", path_.c_str(), getpid()));
-    std::unique_ptr<char[], decltype(free)*> temp_name_free(temp, free);
-
-    int fd;
-    KJ_SYSCALL(fd = mkstemp(temp), temp);
-    fd_ = kj::AutoCloseFd(fd);
-    tmp_path_ = std::string(temp);
-
-    int nflags = options_.GetFileFlags();
-    nflags &= O_CLOEXEC;
-
-    int oflags;
-    KJ_SYSCALL(oflags = fcntl(fd, F_GETFD));
-    if ((oflags & nflags) != nflags)
-      KJ_SYSCALL(fcntl(fd, F_SETFD, oflags | nflags));
-
-    WriteHeader(0);
-  }
-
-  void CommitFile() {
-    auto mode = options_.GetFileMode();
-    auto mask = umask(0);
-    umask(mask);
-
-    KJ_SYSCALL(fchmod(fd_.get(), mode & ~mask), tmp_path_);
-    KJ_SYSCALL(rename(tmp_path_.c_str(), path_.c_str()), tmp_path_, path_);
-
-    if (!options_.GetNoFSync()) {
-      // TODO(mortehu): fsync all ancestor directories too.
-      KJ_SYSCALL(fsync(fd_.get()), path_);
-    }
-  }
-
-  void RemoveFile() { unlink(tmp_path_.c_str()); }
-
-  void WriteHeader(uint64_t index_offset) {
-    bool seekable = options_.GetOutputSeekable();
-
-    struct CA_wo_header header;
-    header.magic = MAGIC;  // Will implicitly store endianness
-    header.major_version = MAJOR_VERSION;
-    header.minor_version = MINOR_VERSION;
-    header.flags = seekable ? CA_WO_FLAG_SEEKABLE : 0;
-    header.compression = compression_;
-    header.data_reserved = 0;
-    header.index_offset = index_offset;
-
-    FileIO fd(fd_);
-    KJ_SYSCALL(lseek(fd, 0, SEEK_SET), tmp_path_);
-    fd.Write(&header, sizeof(header));
-  }
-
-  uint64_t WriteFile() {
-    WriteOnceIndex index;
-    WriteOnceBlock block;
-
-    DataBuffer buffer;
-    for (const Entry& entry : index_) {
-      const size_t size = entry.key_size + entry.value_size;
-      if (size > kEntrySizeLimit && block.EstimateSize() > kBlockSizeMin) {
-        WriteBlock(block, index);
-        block.Clear();
-      }
-
-      buffer.resize(size);
-      FileIO(raw_fd_).Read(buffer, entry.offset);
-
-      const char* data = buffer.data();
-      const string_view key(data, entry.key_size);
-      const string_view value(data + entry.key_size, entry.value_size);
-      block.Add(key, value);
-
-      if (block.EstimateSize() > kBlockSizeMax) {
-        WriteBlock(block, index);
-        block.Clear();
-      }
-    }
-
-    WriteBlock(block, index);
-    return WriteIndex(index);
-  }
-
-  void WriteBlock(const WriteOnceBlock& block, WriteOnceIndex& index) {
-    bool seekable = options_.GetOutputSeekable();
-    block.Marshal(marshal_buffer_, seekable);
-    if (!marshal_buffer_.size()) return;
-
-    DataBuffer& buffer = seekable ? marshal_buffer_ : CompressMarshalBuffer();
-    FileIO(fd_).Write(buffer);
-
-    index.Add(block, buffer.size());
-
-    // KJ_LOG(DBG, block.num_entries(), buffer.size());
-  }
-
-  uint64_t WriteIndex(const WriteOnceIndex& index) {
-    index.Marshal(marshal_buffer_);
-    if (!marshal_buffer_.size()) return 0;
-
-    DataBuffer& buffer = CompressMarshalBuffer();
-    FileIO(fd_).Write(buffer);
-
-    uint64_t index_offset = index.GetIndexOffset();
-    WriteHeader(index_offset);
-
-    CommitFile();
-
-    KJ_LOG(DBG, index.num_blocks(), buffer.size());
-    return index_offset;
-  }
-
-  DataBuffer& CompressMarshalBuffer() {
-    if (compression_ == TableCompression::kTableCompressionNone)
-      return marshal_buffer_;
-
-    compress_buffer_.reserve(ZSTD_compressBound(marshal_buffer_.size()));
-    compressor_.Go(compress_buffer_, marshal_buffer_, compression_level_);
-
-    if (compress_buffer_.size() > marshal_buffer_.size())
-      KJ_LOG(DBG, compress_buffer_.size() - marshal_buffer_.size());
-
-    return compress_buffer_;
-  }
-
-  // Final file path.
-  const std::string path_;
-  // Temporary file name.
-  std::string tmp_path_;
-
-  // Saved table creation options.
-  const TableOptions options_;
-  TableCompression compression_ = TableCompression::kTableCompressionNone;
-  int compression_level_ = 0;
-
-  // Result file.
-  kj::AutoCloseFd fd_;
-
   // Temporary file for all added key/value pairs.
   kj::AutoCloseFd raw_fd_;
   FILE* raw_stream_ = nullptr;
@@ -776,13 +801,6 @@ class WriteOnceBuilder {
   // Buffers for key comparison.
   std::unique_ptr<char[]> lhs_buffer_;
   std::unique_ptr<char[]> rhs_buffer_;
-
-  // A buffer for block marshaling.
-  DataBuffer marshal_buffer_;
-  // A buffer for block compression.
-  DataBuffer compress_buffer_;
-  // Compression context.
-  ZstdCompressor compressor_;
 
   // Read statistics.
   uint64_t read_count_ = 0;
@@ -1056,7 +1074,9 @@ class WriteOnceReader_v3 : public WriteOnceReader {
 class WriteOnceTable : public SeekableTable {
  public:
   WriteOnceTable(const char* path, const TableOptions& options) {
-    builder_ = std::make_unique<WriteOnceBuilder>(path, options);
+    builder_ = options.GetInputUnsorted()
+                   ? std::make_unique<WriteOnceSortingBuilder>(path, options)
+                   : std::make_unique<WriteOnceBuilder>(path, options);
   }
 
   WriteOnceTable(const char* path) {

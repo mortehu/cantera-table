@@ -270,6 +270,8 @@ class Table {
 
   virtual bool SeekToKey(const string_view& key) = 0;
 
+  virtual bool Skip(size_t count) = 0;
+
   virtual bool ReadRow(struct iovec* key, struct iovec* value) = 0;
 
   inline bool ReadRow(string_view& key, string_view& value) {

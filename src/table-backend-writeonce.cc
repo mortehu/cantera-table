@@ -820,7 +820,24 @@ class WriteOnceReader {
 
   virtual bool SeekToKey(const string_view& key) = 0;
 
+  virtual bool Skip(size_t count) = 0;
+
   virtual bool ReadRow(struct iovec* key, struct iovec* value) = 0;
+
+ protected:
+  const std::string path_;
+
+  kj::AutoCloseFd fd_;
+
+  uint64_t index_offset_;
+};
+
+/*****************************************************************************/
+
+class WriteOnceSeekableReader : public WriteOnceReader {
+ public:
+  WriteOnceSeekableReader(const std::string& path, kj::AutoCloseFd&& fd,
+      uint64_t index_offset) : WriteOnceReader(path, std::move(fd), index_offset) {}
 
   off_t Offset() const { return offset_ - sizeof(struct CA_wo_header); }
 
@@ -854,13 +871,7 @@ class WriteOnceReader {
   }
 
  protected:
-  const std::string path_;
-
-  kj::AutoCloseFd fd_;
-
-  uint64_t index_offset_;
-
-  // Used for read, seek, offset and delete.
+  // Used for read, seek, offset.
   uint64_t offset_ = 0;
 };
 
@@ -875,6 +886,39 @@ class WriteOnceReader_v4 : public WriteOnceReader {
   int IsSorted() override { return 1; }
 
   bool SeekToKey(const string_view& key) {
+    KJ_UNIMPLEMENTED();
+    return false;
+  }
+
+  bool Skip(size_t count) override {
+    KJ_UNIMPLEMENTED();
+    return false;
+  }
+
+  bool ReadRow(struct iovec* key, struct iovec* value) {
+    KJ_UNIMPLEMENTED();
+    return false;
+  }
+
+ private:
+};
+
+/*****************************************************************************/
+
+class WriteOnceSeekableReader_v4 : public WriteOnceSeekableReader {
+ public:
+  WriteOnceSeekableReader_v4(const std::string& path, kj::AutoCloseFd&& fd,
+                     uint64_t index_offset)
+      : WriteOnceSeekableReader(path, std::move(fd), index_offset) {}
+
+  int IsSorted() override { return 1; }
+
+  bool SeekToKey(const string_view& key) {
+    KJ_UNIMPLEMENTED();
+    return false;
+  }
+
+  bool Skip(size_t count) override {
     KJ_UNIMPLEMENTED();
     return false;
   }
@@ -897,11 +941,11 @@ uint64_t CA_wo_hash(const string_view& str) {
   return result;
 }
 
-class WriteOnceReader_v3 : public WriteOnceReader {
+class WriteOnceReader_v3 : public WriteOnceSeekableReader {
  public:
   WriteOnceReader_v3(const std::string& path, kj::AutoCloseFd&& fd,
                      uint64_t index_offset)
-      : WriteOnceReader(path, std::move(fd), index_offset) {
+      : WriteOnceSeekableReader(path, std::move(fd), index_offset) {
     MemoryMap();
   }
 
@@ -976,6 +1020,11 @@ class WriteOnceReader_v3 : public WriteOnceReader {
       }
     }
 
+    return false;
+  }
+
+  bool Skip(size_t count) override {
+    KJ_UNIMPLEMENTED();
     return false;
   }
 
@@ -1079,7 +1128,7 @@ class WriteOnceTable : public SeekableTable {
                    : std::make_unique<WriteOnceBuilder>(path, options);
   }
 
-  WriteOnceTable(const char* path) {
+  WriteOnceTable(const char* path, bool seekable) {
     kj::AutoCloseFd fd = OpenFile(path);
 
     struct CA_wo_header header;
@@ -1096,6 +1145,7 @@ class WriteOnceTable : public SeekableTable {
     else
       reader_ = std::make_unique<WriteOnceReader_v4>(path, std::move(fd),
                                                      header.index_offset);
+    SetupSeeker();
   }
 
   void Sync() override {
@@ -1107,6 +1157,7 @@ class WriteOnceTable : public SeekableTable {
       kj::AutoCloseFd fd = OpenFile(path.c_str());
       reader_ = std::make_unique<WriteOnceReader_v4>(path, std::move(fd),
                                                      index_offset);
+      SetupSeeker();
     }
   }
 
@@ -1127,13 +1178,17 @@ class WriteOnceTable : public SeekableTable {
   void SeekToFirst() override { Seek(0, SEEK_SET); }
 
   void Seek(off_t offset, int whence) override {
-    if (reader_) reader_->Seek(offset, whence);
+    if (seeker_) seeker_->Seek(offset, whence);
   }
 
-  off_t Offset() override { return reader_ ? reader_->Offset() : 0; }
+  off_t Offset() override { return seeker_ ? seeker_->Offset() : 0; }
 
   bool SeekToKey(const string_view& key) override {
     return reader_ ? reader_->SeekToKey(key) : false;
+  }
+
+  bool Skip(size_t count) override {
+    return reader_ ? reader_->Skip(count) : false;
   }
 
   bool ReadRow(struct iovec* key, struct iovec* value) override {
@@ -1147,8 +1202,13 @@ class WriteOnceTable : public SeekableTable {
     return kj::AutoCloseFd(fd);
   }
 
+  void SetupSeeker() {
+    seeker_ = dynamic_cast<WriteOnceSeekableReader*>(reader_.get());
+  }
+
   // Table reader.
   std::unique_ptr<WriteOnceReader> reader_;
+  WriteOnceSeekableReader* seeker_ = nullptr;
   // Table builder.
   std::unique_ptr<WriteOnceBuilder> builder_;
 };
@@ -1163,12 +1223,12 @@ std::unique_ptr<Table> WriteOnceTableBackend::Create(
 }
 
 std::unique_ptr<Table> WriteOnceTableBackend::Open(const char* path) {
-  return std::make_unique<WriteOnceTable>(path);
+  return std::make_unique<WriteOnceTable>(path, false);
 }
 
 std::unique_ptr<SeekableTable> WriteOnceTableBackend::OpenSeekable(
     const char* path) {
-  return std::make_unique<WriteOnceTable>(path);
+  return std::make_unique<WriteOnceTable>(path, true);
 }
 
 }  // namespace table

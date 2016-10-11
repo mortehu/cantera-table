@@ -102,7 +102,15 @@ struct option kLongOptions[] = {
 
 std::unique_ptr<ca_table::Table> table_handle;
 
-enum token_state { parse_key, parse_offset, parse_value };
+enum token_state {
+  parse_key,
+  parse_offset,
+  parse_value,
+  parse_pct5,
+  parse_pct25,
+  parse_pct75,
+  parse_pct95
+};
 
 struct parse_state {
   enum token_state token_state = parse_key;
@@ -322,6 +330,27 @@ void parse_data(const char* begin, const char* end, parse_state& state) {
             char* endptr;
 
             score.score = strtod(value_string.c_str(), &endptr);
+
+            score.score_pct5 = strtod(endptr, &endptr);
+            if (*endptr) {
+              score.score_pct25 = strtod(endptr, &endptr);
+              if (not*endptr)
+                errx(EX_DATAERR,
+                     "Unable to parse value '%s'. Incorrect percentiles",
+                     value_string.c_str());
+              score.score_pct75 = strtod(endptr, &endptr);
+              if (not*endptr)
+                errx(EX_DATAERR,
+                     "Unable to parse value '%s'. Incorrect percentiles",
+                     value_string.c_str());
+              score.score_pct95 = strtod(endptr, &endptr);
+              if (not*endptr)
+                errx(EX_DATAERR,
+                     "Unable to parse value '%s'. Incorrect percentiles",
+                     value_string.c_str());
+            } else {
+              score.score_pct5 = std::numeric_limits<float>::quiet_NaN();
+            }
 
             if (*endptr)
               errx(EX_DATAERR,

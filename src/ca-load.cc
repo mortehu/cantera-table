@@ -327,35 +327,40 @@ void parse_data(const char* begin, const char* end, parse_state& state) {
             state.no_match = 0;
           } else {
             ca_table::ca_score score;
+            const char* start = value_string.c_str();
             char* endptr;
 
-            score.score = strtod(value_string.c_str(), &endptr);
+            score.score = strtod(start, &endptr);
 
-            score.score_pct5 = strtod(endptr, &endptr);
-            if (*endptr) {
-              score.score_pct25 = strtod(endptr, &endptr);
-              if (not*endptr)
+            if (start == endptr)
+              errx(EX_DATAERR,
+                   "Unable to parse value '%s'.  Unexpected suffix: '%s'",
+                   value_string.c_str(), endptr);
+
+            start = endptr;
+            score.score_pct5 = strtod(start, &endptr);
+
+            if (start != endptr) {
+              score.score_pct25 = strtod(start, &endptr);
+              if (start == endptr)
                 errx(EX_DATAERR,
-                     "Unable to parse value '%s'. Incorrect percentiles",
+                     "Unable to parse value '%s'. Incorrect 25th percentile",
                      value_string.c_str());
-              score.score_pct75 = strtod(endptr, &endptr);
-              if (not*endptr)
+              start = endptr;
+              score.score_pct75 = strtod(start, &endptr);
+              if (start == endptr)
                 errx(EX_DATAERR,
-                     "Unable to parse value '%s'. Incorrect percentiles",
+                     "Unable to parse value '%s'. Incorrect 75th percentile",
                      value_string.c_str());
-              score.score_pct95 = strtod(endptr, &endptr);
-              if (not*endptr)
+              start = endptr;
+              score.score_pct95 = strtod(start, &endptr);
+              if (start == endptr)
                 errx(EX_DATAERR,
-                     "Unable to parse value '%s'. Incorrect percentiles",
+                     "Unable to parse value '%s'. Incorrect 95th percentile",
                      value_string.c_str());
             } else {
               score.score_pct5 = std::numeric_limits<float>::quiet_NaN();
             }
-
-            if (*endptr)
-              errx(EX_DATAERR,
-                   "Unable to parse value '%s'.  Unexpected suffix: '%s'",
-                   value_string.c_str(), endptr);
 
             AddOffsetScore(current_offset, score);
           }

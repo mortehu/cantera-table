@@ -328,7 +328,12 @@ void LookupIndexKey(
           break;
         }
 
-        if (string_view::npos == row_key.find(parameter)) continue;
+        if (row_key.end() ==
+            std::search(row_key.begin(), row_key.end(), parameter.begin(),
+                        parameter.end(), [](const auto& c1, const auto& c2) {
+                          return std::tolower(c1) == std::tolower(c2);
+                        }))
+          continue;
 
         ca_offset_score_parse(data, &new_offsets);
 

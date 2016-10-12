@@ -157,7 +157,6 @@ void DumpTimeSeries() {
     }
 
     std::vector<ca_table::ca_offset_score> offsets;
-    size_t i;
 
     ca_table::ca_offset_score_parse(offset_score, &offsets);
 
@@ -166,29 +165,43 @@ void DumpTimeSeries() {
              offsets.size());
     } else {
       if (!strcmp(date_format, "%s")) {
-        for (i = 0; i < offsets.size(); ++i) {
+        for (size_t i = 0; i < offsets.size(); ++i) {
           KJ_REQUIRE(!offsets[i].HasPercentiles());
 
           printf("%.*s\t%llu\t%.9g\n", static_cast<int>(key.size()), key.data(),
                  (long long unsigned)offsets[i].offset, offsets[i].score);
         }
       } else {
-        char time_buffer[64];
-        time_t time;
-        struct tm tm;
+        for (size_t i = 0; i < offsets.size(); ++i) {
+          if (offsets[i].HasPercentiles()) {
+            const time_t time = offsets[i].offset;
+            struct tm tm;
+            memset(&tm, 0, sizeof(tm));
 
-        for (i = 0; i < offsets.size(); ++i) {
-          KJ_REQUIRE(!offsets[i].HasPercentiles());
+            gmtime_r(&time, &tm);
 
-          time = offsets[i].offset;
-          memset(&tm, 0, sizeof(tm));
+            char time_buffer[64];
+            strftime(time_buffer, sizeof(time_buffer), date_format, &tm);
 
-          gmtime_r(&time, &tm);
+            printf("%.*s\t%s\t%.9g %.9g %.9g %.9g %.9g\n",
+                   static_cast<int>(key.size()), key.data(), time_buffer,
+                   offsets[i].score, offsets[i].score_pct5,
+                   offsets[i].score_pct25, offsets[i].score_pct75,
+                   offsets[i].score_pct95);
 
-          strftime(time_buffer, sizeof(time_buffer), date_format, &tm);
+          } else {
+            const time_t time = offsets[i].offset;
+            struct tm tm;
+            memset(&tm, 0, sizeof(tm));
 
-          printf("%.*s\t%s\t%.9g\n", static_cast<int>(key.size()), key.data(),
-                 time_buffer, offsets[i].score);
+            gmtime_r(&time, &tm);
+
+            char time_buffer[64];
+            strftime(time_buffer, sizeof(time_buffer), date_format, &tm);
+
+            printf("%.*s\t%s\t%.9g\n", static_cast<int>(key.size()), key.data(),
+                   time_buffer, offsets[i].score);
+          }
         }
       }
     }

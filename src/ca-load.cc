@@ -113,7 +113,15 @@ struct option kLongOptions[] = {
 
 std::unique_ptr<ca_table::Table> table_handle;
 
-enum token_state { parse_key, parse_offset, parse_value };
+enum token_state {
+  parse_key,
+  parse_offset,
+  parse_value,
+  parse_pct5,
+  parse_pct25,
+  parse_pct75,
+  parse_pct95
+};
 
 struct parse_state {
   enum token_state token_state = parse_key;
@@ -330,14 +338,40 @@ void parse_data(const char* begin, const char* end, parse_state& state) {
             state.no_match = 0;
           } else {
             ca_table::ca_score score;
+            const char* start = value_string.c_str();
             char* endptr;
 
-            score.score = strtod(value_string.c_str(), &endptr);
+            score.score = strtod(start, &endptr);
 
-            if (*endptr)
+            if (start == endptr)
               errx(EX_DATAERR,
                    "Unable to parse value '%s'.  Unexpected suffix: '%s'",
                    value_string.c_str(), endptr);
+
+            start = endptr;
+            score.score_pct5 = strtod(start, &endptr);
+
+            if (start != endptr) {
+              score.score_pct25 = strtod(start, &endptr);
+              if (start == endptr)
+                errx(EX_DATAERR,
+                     "Unable to parse value '%s'. Incorrect 25th percentile",
+                     value_string.c_str());
+              start = endptr;
+              score.score_pct75 = strtod(start, &endptr);
+              if (start == endptr)
+                errx(EX_DATAERR,
+                     "Unable to parse value '%s'. Incorrect 75th percentile",
+                     value_string.c_str());
+              start = endptr;
+              score.score_pct95 = strtod(start, &endptr);
+              if (start == endptr)
+                errx(EX_DATAERR,
+                     "Unable to parse value '%s'. Incorrect 95th percentile",
+                     value_string.c_str());
+            } else {
+              score.score_pct5 = std::numeric_limits<float>::quiet_NaN();
+            }
 
             AddOffsetScore(current_offset, score);
           }

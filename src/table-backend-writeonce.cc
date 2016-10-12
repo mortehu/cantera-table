@@ -999,18 +999,15 @@ class WriteOnceReader {
 class WriteOnceReader_v4 : public WriteOnceReader {
  public:
   WriteOnceReader_v4(const std::string& path, kj::AutoCloseFd&& fd,
-                     uint64_t index_offset)
+                     uint64_t index_offset, TableCompression compression,
+                     bool seekable)
       : WriteOnceReader(path, std::move(fd), index_offset),
+        compression_(compression),
+        seekable_(seekable),
         index_cache_(index_),
         block_cache_(block_) {
     ReadIndex();
   }
-
-  void SetCompression(TableCompression compression) {
-    compression_ = compression;
-  }
-
-  void SetSeekable(bool value) { seekable_ = value; }
 
   int IsSorted() override { return 1; }
 
@@ -1169,8 +1166,8 @@ class WriteOnceReader_v4 : public WriteOnceReader {
     return decompress_buffer_;
   }
 
-  TableCompression compression_ = TableCompression::kTableCompressionNone;
-  bool seekable_ = false;
+  const TableCompression compression_;
+  const bool seekable_;
 
   WriteOnceIndex index_;
   WriteOnceIndex::Cache index_cache_;
@@ -1437,16 +1434,16 @@ class WriteOnceTable : public SeekableTable {
     } else {
       KJ_REQUIRE(header.compression <= kTableCompressionLast,
                  "unsupported compression method", header.compression);
-      auto reader =
-          new WriteOnceReader_v4(path, std::move(fd), header.index_offset);
-      reader->SetCompression(TableCompression(header.compression));
-      if ((header.flags & CA_WO_FLAG_SEEKABLE) != 0)
-        reader->SetSeekable(true);
-      else if (seekable)
-        KJ_FAIL_REQUIRE("the write-once table is not seekable");
       if ((header.flags & CA_WO_FLAG_EXTENDED) != 0)
         KJ_UNIMPLEMENTED("extended write-once tables are not supported yet");
-      reader_ = std::unique_ptr<WriteOnceReader>(reader);
+
+      bool seekable_format = (header.flags & CA_WO_FLAG_SEEKABLE) != 0;
+      if (seekable && !seekable_format)
+        KJ_FAIL_REQUIRE("the write-once table is not seekable");
+
+      reader_ = std::make_unique<WriteOnceReader_v4>(
+          path, std::move(fd), header.index_offset,
+          TableCompression(header.compression), seekable_format);
     }
   }
 
@@ -1471,10 +1468,8 @@ class WriteOnceTable : public SeekableTable {
       builder_.reset();
 
       kj::AutoCloseFd fd = OpenFile(path.c_str());
-      auto reader = new WriteOnceReader_v4(path, std::move(fd), index_offset);
-      reader->SetCompression(compression);
-      reader->SetSeekable(seekable);
-      reader_ = std::unique_ptr<WriteOnceReader>(reader);
+      reader_ = std::make_unique<WriteOnceReader_v4>(
+          path, std::move(fd), index_offset, compression, seekable);
     }
   }
 

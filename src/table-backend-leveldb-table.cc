@@ -154,10 +154,6 @@ class LevelDBTable : public Table {
     LinkAnonTemporaryFile(temp_fd_, path_.c_str());
   }
 
-  void SetFlag(enum ca_table_flag flag) override {
-    KJ_FAIL_REQUIRE(!"Operation not supported");
-  }
-
   int IsSorted() override { return true; }
 
   void InsertRow(const struct iovec* value, size_t value_count) override {
@@ -180,6 +176,19 @@ class LevelDBTable : public Table {
     return SeekToKey(leveldb::Slice(key.data(), key.size()));
   }
 
+  bool Skip(size_t count) override {
+    while (count-- > 0) {
+      iterator_->Next();
+
+      if (!iterator_->Valid()) {
+        eof_ = true;
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   bool ReadRow(struct iovec* key, struct iovec* value) override {
     return ReadRow(const_cast<const void**>(&key->iov_base), &key->iov_len,
                    const_cast<const void**>(&value->iov_base), &value->iov_len);
@@ -198,19 +207,6 @@ class LevelDBTable : public Table {
     table_builder_->Add(key, value);
     prev_key_.assign(key_begin, key_end);
     CHECK_STATUS(table_builder_->status());
-  }
-
-  bool Skip(size_t count) {
-    while (count-- > 0) {
-      iterator_->Next();
-
-      if (!iterator_->Valid()) {
-        eof_ = true;
-        return false;
-      }
-    }
-
-    return true;
   }
 
   bool SeekToKey(const leveldb::Slice& key) {

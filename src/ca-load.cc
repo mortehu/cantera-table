@@ -70,11 +70,14 @@ enum Option {
   kDateFormatOption,
   kDelimiterOption,
   kInputFormatOption,
+  kInputUnsorted,
   kKeyFilterOption,
   kMergeModeMotion,
-  kOutputTypeOption,
   kOutputBackend,
   kOutputCompression,
+  kOutputCompressionLevel,
+  kOutputSeekable,
+  kOutputTypeOption,
   kSchemaOption,
   kShardCountOption,
   kShardIndexOption,
@@ -87,13 +90,17 @@ struct option kLongOptions[] = {
     {"date-format", required_argument, nullptr, kDateFormatOption},
     {"delimiter", required_argument, nullptr, kDelimiterOption},
     {"input-format", required_argument, nullptr, kInputFormatOption},
+    {"input-unsorted", no_argument, nullptr, kInputUnsorted},
     {"key-filter", required_argument, nullptr, kKeyFilterOption},
     {"merge-mode", required_argument, nullptr, kMergeModeMotion},
     {"no-unescape", no_argument, &no_unescape, 1},
-    {"output-type", required_argument, nullptr, kOutputTypeOption},
-    {"output-format", required_argument, nullptr, kOutputTypeOption},
     {"output-backend", required_argument, nullptr, kOutputBackend},
     {"output-compression", required_argument, nullptr, kOutputCompression},
+    {"output-compression-level", required_argument, nullptr,
+     kOutputCompressionLevel},
+    {"output-seekable", no_argument, nullptr, kOutputSeekable},
+    {"output-type", required_argument, nullptr, kOutputTypeOption},
+    {"output-format", required_argument, nullptr, kOutputTypeOption},
     {"schema", required_argument, nullptr, kSchemaOption},
     {"shard-count", required_argument, nullptr, kShardCountOption},
     {"shard-index", required_argument, nullptr, kShardIndexOption},
@@ -530,12 +537,16 @@ void CopyTable(ca_table::Table* input, ca_table::Table* output) {
 
 int main(int argc, char** argv) try {
   Format input_format = kFormatAuto;
+  bool input_unsorted = false;
+
   DataType output_type = kDataTypeTimeSeries;
   const char* output_path;
 
   const char* output_backend = nullptr;
   ca_table::TableCompression output_compression =
       ca_table::kTableCompressionDefault;
+  uint64_t output_compression_level = 0;
+  bool output_seekable = false;
 
   const char* schema_path = NULL;
 
@@ -580,6 +591,10 @@ int main(int argc, char** argv) try {
         }
         break;
 
+      case kInputUnsorted:
+        input_unsorted = true;
+        break;
+
       case kKeyFilterOption:
         key_filter = std::make_unique<re2::RE2>(optarg);
         break;
@@ -622,6 +637,14 @@ int main(int argc, char** argv) try {
         }
         break;
 
+      case kOutputCompressionLevel:
+        output_compression_level = ca_table::internal::StringToUInt64(optarg);
+        break;
+
+      case kOutputSeekable:
+        output_seekable = true;
+        break;
+
       case kSchemaOption:
         schema_path = optarg;
         break;
@@ -656,17 +679,21 @@ int main(int argc, char** argv) try {
         "      --date=DATE            use DATE as timestamp\n"
         "      --delimiter=DELIMITER  input delimiter [%c]\n"
         "      --input-format=FORMAT  format of input data\n"
+        "      --input-unsorted       input data is not sorted\n"
         "      --key=KEY              use KEY as key\n"
         "      --key-filter=REGEX     skip input keys matching REGEX\n"
         "      --merge-mode=MODE      merge mode (pick-one|sum|union)\n"
         "      --no-unescape          don't apply any unescaping logic\n"
-        "      --output-type=TYPE     type of output table\n"
-        "                               (index|summaries|time-series)\n"
         "      --output-backend=TYPE  type of output storage backend\n"
         "                               (leveldb-table|write-once)\n"
         "      --output-compression=TYPE\n"
         "                             output compression method\n"
         "                               (default|none|zstd)\n"
+        "      --output-compression-level=LEVEL\n"
+        "                             output compression level\n"
+        "      --output-seekable      output needs to be seekable\n"
+        "      --output-type=TYPE     type of output table\n"
+        "                               (index|summaries|time-series)\n"
         "      --schema=PATH          schema file for index building\n"
         "      --strip-key-prefix=PREFIX\n"
         "                             remove PREFIX from keys\n"
@@ -700,22 +727,25 @@ int main(int argc, char** argv) try {
   } else if (output_type == kDataTypeSummaries) {
     // Summary tables need to be quickly seekable, which LevelDB Tables are
     // not.
-    if (!output_backend) {
+    if (!output_backend)
       output_backend = "write-once";
-    } else if (!!strcmp(output_backend, "write-once")) {
+    else if (!!strcmp(output_backend, "write-once"))
       errx(EX_USAGE, "summary tables can only be used with write-once backend");
-    }
 
     if (output_compression != ca_table::kTableCompressionNone &&
-        output_compression != ca_table::kTableCompressionDefault) {
+        output_compression != ca_table::kTableCompressionDefault)
       errx(EX_USAGE, "summary tables cannot be compressed");
-    }
 
+    output_seekable = true;
     do_summaries = 1;
   }
 
   ca_table::TableOptions output_options = ca_table::TableOptions::Create();
-  output_options.SetFileMode(0444).SetCompression(output_compression);
+  output_options.SetFileMode(0444)
+      .SetCompression(output_compression)
+      .SetCompressionLevel(output_compression_level)
+      .SetInputUnsorted(input_unsorted)
+      .SetOutputSeekable(output_seekable);
 
   if (!output_backend) output_backend = "leveldb-table";
 

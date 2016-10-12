@@ -155,8 +155,6 @@ struct ca_score {
 
 /*****************************************************************************/
 
-enum ca_table_flag { CA_TABLE_NO_RELATIVE, CA_TABLE_NO_FSYNC };
-
 Backend* ca_table_backend(const char* name);
 
 /*****************************************************************************/
@@ -199,11 +197,30 @@ class TableOptions {
     return *this;
   }
 
+  TableOptions& SetNoFSync(bool value = true) {
+    no_fsync_ = value;
+    return *this;
+  }
+
+  TableOptions& SetInputUnsorted(bool value = true) {
+    input_unsorted_ = value;
+    return *this;
+  }
+
+  TableOptions& SetOutputSeekable(bool value = true) {
+    output_seekable_ = value;
+    return *this;
+  }
+
   int GetFileFlags() const { return file_flags_; }
   mode_t GetFileMode() const { return file_mode_; }
 
   TableCompression GetCompression() const { return compression_; }
   uint8_t GetCompressionLevel() const { return compression_level_; }
+
+  bool GetNoFSync() const { return no_fsync_; }
+  bool GetInputUnsorted() const { return input_unsorted_; }
+  bool GetOutputSeekable() const { return output_seekable_; }
 
  private:
   // File creation options.
@@ -213,6 +230,11 @@ class TableOptions {
   // Data compression options.
   TableCompression compression_ = kTableCompressionDefault;
   uint8_t compression_level_ = 0;
+
+  // Miscellaneous flags.
+  bool no_fsync_ = false;
+  bool input_unsorted_ = false;
+  bool output_seekable_ = false;
 };
 
 /*****************************************************************************/
@@ -224,8 +246,6 @@ class Table {
   virtual ~Table();
 
   virtual void Sync() = 0;
-
-  virtual void SetFlag(enum ca_table_flag flag) = 0;
 
   virtual int IsSorted() = 0;
 
@@ -249,6 +269,8 @@ class Table {
   virtual void SeekToFirst() = 0;
 
   virtual bool SeekToKey(const string_view& key) = 0;
+
+  virtual bool Skip(size_t count) = 0;
 
   virtual bool ReadRow(struct iovec* key, struct iovec* value) = 0;
 

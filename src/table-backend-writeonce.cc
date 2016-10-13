@@ -1421,7 +1421,7 @@ class WriteOnceTable : public SeekableTable {
   }
 
   WriteOnceTable(const char* path, bool seekable) {
-    kj::AutoCloseFd fd = OpenFile(path);
+    kj::AutoCloseFd fd = OpenFile(path, O_RDONLY | O_CLOEXEC);
 
     struct CA_wo_header header;
     FileIO(fd).Read(&header, sizeof header);
@@ -1470,7 +1470,7 @@ class WriteOnceTable : public SeekableTable {
       bool seekable = builder_->seekable();
       builder_.reset();
 
-      kj::AutoCloseFd fd = OpenFile(path.c_str());
+      kj::AutoCloseFd fd = OpenFile(path.c_str(), O_RDONLY | O_CLOEXEC);
       reader_ = std::make_unique<WriteOnceReader_v4>(
           path, std::move(fd), index_offset, compression, seekable);
     }
@@ -1501,12 +1501,6 @@ class WriteOnceTable : public SeekableTable {
   }
 
  private:
-  static kj::AutoCloseFd OpenFile(const char* path) {
-    int fd;
-    KJ_SYSCALL(fd = open(path, O_RDONLY | O_CLOEXEC));
-    return kj::AutoCloseFd(fd);
-  }
-
   // Table reader.
   std::unique_ptr<WriteOnceReader> reader_;
   // Table builder.

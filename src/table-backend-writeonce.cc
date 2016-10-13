@@ -1127,7 +1127,8 @@ class WriteOnceReader_v4 : public WriteOnceReader {
  private:
   void ReadIndex() {
     uint64_t size = GetFileSize() - index_offset_;
-    index_.Unmarshal(Read(index_offset_, size));
+    bool compressed = (compression_ != kTableCompressionNone);
+    index_.Unmarshal(Read(index_offset_, size, compressed));
   }
 
   void ReadBlock(size_t num) {
@@ -1136,7 +1137,8 @@ class WriteOnceReader_v4 : public WriteOnceReader {
     uint64_t offset = index_cache_.GetBlockOffset(num);
     size_t size = index_.GetBlockSize(num);
     uint32_t num_entries = index_.GetNumEntries(num);
-    block_.Unmarshal(Read(offset, size), num_entries, seekable_);
+    bool compressed = (compression_ != kTableCompressionNone) && !seekable_;
+    block_.Unmarshal(Read(offset, size, compressed), num_entries, seekable_);
 
     block_read_num_ = num;
     block_cache_.Clear();
@@ -1154,10 +1156,11 @@ class WriteOnceReader_v4 : public WriteOnceReader {
 
   off_t IndexOffset() const { return Offset(index_offset_); }
 
-  DataBuffer& Read(uint64_t offset, size_t size) {
+  DataBuffer& Read(uint64_t offset, size_t size, bool compressed) {
     read_buffer_.resize(size);
     FileIO(fd_).Read(read_buffer_, offset);
-    if (compression_ == kTableCompressionNone) return read_buffer_;
+
+    if (!compressed) return read_buffer_;
 
     size_t decomp_size = ZSTD_getDecompressedSize(read_buffer_.data(), size);
     decompress_buffer_.resize(decomp_size);

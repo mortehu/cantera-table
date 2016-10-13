@@ -1082,13 +1082,12 @@ class WriteOnceReader_v4 : public WriteOnceReader {
     if (block_num_ != block_read_num_) ReadBlock(block_num_);
 
     return index_cache_.GetBlockOffset(block_num_) +
-           block_.GetEntryOffset(entry_num_);
+           block_.GetEntryOffset(entry_num_) - sizeof(struct CA_wo_header);
   }
 
   void Seek(off_t offset, int whence) override {
     KJ_REQUIRE(seekable_);
 
-    uint64_t new_offset;
     switch (whence) {
       case SEEK_SET:
         KJ_REQUIRE(offset >= 0);
@@ -1108,9 +1107,9 @@ class WriteOnceReader_v4 : public WriteOnceReader {
         KJ_FAIL_REQUIRE(!"Invalid 'whence' value");
     }
 
-    KJ_REQUIRE(new_offset >= sizeof(struct CA_wo_header),
+    KJ_REQUIRE(offset >= sizeof(struct CA_wo_header),
                "attempt to seek before start of table");
-    KJ_REQUIRE(new_offset <= index_offset_,
+    KJ_REQUIRE(offset <= index_offset_,
                "attempt to seek past end of table");
 
     block_num_ = 0;
@@ -1283,7 +1282,7 @@ class WriteOnceReader_v3 : public WriteOnceReader {
   }
 
   bool Skip(size_t count) override {
-    KJ_UNIMPLEMENTED();
+    KJ_UNIMPLEMENTED("Skip() shouldn't be used with old write-once format");
     return false;
   }
 

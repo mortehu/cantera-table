@@ -1,3 +1,9 @@
+ca-table (1.3.1) unstable; urgency=medium
+
+  * Fix EOF handling in leveldb Skip() method
+
+ -- Charles Samuels <kalle@eventures.vc>  Thu, 14 Oct 2016 18:16:53 -0400
+
 ca-table (1.3) unstable; urgency=medium
 
   * New write-once table format with zstd compression support

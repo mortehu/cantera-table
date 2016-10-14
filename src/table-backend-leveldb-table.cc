@@ -178,11 +178,13 @@ class LevelDBTable : public Table {
 
   bool Skip(size_t count) override {
     while (count-- > 0) {
+      if (eof_) return false;
+
       iterator_->Next();
 
       if (!iterator_->Valid()) {
+        need_seek_ = false;
         eof_ = true;
-        return false;
       }
     }
 

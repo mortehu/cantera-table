@@ -1169,7 +1169,7 @@ class WriteOnceReader_v4 : public WriteOnceReader {
 
     offset -= index_cache_.GetBlockOffset(block_num_);
     while (offset > entry_offset_) {
-      const unsigned char* entry = read_buffer_.udata();
+      const unsigned char* entry = read_buffer_.udata() + entry_offset_;
       const unsigned char* ptr = entry;
 
       uint32_t k_size = oroch::varint_codec<uint32_t>::value_decode(ptr);

@@ -4,6 +4,7 @@
 #include <experimental/string_view>
 
 #include <fcntl.h>
+#include <unistd.h>
 
 #include <kj/debug.h>
 #include <kj/io.h>
@@ -17,6 +18,10 @@ namespace internal {
 
 kj::AutoCloseFd OpenFile(const char* path, int flags, int mode = 0666);
 
+// Creates an unnamed temporary file in the given directory.
+kj::AutoCloseFd AnonTemporaryFile(const char* path = nullptr,
+                                  int mode = S_IRUSR | S_IWUSR);
+
 size_t ReadWithOffset(int fd, void* dest, size_t size_min, size_t size_max,
                       off_t offset);
 
@@ -24,15 +29,56 @@ inline void ReadWithOffset(int fd, void* dest, size_t size, off_t offset) {
   ReadWithOffset(fd, dest, size, size, offset);
 }
 
-// Creates an unnamed temporary file in the given directory.
-kj::AutoCloseFd AnonTemporaryFile(const char* path = nullptr,
-                                  int mode = S_IRUSR | S_IWUSR);
+// A temporary file in a given directory.
+class TemporaryFile : public kj::AutoCloseFd {
+ public:
+  TemporaryFile(const char* path, int mode = S_IRUSR | S_IWUSR) {
+    Make(path, mode);
+  }
 
-// Creates a name for a temporary file created with AnonTemporaryFile().  If
-// the target path already exists, a link with a random name will be created
-// first, in order to replace the target atomically.
-void LinkAnonTemporaryFile(int fd, const char* path);
-void LinkAnonTemporaryFile(int dir_fd, int fd, const char* path);
+  ~TemporaryFile() noexcept;
+
+  void Unlink() {
+#if !defined(O_TMPFILE)
+    if (!temp_path_.empty()) {
+      KJ_SYSCALL(unlink(temp_path_.data()), temp_path_);
+      Reset();
+    }
+#endif
+  }
+
+  void Close() { kj::AutoCloseFd::operator=(nullptr); }
+
+ protected:
+  TemporaryFile() {}
+
+  void Make(const char* path, int mode = S_IRUSR | S_IWUSR);
+
+  void Reset() {
+#if !defined(O_TMPFILE)
+    temp_path_.clear();
+#endif
+  }
+
+#if !defined(O_TMPFILE)
+  std::string temp_path_;
+#endif
+};
+
+// A temporary file in a given directory that can be made persistent if needed.
+class PendingFile : public TemporaryFile {
+ public:
+  PendingFile(const char* path, int mode = S_IRUSR | S_IWUSR);
+
+  void Finish();
+
+ private:
+  std::string path_;
+
+#if !defined(O_TMPFILE)
+  int mode_;
+#endif
+};
 
 // Our own hash algorithm, used instead of std::hash for predictable result.
 uint64_t Hash(const string_view& key);

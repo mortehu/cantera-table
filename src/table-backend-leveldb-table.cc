@@ -68,33 +68,15 @@ using namespace internal;
 
 namespace {
 
-class LevelDBFile : public leveldb::RandomAccessFile,
-                    public leveldb::WritableFile {
+class LevelDBWriter : public PendingFile, public leveldb::WritableFile {
  public:
-  LevelDBFile(kj::AutoCloseFd&& fd) : fd_(std::move(fd)) {}
-
-  ~LevelDBFile() noexcept(true) {
-    try {
-      fd_ = nullptr;
-    } catch (...) {
-    }
-  }
-
-  leveldb::Status Read(uint64_t offset, size_t n, leveldb::Slice* result,
-                       char* scratch) const override {
-    auto amount_read = pread(fd_.get(), scratch, n, offset);
-    if (amount_read < 0)
-      return leveldb::Status::IOError("pread failed", strerror(errno));
-    *result = leveldb::Slice(scratch, static_cast<size_t>(n));
-    return leveldb::Status::OK();
-  }
+  LevelDBWriter(const char* path) : PendingFile(path) {}
 
   leveldb::Status Append(const leveldb::Slice& data) override {
     auto start = reinterpret_cast<const char*>(data.data());
     size_t offset = 0;
     while (offset < data.size()) {
-      auto amount_written =
-          write(fd_.get(), start + offset, data.size() - offset);
+      auto amount_written = write(get(), start + offset, data.size() - offset);
       if (amount_written < 0)
         return leveldb::Status::IOError("write failed", strerror(errno));
       if (static_cast<size_t>(amount_written) == 0)
@@ -105,45 +87,80 @@ class LevelDBFile : public leveldb::RandomAccessFile,
   }
 
   leveldb::Status Close() override {
-    fd_ = nullptr;
+    PendingFile::Close();
     return leveldb::Status::OK();
   }
 
   leveldb::Status Flush() override { return leveldb::Status::OK(); }
 
   leveldb::Status Sync() override {
-    if (-1 == fdatasync(fd_.get()))
+    if (-1 == fdatasync(get()))
       return leveldb::Status::IOError("fdatasync failed", strerror(errno));
+    return leveldb::Status::OK();
+  }
+};
+
+class LevelDBReader : public leveldb::RandomAccessFile {
+ public:
+  LevelDBReader(const char* path) : fd_(OpenFile(path, O_RDONLY | O_CLOEXEC)) {}
+
+  ~LevelDBReader() noexcept(true) {
+    try {
+      fd_ = nullptr;
+    } catch (...) {
+    }
+  }
+
+  leveldb::Status Read(uint64_t offset, size_t n, leveldb::Slice* result,
+                       char* scratch) const override {
+    auto amount_read = pread(fd_, scratch, n, offset);
+    if (amount_read < 0)
+      return leveldb::Status::IOError("pread failed", strerror(errno));
+    *result = leveldb::Slice(scratch, static_cast<size_t>(n));
     return leveldb::Status::OK();
   }
 
   uint64_t FileSize() const {
     off_t size;
-    KJ_SYSCALL(size = lseek(fd_.get(), 0, SEEK_END));
+    KJ_SYSCALL(size = lseek(fd_, 0, SEEK_END));
     return size;
   }
 
  private:
-  mutable kj::AutoCloseFd fd_;
+  kj::AutoCloseFd fd_;
 };
 
 /*****************************************************************************/
 
 class LevelDBTable : public Table {
  public:
-  LevelDBTable(std::unique_ptr<leveldb::WritableFile>&& writable_file,
-               leveldb::Options& leveldb_options, int temp_fd, std::string path)
-      : writable_file_(std::move(writable_file)),
-        table_builder_(std::make_unique<leveldb::TableBuilder>(
-            leveldb_options, writable_file_.get())),
-        temp_fd_(temp_fd),
-        path_(std::move(path)) {}
+  LevelDBTable(const char* path, const TableOptions& options) {
+    leveldb::Options leveldb_options;
+    switch (options.GetCompression()) {
+      case kTableCompressionNone:
+        leveldb_options.compression = leveldb::kNoCompression;
+        break;
+      case kTableCompressionDefault:
+        leveldb_options.compression = leveldb::kSnappyCompression;
+        break;
+      default:
+        KJ_FAIL_REQUIRE("LevelDB tables do not support given compression method");
+    }
 
-  LevelDBTable(std::unique_ptr<leveldb::RandomAccessFile>&& file,
-               leveldb::Table* table)
-      : file_(std::move(file)),
-        table_(table),
-        iterator_(table_->NewIterator(leveldb::ReadOptions())) {
+    writable_file_ = std::make_unique<LevelDBWriter>(path);
+    table_builder_ = std::make_unique<leveldb::TableBuilder>(
+        leveldb_options, writable_file_.get());
+  }
+
+  LevelDBTable(const char* path) {
+    file_ = std::make_unique<LevelDBReader>(path);
+
+    leveldb::Table* table;
+    CHECK_STATUS(leveldb::Table::Open(leveldb::Options(), file_.get(),
+                                      file_->FileSize(), &table));
+    table_.reset(table);
+
+    iterator_.reset(table_->NewIterator(leveldb::ReadOptions()));
     iterator_->SeekToFirst();
     if (!iterator_->Valid()) eof_ = true;
   }
@@ -151,7 +168,7 @@ class LevelDBTable : public Table {
   void Sync() override {
     KJ_REQUIRE(table_builder_ != nullptr);
     CHECK_STATUS(table_builder_->Finish());
-    LinkAnonTemporaryFile(temp_fd_, path_.c_str());
+    writable_file_->Finish();
   }
 
   int IsSorted() override { return true; }
@@ -254,21 +271,14 @@ class LevelDBTable : public Table {
 
  private:
   // Writing
-  std::unique_ptr<leveldb::WritableFile> writable_file_;
+  std::unique_ptr<LevelDBWriter> writable_file_;
   std::unique_ptr<leveldb::TableBuilder> table_builder_;
 
   // Used to ensure rows are inserted in lexicographical order.
   std::vector<uint8_t> prev_key_;
 
-  // File descriptor of anonymous temporary file used during construction of
-  // table.
-  int temp_fd_ = -1;
-
-  // Path used after table has been finalized.
-  std::string path_;
-
   // Reading
-  std::unique_ptr<leveldb::RandomAccessFile> file_;
+  std::unique_ptr<LevelDBReader> file_;
   std::unique_ptr<leveldb::Table> table_;
   std::unique_ptr<leveldb::Iterator> iterator_;
   bool need_seek_ = false;
@@ -279,55 +289,17 @@ class LevelDBTable : public Table {
 
 std::unique_ptr<Table> LevelDBTableBackend::Create(
     const char* path, const TableOptions& options) {
-  int flags = options.GetFileFlags();
-  KJ_REQUIRE((flags & ~(O_EXCL | O_CLOEXEC)) == 0);
-  flags |= O_CREAT | O_TRUNC | O_WRONLY;
-
-  auto mode = options.GetFileMode();
-  auto mask = umask(0);
-  umask(mask);
-
-  std::string temp_dir(".");
-  if (const auto last_slash = strrchr(path, '/'))
-    temp_dir = std::string(path, last_slash - path);
-  auto temp_file = AnonTemporaryFile(temp_dir.c_str());
-
-  KJ_SYSCALL(fchmod(temp_file, mode & ~mask));
-
-  auto temp_fd = temp_file.get();
-
-  auto file = std::make_unique<LevelDBFile>(std::move(temp_file));
-
-  leveldb::Options leveldb_options;
-  switch (options.GetCompression()) {
-    case kTableCompressionNone:
-      leveldb_options.compression = leveldb::kNoCompression;
-      break;
-    case kTableCompressionDefault:
-      leveldb_options.compression = leveldb::kSnappyCompression;
-      break;
-    default:
-      KJ_FAIL_REQUIRE("LevelDB tables do not support given compression method");
-  }
-
-  return std::make_unique<LevelDBTable>(std::move(file), leveldb_options,
-                                        temp_fd, path);
+  return std::make_unique<LevelDBTable>(path, options);
 }
 
 std::unique_ptr<Table> LevelDBTableBackend::Open(const char* path) {
-  auto file =
-      std::make_unique<LevelDBFile>(OpenFile(path, O_RDONLY | O_CLOEXEC));
-
-  leveldb::Table* table;
-  CHECK_STATUS(leveldb::Table::Open(leveldb::Options(), file.get(),
-                                    file->FileSize(), &table));
-
-  return std::make_unique<LevelDBTable>(std::move(file), table);
+  return std::make_unique<LevelDBTable>(path);
 }
 
 std::unique_ptr<SeekableTable> LevelDBTableBackend::OpenSeekable(
     const char* path) {
   KJ_FAIL_REQUIRE("LevelDB tables are not seekable");
+  return nullptr;
 }
 
 }  // namespace table

@@ -36,15 +36,16 @@ kj::AutoCloseFd AnonTemporaryFile(const char* path, int mode) {
 /*****************************************************************************/
 
 TemporaryFile::~TemporaryFile() noexcept {
-  try {
-    Close();
-  } catch (...) {
-    KJ_LOG(ERROR, "failed to close a temporary file", temp_path_);
-  }
+#if !defined(O_TMPFILE)
   try {
     Unlink();
   } catch (...) {
     KJ_LOG(ERROR, "failed to remove a temporary file", temp_path_);
+  }
+#endif
+  try {
+    Close();
+  } catch (...) {
   }
 }
 
@@ -104,7 +105,11 @@ static void MakeRandomString(char* output, size_t length) {
 #endif
 
 PendingFile::PendingFile(const char* path, int mode)
+#if !defined(O_TMPFILE)
     : path_(path), mode_(mode) {
+#else
+    : path_(path) {
+#endif
   std::string base(".");
   if (const char* last_slash = std::strrchr(path, '/')) {
     KJ_REQUIRE(path != last_slash);

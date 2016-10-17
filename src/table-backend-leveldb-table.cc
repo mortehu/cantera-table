@@ -70,7 +70,8 @@ namespace {
 
 class LevelDBWriter : public PendingFile, public leveldb::WritableFile {
  public:
-  LevelDBWriter(const char* path) : PendingFile(path) {}
+  LevelDBWriter(const char* path, int flags, mode_t mode)
+      : PendingFile(path, flags, mode) {}
 
   leveldb::Status Append(const leveldb::Slice& data) override {
     auto start = reinterpret_cast<const char*>(data.data());
@@ -147,7 +148,8 @@ class LevelDBTable : public Table {
         KJ_FAIL_REQUIRE("LevelDB tables do not support given compression method");
     }
 
-    writable_file_ = std::make_unique<LevelDBWriter>(path);
+    writable_file_ = std::make_unique<LevelDBWriter>(
+        path, options.GetFileFlags(), options.GetFileMode());
     table_builder_ = std::make_unique<leveldb::TableBuilder>(
         leveldb_options, writable_file_.get());
   }

@@ -28,9 +28,7 @@ kj::AutoCloseFd OpenFile(const char* path, int flags, int mode) {
 }
 
 kj::AutoCloseFd AnonTemporaryFile(const char* path, int mode) {
-  TemporaryFile file(path, mode);
-  file.Unlink();
-  return std::move(file);
+  return TemporaryFile(path, 0, mode, true);
 }
 
 /*****************************************************************************/
@@ -49,7 +47,7 @@ TemporaryFile::~TemporaryFile() noexcept {
   }
 }
 
-void TemporaryFile::Make(const char* path, int mode) {
+void TemporaryFile::Make(const char* path, int flags, mode_t mode) {
   if (path == nullptr) {
     path = std::getenv("TMPDIR");
 #ifdef P_tmpdir
@@ -59,7 +57,8 @@ void TemporaryFile::Make(const char* path, int mode) {
   }
 
 #ifdef O_TMPFILE
-  kj::AutoCloseFd fd = OpenFile(path, O_TMPFILE | O_RDWR, mode);
+  flags = (flags & O_CLOEXEC) | O_TMPFILE | O_RDWR;
+  kj::AutoCloseFd fd = OpenFile(path, flags, mode);
   kj::AutoCloseFd::operator=(std::move(fd));
 #else
   static const char suffix[] = "/ca-table.tmp.XXXXXX";
@@ -73,15 +72,18 @@ void TemporaryFile::Make(const char* path, int mode) {
   KJ_SYSCALL(fd = mkstemp(pathname.get()), pathname.get());
   kj::AutoCloseFd::operator=(kj::AutoCloseFd(fd));
 
-#ifdef PARANOID
   try {
     temp_path_ = pathname.get();
   } catch (...) {
     unlink(pathname.get());
+    throw;
   }
-#else
-  temp_path_ = pathname.get();
-#endif
+
+  if ((flags & O_CLOEXEC) != 0) {
+    KJ_SYSCALL(flags = fcntl(fd, F_GETFD));
+    flags |= FD_CLOEXEC;
+    KJ_SYSCALL(fcntl(fd, F_SETFD, flags));
+  }
 #endif
 }
 
@@ -103,7 +105,7 @@ static void MakeRandomString(char* output, size_t length) {
 }
 #endif
 
-PendingFile::PendingFile(const char* path, int mode)
+PendingFile::PendingFile(const char* path, int flags, mode_t mode)
 #if !defined(O_TMPFILE)
     : path_(path), mode_(mode) {
 #else
@@ -115,7 +117,7 @@ PendingFile::PendingFile(const char* path, int mode)
     base = std::string(path, last_slash - 1);
   }
 
-  Make(base.data(), mode);
+  Make(base.data(), flags, mode);
 }
 
 void PendingFile::Finish() {
@@ -166,9 +168,9 @@ void PendingFile::Finish() {
     KJ_SYSCALL(fchmod(get(), mode_ & ~mask), temp_path_);
 
   KJ_SYSCALL(rename(temp_path_.data(), path_.data()), temp_path_, path_);
-#endif
 
   Reset();
+#endif
 }
 
 /*****************************************************************************/

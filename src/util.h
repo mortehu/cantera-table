@@ -32,11 +32,16 @@ inline void ReadWithOffset(int fd, void* dest, size_t size, off_t offset) {
 // A temporary file in a given directory.
 class TemporaryFile : public kj::AutoCloseFd {
  public:
-  TemporaryFile(const char* path, int mode = S_IRUSR | S_IWUSR) {
-    Make(path, mode);
+  TemporaryFile() {}
+
+  TemporaryFile(const char* path, int flags, mode_t mode, bool unlink = true) {
+    Make(path, flags, mode);
+    if (unlink) Unlink();
   }
 
   ~TemporaryFile() noexcept;
+
+  void Make(const char* path, int flags, mode_t mode);
 
   void Unlink() {
 #if !defined(O_TMPFILE)
@@ -50,17 +55,9 @@ class TemporaryFile : public kj::AutoCloseFd {
   void Close() { kj::AutoCloseFd::operator=(nullptr); }
 
  protected:
-  TemporaryFile() {}
-
-  void Make(const char* path, int mode = S_IRUSR | S_IWUSR);
-
-  void Reset() {
 #if !defined(O_TMPFILE)
-    temp_path_.clear();
-#endif
-  }
+  void Reset() { temp_path_.clear(); }
 
-#if !defined(O_TMPFILE)
   std::string temp_path_;
 #endif
 };
@@ -68,7 +65,7 @@ class TemporaryFile : public kj::AutoCloseFd {
 // A temporary file in a given directory that can be made persistent if needed.
 class PendingFile : public TemporaryFile {
  public:
-  PendingFile(const char* path, int mode = S_IRUSR | S_IWUSR);
+  PendingFile(const char* path, int flags, mode_t mode);
 
   void Finish();
 
@@ -76,7 +73,7 @@ class PendingFile : public TemporaryFile {
   std::string path_;
 
 #if !defined(O_TMPFILE)
-  int mode_;
+  mode_t mode_;
 #endif
 };
 

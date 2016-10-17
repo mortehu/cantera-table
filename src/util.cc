@@ -59,8 +59,8 @@ void TemporaryFile::Make(const char* path, int mode) {
   }
 
 #ifdef O_TMPFILE
-  int fd = OpenFile(path, O_TMPFILE | O_RDWR, mode);
-  kj::AutoCloseFd::operator=(kj::AutoCloseFd(fd));
+  kj::AutoCloseFd fd = OpenFile(path, O_TMPFILE | O_RDWR, mode);
+  kj::AutoCloseFd::operator=(std::move(fd));
 #else
   static const char suffix[] = "/ca-table.tmp.XXXXXX";
 
@@ -78,7 +78,6 @@ void TemporaryFile::Make(const char* path, int mode) {
     temp_path_ = pathname.get();
   } catch (...) {
     unlink(pathname.get());
-    Close();
   }
 #else
   temp_path_ = pathname.get();

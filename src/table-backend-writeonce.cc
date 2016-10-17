@@ -975,10 +975,6 @@ class WriteOnceReader {
 
   virtual bool ReadRow(struct iovec* key, struct iovec* value) = 0;
 
-  virtual off_t Offset() = 0;
-
-  virtual void Seek(off_t offset, int whence) = 0;
-
   uint64_t GetFileSize() {
     struct stat st;
     KJ_SYSCALL(fstat(fd_, &st));
@@ -995,157 +991,25 @@ class WriteOnceReader {
 
 /*****************************************************************************/
 
-class WriteOnceReader_v4 : public WriteOnceReader {
+class WriteOnceSeekableReader : public WriteOnceReader {
  public:
-  WriteOnceReader_v4(const std::string& path, kj::AutoCloseFd&& fd,
-                     uint64_t index_offset, TableCompression compression,
-                     bool seekable)
-      : WriteOnceReader(path, std::move(fd), index_offset),
-        compression_(compression),
-        seekable_(seekable),
-        index_cache_(index_),
-        block_cache_(block_) {
-    ReadIndex();
-  }
+  WriteOnceSeekableReader(const std::string& path, kj::AutoCloseFd&& fd,
+                          uint64_t index_offset)
+      : WriteOnceReader(path, std::move(fd), index_offset) {}
 
-  int IsSorted() override { return 1; }
+  off_t Offset() { return offset_ - sizeof(struct CA_wo_header); }
 
-  void SeekToFirst() override {
-    block_num_ = 0;
-    entry_num_ = 0;
-    entry_offset_ = 0; // used only if seekable
-  }
-
-  bool SeekToKey(const string_view& key) override {
-    uint64_t block_num = index_cache_.FindBlockByKey(key);
-    if (block_num >= index_.num_blocks()) return NotFound();
-    if (block_num != block_read_num_) ReadBlock(block_num);
-
-    block_num_ = block_num;
-    if (!seekable_) {
-      entry_num_ = block_cache_.FindEntryByKey(key);
-      return block_cache_.GetKey(entry_num_) == key;
-    } else {
-      for (;;) {
-        const unsigned char* entry = read_buffer_.udata() + entry_offset_;
-        const unsigned char* ptr = entry;
-
-        uint32_t k_size = oroch::varint_codec<uint32_t>::value_decode(ptr);
-        uint32_t v_size = oroch::varint_codec<uint32_t>::value_decode(ptr);
-        string_view cur(reinterpret_cast<const char *>(ptr), k_size);
-        if (!(cur < key))
-          return (cur == key);
-
-        entry_num_++;
-        entry_offset_ += ptr + k_size + v_size - entry;
-        KJ_REQUIRE(entry_offset_ < read_buffer_.size());
-      }
-    }
-  }
-
-  bool Skip(size_t count) override {
-    uint64_t block_num = block_num_;
-    if (block_num == UINT64_MAX) {
-      SeekToFirst();
-      block_num = 0;
-    }
-
-    uint32_t entry_num = entry_num_;
-    uint32_t entry_offset = entry_offset_; // used only if seekable
-    while (count) {
-      if (block_num >= index_.num_blocks()) return NotFound();
-
-      uint32_t avail = index_.GetNumEntries(block_num) - entry_num;
-      if (count < avail) {
-        entry_num += count;
-        if (!seekable_) {
-          count = 0;
-        } else {
-          const unsigned char* ptr = read_buffer_.udata() + entry_offset;
-          while (count--) {
-            uint32_t k_size = oroch::varint_codec<uint32_t>::value_decode(ptr);
-            uint32_t v_size = oroch::varint_codec<uint32_t>::value_decode(ptr);
-            ptr += k_size + v_size;
-          }
-          KJ_REQUIRE(entry_offset <= read_buffer_.size());
-          entry_offset = ptr - read_buffer_.udata();
-        }
-      } else {
-        block_num++;
-        entry_num = 0;
-        entry_offset = 0;
-        count -= avail;
-      }
-    }
-
-    block_num_ = block_num;
-    entry_num_ = entry_num;
-    entry_offset_ = entry_offset;
-    return true;
-  }
-
-  bool ReadRow(struct iovec* key, struct iovec* value) override {
-    if (block_num_ == UINT64_MAX) SeekToFirst();
-    if (block_num_ >= index_.num_blocks()) return false;
-    if (block_num_ != block_read_num_) ReadBlock(block_num_);
-
-    if (!seekable_) {
-      string_view k = block_cache_.GetKey(entry_num_);
-      key->iov_base = const_cast<char*>(k.data());
-      key->iov_len = k.size();
-
-      string_view v = block_cache_.GetValue(entry_num_);
-      value->iov_base = const_cast<char*>(v.data());
-      value->iov_len = v.size();
-    } else {
-      unsigned char* entry = read_buffer_.udata() + entry_offset_;
-
-      const unsigned char* ptr = entry;
-      key->iov_len = oroch::varint_codec<uint32_t>::value_decode(ptr);
-      value->iov_len = oroch::varint_codec<uint32_t>::value_decode(ptr);
-      key->iov_base = const_cast<unsigned char *>(ptr);
-      ptr += key->iov_len;
-      value->iov_base = const_cast<unsigned char *>(ptr);
-      ptr += value->iov_len;
-
-      entry_offset_ += ptr - entry;
-    }
-
-    if (++entry_num_ >= index_.GetNumEntries(block_num_)) {
-      ++block_num_;
-      entry_num_ = 0;
-      entry_offset_ = 0;
-    }
-
-    return true;
-  }
-
-  off_t Offset() override {
-    KJ_REQUIRE(seekable_);
-
-    if (block_num_ == UINT64_MAX) SeekToFirst();
-    if (block_num_ >= index_.num_blocks()) return IndexOffset();
-    if (block_num_ != block_read_num_) ReadBlock(block_num_);
-
-    return index_cache_.GetBlockOffset(block_num_) + entry_offset_ -
-           sizeof(struct CA_wo_header);
-  }
-
-  void Seek(off_t offset, int whence) override {
-    KJ_REQUIRE(seekable_);
-
+  void Seek(off_t offset, int whence) {
     switch (whence) {
       case SEEK_SET:
-        KJ_REQUIRE(offset >= 0);
         offset += sizeof(struct CA_wo_header);
         break;
 
       case SEEK_CUR:
-        offset += Offset() + sizeof(struct CA_wo_header);
+        offset += offset_;
         break;
 
       case SEEK_END:
-        KJ_REQUIRE(offset <= 0);
         offset = index_offset_ - offset;
         break;
 
@@ -1157,28 +1021,90 @@ class WriteOnceReader_v4 : public WriteOnceReader {
                "attempt to seek before start of table");
     KJ_REQUIRE(offset <= index_offset_, "attempt to seek past end of table");
 
-    block_num_ = 0;
-    while ((block_num_ + 1) < index_.num_blocks() &&
-           index_cache_.GetBlockOffset(block_num_ + 1) <= offset)
-      ++block_num_;
+    offset_ = offset;
+  }
 
+ protected:
+  // Used for read, seek, offset.
+  uint64_t offset_ = sizeof(struct CA_wo_header);
+};
+
+/*****************************************************************************/
+
+class WriteOnceReader_v4 : public WriteOnceReader {
+ public:
+  WriteOnceReader_v4(const std::string& path, kj::AutoCloseFd&& fd,
+                     uint64_t index_offset, TableCompression compression)
+      : WriteOnceReader(path, std::move(fd), index_offset),
+        compression_(compression),
+        index_cache_(index_),
+        block_cache_(block_) {
+    ReadIndex();
+  }
+
+  int IsSorted() override { return 1; }
+
+  void SeekToFirst() override {
+    block_num_ = 0;
+    entry_num_ = 0;
+  }
+
+  bool SeekToKey(const string_view& key) override {
+    uint64_t block_num = index_cache_.FindBlockByKey(key);
+    if (block_num >= index_.num_blocks()) return NotFound();
+    if (block_num != block_read_num_) ReadBlock(block_num);
+
+    block_num_ = block_num;
+    entry_num_ = block_cache_.FindEntryByKey(key);
+    return block_cache_.GetKey(entry_num_) == key;
+  }
+
+  bool Skip(size_t count) override {
+    uint64_t block_num = block_num_;
+    if (block_num == UINT64_MAX) {
+      SeekToFirst();
+      block_num = 0;
+    }
+
+    uint32_t entry_num = entry_num_;
+    while (count) {
+      if (block_num >= index_.num_blocks()) return NotFound();
+
+      uint32_t avail = index_.GetNumEntries(block_num) - entry_num;
+      if (count < avail) {
+        entry_num += count;
+        count = 0;
+      } else {
+        block_num++;
+        entry_num = 0;
+        count -= avail;
+      }
+    }
+
+    block_num_ = block_num;
+    entry_num_ = entry_num;
+    return true;
+  }
+
+  bool ReadRow(struct iovec* key, struct iovec* value) override {
+    if (block_num_ == UINT64_MAX) SeekToFirst();
+    if (block_num_ >= index_.num_blocks()) return false;
     if (block_num_ != block_read_num_) ReadBlock(block_num_);
 
-    entry_num_ = 0;
-    entry_offset_ = 0;
+    string_view k = block_cache_.GetKey(entry_num_);
+    key->iov_base = const_cast<char*>(k.data());
+    key->iov_len = k.size();
 
-    offset -= index_cache_.GetBlockOffset(block_num_);
-    while (offset > entry_offset_) {
-      const unsigned char* entry = read_buffer_.udata() + entry_offset_;
-      const unsigned char* ptr = entry;
+    string_view v = block_cache_.GetValue(entry_num_);
+    value->iov_base = const_cast<char*>(v.data());
+    value->iov_len = v.size();
 
-      uint32_t k_size = oroch::varint_codec<uint32_t>::value_decode(ptr);
-      uint32_t v_size = oroch::varint_codec<uint32_t>::value_decode(ptr);
-      ptr += k_size + v_size;
-
-      entry_num_++;
-      entry_offset_ += ptr - entry;
+    if (++entry_num_ >= index_.GetNumEntries(block_num_)) {
+      ++block_num_;
+      entry_num_ = 0;
     }
+
+    return true;
   }
 
  private:
@@ -1194,12 +1120,8 @@ class WriteOnceReader_v4 : public WriteOnceReader {
     uint64_t offset = index_cache_.GetBlockOffset(num);
     size_t size = index_.GetBlockSize(num);
     uint32_t num_entries = index_.GetNumEntries(num);
-    if (seekable_) {
-      Read(offset, size, false);
-    } else {
-      bool compressed = (compression_ != kTableCompressionNone);
-      block_.Unmarshal(Read(offset, size, compressed), num_entries, false);
-    }
+    bool compressed = (compression_ != kTableCompressionNone);
+    block_.Unmarshal(Read(offset, size, compressed), num_entries, false);
 
     block_read_num_ = num;
     block_cache_.Clear();
@@ -1208,12 +1130,7 @@ class WriteOnceReader_v4 : public WriteOnceReader {
   bool NotFound() {
     block_num_ = index_.num_blocks();
     entry_num_ = 0;
-    entry_offset_ = 0;
     return false;
-  }
-
-  off_t IndexOffset() const {
-    return index_offset_ - sizeof(struct CA_wo_header);
   }
 
   DataBuffer& Read(uint64_t offset, size_t size, bool compressed) {
@@ -1230,7 +1147,6 @@ class WriteOnceReader_v4 : public WriteOnceReader {
   }
 
   const TableCompression compression_;
-  const bool seekable_;
 
   WriteOnceIndex index_;
   WriteOnceIndex::Cache index_cache_;
@@ -1241,12 +1157,103 @@ class WriteOnceReader_v4 : public WriteOnceReader {
   uint64_t block_read_num_ = UINT64_MAX;
   uint64_t block_num_ = UINT64_MAX;
   uint32_t entry_num_ = UINT32_MAX;
-  uint32_t entry_offset_ = 0;
 
   DataBuffer read_buffer_;
   DataBuffer decompress_buffer_;
   // Decompression context.
   ZstdDecompressor decompressor_;
+};
+
+/*****************************************************************************/
+
+class WriteOnceSeekableReader_v4 : public WriteOnceSeekableReader {
+ public:
+  WriteOnceSeekableReader_v4(const std::string& path, kj::AutoCloseFd&& fd,
+                             uint64_t index_offset)
+      : WriteOnceSeekableReader(path, std::move(fd), index_offset),
+        index_cache_(index_) {
+    uint64_t size = GetFileSize() - index_offset_;
+
+    DataBuffer read_buffer;
+    read_buffer.resize(size);
+    FileIO(fd_).Read(read_buffer, index_offset_);
+
+    index_.Unmarshal(read_buffer);
+
+    map_ = mmap(NULL, index_offset_, PROT_READ, MAP_SHARED, fd_, 0);
+    if (MAP_FAILED == map_) KJ_FAIL_SYSCALL("mmap", errno, path);
+  }
+
+  virtual ~WriteOnceSeekableReader_v4() {
+    if (map_ != MAP_FAILED) munmap(map_, index_offset_);
+  }
+
+  int IsSorted() override { return 1; }
+
+  void SeekToFirst() override { offset_ = sizeof(struct CA_wo_header); }
+
+  bool SeekToKey(const string_view& key) override {
+    uint64_t block_num = index_cache_.FindBlockByKey(key);
+
+    if (block_num < index_.num_blocks()) {
+      const unsigned char* base = reinterpret_cast<unsigned char*>(map_);
+      const unsigned char* ptr = base + index_cache_.GetBlockOffset(block_num);
+      const unsigned char* end = base + index_offset_;
+
+      while (ptr < end) {
+        uint32_t k_size = oroch::varint_codec<uint32_t>::value_decode(ptr);
+        uint32_t v_size = oroch::varint_codec<uint32_t>::value_decode(ptr);
+
+        string_view cur(reinterpret_cast<const char*>(ptr), k_size);
+        if (cur.compare(key) >= 0) {
+          offset_ = ptr - base;
+          return true;
+        }
+
+        ptr += k_size + v_size;
+      }
+    }
+
+    offset_ = index_offset_;
+    return false;
+  }
+
+  bool Skip(size_t count) override {
+    struct iovec key, value;
+    while (count--) {
+      if (!ReadRow(&key, &value)) return false;
+    }
+    return true;
+  }
+
+  bool ReadRow(struct iovec* key, struct iovec* value) override {
+    if (offset_ >= index_offset_) return false;
+
+    const unsigned char* base = reinterpret_cast<unsigned char*>(map_);
+    const unsigned char* ptr = base + offset_;
+
+    uint32_t k_size = oroch::varint_codec<uint32_t>::value_decode(ptr);
+    uint32_t v_size = oroch::varint_codec<uint32_t>::value_decode(ptr);
+
+    key->iov_base = const_cast<unsigned char*>(ptr);
+    key->iov_len = k_size;
+    ptr += k_size;
+
+    value->iov_base = const_cast<unsigned char*>(ptr);
+    value->iov_len = k_size;
+    ptr += v_size;
+
+    offset_ = ptr - base;
+    KJ_REQUIRE(offset_ <= index_offset_);
+
+    return true;
+  }
+
+ private:
+  void* map_ = MAP_FAILED;
+
+  WriteOnceIndex index_;
+  WriteOnceIndex::Cache index_cache_;
 };
 
 /*****************************************************************************/
@@ -1259,11 +1266,11 @@ uint64_t CA_wo_hash(const string_view& str) {
   return result;
 }
 
-class WriteOnceReader_v3 : public WriteOnceReader {
+class WriteOnceReader_v3 : public WriteOnceSeekableReader {
  public:
   WriteOnceReader_v3(const std::string& path, kj::AutoCloseFd&& fd,
                      uint64_t index_offset)
-      : WriteOnceReader(path, std::move(fd), index_offset) {
+      : WriteOnceSeekableReader(path, std::move(fd), index_offset) {
     MemoryMap();
   }
 
@@ -1344,8 +1351,11 @@ class WriteOnceReader_v3 : public WriteOnceReader {
   }
 
   bool Skip(size_t count) override {
-    KJ_UNIMPLEMENTED("Skip() shouldn't be used with old write-once format");
-    return false;
+    struct iovec key, value;
+    while (count--) {
+      if (!ReadRow(&key, &value)) return false;
+    }
+    return true;
   }
 
   bool ReadRow(struct iovec* key, struct iovec* value) override {
@@ -1372,37 +1382,6 @@ class WriteOnceReader_v3 : public WriteOnceReader {
     offset_ = p - reinterpret_cast<uint8_t*>(buffer_);
 
     return true;
-  }
-
-  off_t Offset() override { return offset_ - sizeof(struct CA_wo_header); }
-
-  void Seek(off_t offset, int whence) override {
-    uint64_t new_offset;
-    switch (whence) {
-      case SEEK_SET:
-        KJ_REQUIRE(offset >= 0);
-        new_offset = sizeof(struct CA_wo_header) + offset;
-        break;
-
-      case SEEK_CUR:
-        new_offset = offset_ + offset;
-        break;
-
-      case SEEK_END:
-        KJ_REQUIRE(offset <= 0);
-        new_offset = index_offset_ - offset;
-        break;
-
-      default:
-        KJ_FAIL_REQUIRE(!"Invalid 'whence' value");
-    }
-
-    KJ_REQUIRE(new_offset >= sizeof(struct CA_wo_header),
-               "attempt to seek before start of table");
-    KJ_REQUIRE(new_offset <= index_offset_,
-               "attempt to seek past end of table");
-
-    offset_ = new_offset;
   }
 
  private:
@@ -1456,9 +1435,6 @@ class WriteOnceReader_v3 : public WriteOnceReader {
 
   struct CA_wo_header* header_ = nullptr;
 
-  // Used for read, seek, offset.
-  uint64_t offset_ = 0;
-
   union {
     uint64_t* u64;
     uint32_t* u32;
@@ -1481,7 +1457,7 @@ class WriteOnceTable : public SeekableTable {
                    : std::make_unique<WriteOnceBuilder>(path, options);
   }
 
-  WriteOnceTable(const char* path, bool seekable) {
+  WriteOnceTable(const char* path, bool seekable_required) {
     kj::AutoCloseFd fd = OpenFile(path, O_RDONLY | O_CLOEXEC);
 
     struct CA_wo_header header;
@@ -1493,21 +1469,28 @@ class WriteOnceTable : public SeekableTable {
     if (header.major_version <= 3) {
       KJ_REQUIRE(header.compression == 0, "unsupported compression method",
                  header.compression);
-      reader_ = std::make_unique<WriteOnceReader_v3>(path, std::move(fd),
-                                                     header.index_offset);
+      seekable_reader_ =
+          new WriteOnceReader_v3(path, std::move(fd), header.index_offset);
+      reader_.reset(seekable_reader_);
     } else {
       KJ_REQUIRE(header.compression <= kTableCompressionLast,
                  "unsupported compression method", header.compression);
       if ((header.flags & CA_WO_FLAG_EXTENDED) != 0)
         KJ_UNIMPLEMENTED("extended write-once tables are not supported yet");
 
-      bool seekable_format = (header.flags & CA_WO_FLAG_SEEKABLE) != 0;
-      if (seekable && !seekable_format)
-        KJ_FAIL_REQUIRE("the write-once table is not seekable");
+      bool seekable = (header.flags & CA_WO_FLAG_SEEKABLE) != 0;
+      if (seekable_required && !seekable)
+        KJ_FAIL_REQUIRE("the write-once table is not seekable", path);
 
-      reader_ = std::make_unique<WriteOnceReader_v4>(
-          path, std::move(fd), header.index_offset,
-          TableCompression(header.compression), seekable_format);
+      if (!seekable) {
+        reader_ = std::make_unique<WriteOnceReader_v4>(
+            path, std::move(fd), header.index_offset,
+            TableCompression(header.compression));
+      } else {
+        seekable_reader_ = new WriteOnceSeekableReader_v4(path, std::move(fd),
+                                                          header.index_offset);
+        reader_.reset(seekable_reader_);
+      }
     }
   }
 
@@ -1532,8 +1515,14 @@ class WriteOnceTable : public SeekableTable {
       builder_.reset();
 
       kj::AutoCloseFd fd = OpenFile(path.c_str(), O_RDONLY | O_CLOEXEC);
-      reader_ = std::make_unique<WriteOnceReader_v4>(
-          path, std::move(fd), index_offset, compression, seekable);
+      if (!seekable) {
+        reader_ = std::make_unique<WriteOnceReader_v4>(
+            path, std::move(fd), index_offset, compression);
+      } else {
+        seekable_reader_ =
+            new WriteOnceSeekableReader_v4(path, std::move(fd), index_offset);
+        reader_.reset(seekable_reader_);
+      }
     }
   }
 
@@ -1544,10 +1533,12 @@ class WriteOnceTable : public SeekableTable {
   }
 
   void Seek(off_t offset, int whence) override {
-    if (reader_) reader_->Seek(offset, whence);
+    if (seekable_reader_) seekable_reader_->Seek(offset, whence);
   }
 
-  off_t Offset() override { return reader_ ? reader_->Offset() : 0; }
+  off_t Offset() override {
+    return seekable_reader_ ? seekable_reader_->Offset() : 0;
+  }
 
   bool SeekToKey(const string_view& key) override {
     return reader_ ? reader_->SeekToKey(key) : false;
@@ -1564,6 +1555,7 @@ class WriteOnceTable : public SeekableTable {
  private:
   // Table reader.
   std::unique_ptr<WriteOnceReader> reader_;
+  WriteOnceSeekableReader* seekable_reader_ = nullptr;
   // Table builder.
   std::unique_ptr<WriteOnceBuilder> builder_;
 };

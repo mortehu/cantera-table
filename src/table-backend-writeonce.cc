@@ -1240,7 +1240,7 @@ class WriteOnceSeekableReader_v4 : public WriteOnceSeekableReader {
     ptr += k_size;
 
     value->iov_base = const_cast<unsigned char*>(ptr);
-    value->iov_len = k_size;
+    value->iov_len = v_size;
     ptr += v_size;
 
     offset_ = ptr - base;

@@ -1206,9 +1206,10 @@ class WriteOnceSeekableReader_v4 : public WriteOnceSeekableReader {
         uint32_t v_size = oroch::varint_codec<uint32_t>::value_decode(ptr);
 
         string_view cur(reinterpret_cast<const char*>(ptr), k_size);
-        if (cur.compare(key) >= 0) {
+        int result = cur.compare(key);
+        if (result >= 0) {
           offset_ = start_ptr - base;
-          return true;
+          return result == 0;
         }
 
         ptr += k_size + v_size;

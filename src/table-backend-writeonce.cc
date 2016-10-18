@@ -1201,12 +1201,13 @@ class WriteOnceSeekableReader_v4 : public WriteOnceSeekableReader {
       const unsigned char* end = base + index_offset_;
 
       while (ptr < end) {
+        const unsigned char* start_ptr = ptr;
         uint32_t k_size = oroch::varint_codec<uint32_t>::value_decode(ptr);
         uint32_t v_size = oroch::varint_codec<uint32_t>::value_decode(ptr);
 
         string_view cur(reinterpret_cast<const char*>(ptr), k_size);
         if (cur.compare(key) >= 0) {
-          offset_ = ptr - base;
+          offset_ = start_ptr - base;
           return true;
         }
 

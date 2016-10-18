@@ -114,7 +114,7 @@ PendingFile::PendingFile(const char* path, int flags, mode_t mode)
   std::string base(".");
   if (const char* last_slash = std::strrchr(path, '/')) {
     KJ_REQUIRE(path != last_slash);
-    base = std::string(path, last_slash - 1);
+    base = std::string(path, last_slash);
   }
 
   Make(base.data(), flags, mode);

@@ -819,7 +819,7 @@ class WriteOnceSortingBuilder : public WriteOnceBuilder {
     std::string dir(".");
     if (const char* last_slash = strrchr(path, '/')) {
       KJ_REQUIRE(path != last_slash);
-      dir = std::string(path, last_slash - 1);
+      dir = std::string(path, last_slash);
     }
 
     raw_fd_ = AnonTemporaryFile(dir.c_str());

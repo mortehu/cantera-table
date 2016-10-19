@@ -298,10 +298,6 @@ class SeekableTable : public Table {
   virtual void Seek(off_t offset, int whence) = 0;
 };
 
-int ca_table_stat(Table* table, struct stat* buf);
-
-int ca_table_utime(Table* table, const struct timeval tv[2]);
-
 /*****************************************************************************/
 
 class TableFactory {

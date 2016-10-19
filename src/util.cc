@@ -5,7 +5,6 @@
 #include "src/util.h"
 
 #include <cstring>
-#include <memory>
 #include <random>
 
 #include <fcntl.h>
@@ -44,7 +43,7 @@ TemporaryFile::~TemporaryFile() noexcept {
   try {
     Unlink();
   } catch (...) {
-    KJ_LOG(ERROR, "failed to remove a temporary file", temp_path_);
+    KJ_LOG(ERROR, "failed to remove a temporary file", temp_path_.get());
   }
 #endif
   try {
@@ -70,20 +69,13 @@ void TemporaryFile::Make(const char* path, int flags, mode_t mode) {
   static const char suffix[] = "/ca-table.tmp.XXXXXX";
 
   size_t len = std::strlen(path);
-  auto pathname = std::make_unique<char[]>(len + sizeof(suffix));
-  std::memcpy(pathname.get(), path, len);
-  std::memcpy(pathname.get() + len, suffix, sizeof(suffix));
+  temp_path_ = std::make_unique<char[]>(len + sizeof(suffix));
+  std::memcpy(temp_path_.get(), path, len);
+  std::memcpy(temp_path_.get() + len, suffix, sizeof(suffix));
 
   int fd;
-  KJ_SYSCALL(fd = mkstemp(pathname.get()), pathname.get());
+  KJ_SYSCALL(fd = mkstemp(temp_path_.get()), temp_path_.get());
   kj::AutoCloseFd::operator=(kj::AutoCloseFd(fd));
-
-  try {
-    temp_path_ = pathname.get();
-  } catch (...) {
-    unlink(pathname.get());
-    throw;
-  }
 
   if ((flags & O_CLOEXEC) != 0) {
     KJ_SYSCALL(flags = fcntl(fd, F_GETFD));
@@ -166,16 +158,16 @@ void PendingFile::Finish() {
 
   KJ_FAIL_REQUIRE("all temporary file creation attempts failed", kMaxAttempts);
 #else
-  KJ_REQUIRE(!temp_path_.empty(), "file has already been renamed or removed");
+  KJ_REQUIRE(temp_path_ != nullptr, "file has already been renamed or removed");
 
   auto mask = umask(0);
   umask(mask);
   if ((mode_ & ~mask) != ((S_IRUSR | S_IWUSR) & ~mask))
-    KJ_SYSCALL(fchmod(get(), mode_ & ~mask), temp_path_);
+    KJ_SYSCALL(fchmod(get(), mode_ & ~mask), temp_path_.get());
 
-  KJ_SYSCALL(rename(temp_path_.data(), path_.data()), temp_path_, path_);
+  KJ_SYSCALL(rename(temp_path_.get(), path_.data()), temp_path_.get(), path_);
 
-  Reset();
+  TemporaryFile::Reset();
 #endif
 }
 

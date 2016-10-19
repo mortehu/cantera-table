@@ -1,6 +1,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <experimental/string_view>
 
 #include <fcntl.h>
@@ -47,8 +48,8 @@ class TemporaryFile : public kj::AutoCloseFd {
 
   void Unlink() {
 #if !defined(O_TMPFILE)
-    if (!temp_path_.empty()) {
-      KJ_SYSCALL(unlink(temp_path_.data()), temp_path_);
+    if (temp_path_) {
+      KJ_SYSCALL(unlink(temp_path_.get()), temp_path_.get());
       Reset();
     }
 #endif
@@ -58,9 +59,9 @@ class TemporaryFile : public kj::AutoCloseFd {
 
  protected:
 #if !defined(O_TMPFILE)
-  void Reset() { temp_path_.clear(); }
+  void Reset() { temp_path_.reset(); }
 
-  std::string temp_path_;
+  std::unique_ptr<char[]> temp_path_;
 #endif
 };
 

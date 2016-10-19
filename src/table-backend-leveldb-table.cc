@@ -121,11 +121,7 @@ class LevelDBReader : public leveldb::RandomAccessFile {
     return leveldb::Status::OK();
   }
 
-  uint64_t FileSize() const {
-    off_t size;
-    KJ_SYSCALL(size = lseek(fd_, 0, SEEK_END));
-    return size;
-  }
+  uint64_t FileSize() const { return cantera::table::internal::FileSize(fd_); }
 
  private:
   kj::AutoCloseFd fd_;

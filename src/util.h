@@ -22,6 +22,8 @@ kj::AutoCloseFd OpenFile(const char* path, int flags, int mode = 0666);
 kj::AutoCloseFd AnonTemporaryFile(const char* path = nullptr,
                                   int mode = S_IRUSR | S_IWUSR);
 
+off_t FileSize(int fd);
+
 size_t ReadWithOffset(int fd, void* dest, size_t size_min, size_t size_max,
                       off_t offset);
 

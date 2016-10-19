@@ -975,12 +975,6 @@ class WriteOnceReader {
 
   virtual bool ReadRow(struct iovec* key, struct iovec* value) = 0;
 
-  uint64_t GetFileSize() {
-    struct stat st;
-    KJ_SYSCALL(fstat(fd_, &st));
-    return st.st_size;
-  }
-
  protected:
   const std::string path_;
 
@@ -1109,7 +1103,7 @@ class WriteOnceReader_v4 : public WriteOnceReader {
 
  private:
   void ReadIndex() {
-    uint64_t size = GetFileSize() - index_offset_;
+    uint64_t size = FileSize(fd_) - index_offset_;
     bool compressed = (compression_ != kTableCompressionNone);
     index_.Unmarshal(Read(index_offset_, size, compressed));
   }
@@ -1172,7 +1166,7 @@ class WriteOnceSeekableReader_v4 : public WriteOnceSeekableReader {
                              uint64_t index_offset)
       : WriteOnceSeekableReader(path, std::move(fd), index_offset),
         index_cache_(index_) {
-    uint64_t size = GetFileSize() - index_offset_;
+    uint64_t size = FileSize(fd_) - index_offset_;
 
     DataBuffer read_buffer;
     read_buffer.resize(size);
@@ -1388,7 +1382,7 @@ class WriteOnceReader_v3 : public WriteOnceSeekableReader {
 
  private:
   void MemoryMap() {
-    uint64_t size = GetFileSize();
+    uint64_t size = FileSize(fd_);
 
     KJ_REQUIRE(static_cast<size_t>(size) > sizeof(struct CA_wo_header), size,
                sizeof(struct CA_wo_header));

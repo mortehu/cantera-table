@@ -31,6 +31,12 @@ kj::AutoCloseFd AnonTemporaryFile(const char* path, int mode) {
   return TemporaryFile(path, 0, mode, true);
 }
 
+off_t FileSize(int fd) {
+  struct stat st;
+  KJ_SYSCALL(fstat(fd, &st));
+  return st.st_size;
+}
+
 /*****************************************************************************/
 
 TemporaryFile::~TemporaryFile() noexcept {

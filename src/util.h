@@ -69,6 +69,8 @@ class PendingFile : public TemporaryFile {
  public:
   PendingFile(const char* path, int flags, mode_t mode);
 
+  const std::string& path() const { return path_; }
+
   void Finish();
 
  private:

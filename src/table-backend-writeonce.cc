@@ -637,10 +637,14 @@ class WriteOnceIndex {
 
 /*****************************************************************************/
 
-class WriteOnceBuilder {
+class WriteOnceBuilder : private PendingFile {
  public:
+  using PendingFile::path;
+
   WriteOnceBuilder(const char* path, const TableOptions& options)
-      : path_(path), options_(options) {
+      : PendingFile(path, options.GetFileFlags(), options.GetFileMode()),
+        seekable_(options.GetOutputSeekable()),
+        no_fsync_(options.GetNoFSync()) {
     KJ_REQUIRE((options.GetFileFlags() & ~(O_EXCL | O_CLOEXEC)) == 0);
 
     compression_ = options.GetCompression();
@@ -653,18 +657,14 @@ class WriteOnceBuilder {
     if (compression_level_ == 0 && compression_ != kTableCompressionNone)
       compression_level_ = 3;
 
-    CreateFile();
+    WriteHeader(0);
   }
 
-  virtual ~WriteOnceBuilder() {
-    if (incomplete_file_) unlink(tmp_path_.get());
-  }
-
-  const std::string& path() const { return path_; }
+  virtual ~WriteOnceBuilder() noexcept(false) {}
 
   TableCompression compression() const { return compression_; }
 
-  bool seekable() const { return options_.GetOutputSeekable(); }
+  bool seekable() const { return seekable_; }
 
   virtual void Add(const string_view& key, const string_view& value) {
     KJ_REQUIRE(block_.empty() || block_.GetLaskKey() <= key,
@@ -687,71 +687,30 @@ class WriteOnceBuilder {
   }
 
  private:
-  void CreateFile() {
-    char* tmp = NULL;
-    KJ_SYSCALL(asprintf(&tmp, "%s.tmp.%u.XXXXXX", path_.c_str(), getpid()));
-    tmp_path_ = std::unique_ptr<char, decltype(free)*>(tmp, free);
-
-    int fd;
-    KJ_SYSCALL(fd = mkstemp(tmp), tmp);
-    fd_ = kj::AutoCloseFd(fd);
-    incomplete_file_ = true;
-
-    int nflags = options_.GetFileFlags();
-    nflags &= O_CLOEXEC;
-
-    int oflags;
-    KJ_SYSCALL(oflags = fcntl(fd, F_GETFD));
-    if ((oflags & nflags) != nflags)
-      KJ_SYSCALL(fcntl(fd, F_SETFD, oflags | nflags));
-
-    WriteHeader(0);
-  }
-
-  void CommitFile() {
-    auto mode = options_.GetFileMode();
-    auto mask = umask(0);
-    umask(mask);
-
-    KJ_SYSCALL(fchmod(fd_.get(), mode & ~mask), tmp_path_.get());
-    KJ_SYSCALL(rename(tmp_path_.get(), path_.c_str()), tmp_path_.get(), path_);
-
-    incomplete_file_ = false;
-
-    if (!options_.GetNoFSync()) {
-      // TODO(mortehu): fsync all ancestor directories too.
-      KJ_SYSCALL(fsync(fd_.get()), path_);
-    }
-  }
-
   void WriteHeader(uint64_t index_offset) {
-    bool seekable = options_.GetOutputSeekable();
-
     struct CA_wo_header header;
     header.magic = MAGIC;  // Will implicitly store endianness
     header.major_version = MAJOR_VERSION;
     header.minor_version = MINOR_VERSION;
-    header.flags = seekable ? CA_WO_FLAG_SEEKABLE : 0;
+    header.flags = seekable_ ? CA_WO_FLAG_SEEKABLE : 0;
     header.compression = compression_;
     header.data_reserved = 0;
     header.index_offset = index_offset;
 
-    FileIO fd(fd_);
-    KJ_SYSCALL(lseek(fd, 0, SEEK_SET), tmp_path_.get());
-    fd.Write(&header, sizeof(header));
+    KJ_SYSCALL(lseek(get(), 0, SEEK_SET));
+    FileIO(get()).Write(&header, sizeof(header));
   }
 
   void WriteBlock(const WriteOnceBlock& block, WriteOnceIndex& index) {
-    bool seekable = options_.GetOutputSeekable();
-    block.Marshal(marshal_buffer_, seekable);
+    block.Marshal(marshal_buffer_, seekable_);
     if (!marshal_buffer_.size()) return;
 
-    DataBuffer& buffer = seekable ? marshal_buffer_ : GetWriteBuffer();
-    FileIO(fd_).Write(buffer);
+    DataBuffer& buffer = seekable_ ? marshal_buffer_ : GetWriteBuffer();
+    FileIO(get()).Write(buffer);
 
     index.Add(block, buffer.size());
 
-    // KJ_LOG(DBG, block.num_entries(), buffer.size());
+    // KJ_DBG(block.num_entries(), buffer.size());
   }
 
   uint64_t WriteIndex(const WriteOnceIndex& index) {
@@ -759,14 +718,18 @@ class WriteOnceBuilder {
     if (!marshal_buffer_.size()) return 0;
 
     DataBuffer& buffer = GetWriteBuffer();
-    FileIO(fd_).Write(buffer);
+    FileIO(get()).Write(buffer);
 
     uint64_t index_offset = index.GetIndexOffset();
     WriteHeader(index_offset);
+    PendingFile::Finish();
 
-    CommitFile();
+    if (!no_fsync_) {
+      // TODO(mortehu): fsync all ancestor directories too.
+      KJ_SYSCALL(fsync(get()), path());
+    }
 
-    // KJ_LOG(DBG, index.num_blocks(), buffer.size());
+    // KJ_DBG(index.num_blocks(), buffer.size());
     return index_offset;
   }
 
@@ -778,25 +741,16 @@ class WriteOnceBuilder {
     compressor_.Go(compress_buffer_, marshal_buffer_, compression_level_);
 
     // if (compress_buffer_.size() > marshal_buffer_.size())
-    //  KJ_LOG(DBG, compress_buffer_.size() - marshal_buffer_.size());
+    //  KJ_DBG(compress_buffer_.size() - marshal_buffer_.size());
 
     return compress_buffer_;
   }
 
-  // Final file path.
-  const std::string path_;
-  // Temporary file name.
-  std::unique_ptr<char, decltype(free)*> tmp_path_ =
-      std::unique_ptr<char, decltype(free)*>(NULL, free);
-
   // Saved table creation options.
-  const TableOptions options_;
   TableCompression compression_ = TableCompression::kTableCompressionNone;
   int compression_level_ = 0;
-
-  // Result file.
-  kj::AutoCloseFd fd_;
-  bool incomplete_file_ = false;
+  const bool seekable_;
+  const bool no_fsync_;
 
   // Result data.
   WriteOnceIndex index_;

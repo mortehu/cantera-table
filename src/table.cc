@@ -33,7 +33,7 @@ const char* detect_table_format(const char* path) {
   KJ_FAIL_REQUIRE("Unrecognized table format", path);
 }
 
-static void init_stat(struct stat &st, const char* path) {
+static void init_stat(struct stat& st, const char* path) {
   std::memset(&st, 0, sizeof(st));
   KJ_SYSCALL(stat(path, &st), path);
 }
@@ -51,6 +51,8 @@ std::unique_ptr<Backend> writeonce_backend;
 Table::Table() {}
 
 Table::~Table() {}
+
+TableBuilder::~TableBuilder() {}
 
 Backend::~Backend() {}
 
@@ -82,22 +84,17 @@ Backend* ca_table_backend(const char* name) {
 
 /*****************************************************************************/
 
-std::unique_ptr<Table> TableFactory::Create(const char* backend_name,
-                                            const char* path,
-                                            const TableOptions &options) {
-  Backend *backend = get_backend(backend_name, path);
-  auto result = backend->Create(path, options);
-
-  std::memset(&result->st, 0, sizeof(result->st));
-
-  return result;
+std::unique_ptr<TableBuilder> TableFactory::Create(
+    const char* backend_name, const char* path, const TableOptions& options) {
+  return get_backend(backend_name, path)->Create(path, options);
 }
 
-std::unique_ptr<Table> TableFactory::Open(const char* backend_name, const char* path) {
+std::unique_ptr<Table> TableFactory::Open(const char* backend_name,
+                                          const char* path) {
   struct stat st;
   init_stat(st, path);
 
-  Backend *backend = get_backend(backend_name, path);
+  Backend* backend = get_backend(backend_name, path);
   auto result = backend->Open(path);
 
   result->st = st;
@@ -105,11 +102,12 @@ std::unique_ptr<Table> TableFactory::Open(const char* backend_name, const char* 
   return result;
 }
 
-std::unique_ptr<SeekableTable> TableFactory::OpenSeekable(const char* backend_name, const char* path) {
+std::unique_ptr<SeekableTable> TableFactory::OpenSeekable(
+    const char* backend_name, const char* path) {
   struct stat st;
   init_stat(st, path);
 
-  Backend *backend = get_backend(backend_name, path);
+  Backend* backend = get_backend(backend_name, path);
   auto result = backend->OpenSeekable(path);
 
   result->st = st;

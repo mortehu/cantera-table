@@ -221,26 +221,22 @@ class TableOptions {
 
 /*****************************************************************************/
 
+class TableBuilder {
+ public:
+  virtual ~TableBuilder();
+
+  virtual void InsertRow(const string_view& key, const string_view& value) = 0;
+
+  virtual void Sync() = 0;
+};
+
 class Table {
  public:
   Table();
 
   virtual ~Table();
 
-  virtual void Sync() = 0;
-
   virtual int IsSorted() = 0;
-
-  virtual void InsertRow(const struct iovec* value, size_t value_count) = 0;
-
-  void InsertRow(const string_view& key, const string_view& value) {
-    iovec iv[2];
-    iv[0].iov_base = const_cast<char*>(key.data());
-    iv[0].iov_len = key.size();
-    iv[1].iov_base = const_cast<char*>(value.data());
-    iv[1].iov_len = value.size();
-    InsertRow(iv, 2);
-  }
 
   // Seeks to the given key.  Returns true if the key was found, false
   // otherwise.
@@ -286,8 +282,8 @@ class Backend {
  public:
   virtual ~Backend();
 
-  virtual std::unique_ptr<Table> Create(const char* path,
-                                        const TableOptions &options) = 0;
+  virtual std::unique_ptr<TableBuilder> Create(const char* path,
+                                               const TableOptions& options) = 0;
 
   virtual std::unique_ptr<Table> Open(const char* path) = 0;
 
@@ -300,9 +296,9 @@ Backend* ca_table_backend(const char* name);
 
 class TableFactory {
  public:
-  static std::unique_ptr<Table> Create(const char* backend_name,
-                                       const char* path,
-                                       const TableOptions &options);
+  static std::unique_ptr<TableBuilder> Create(const char* backend_name,
+                                              const char* path,
+                                              const TableOptions& options);
 
   static std::unique_ptr<Table> Open(const char* backend_name,
                                      const char* path);
@@ -321,7 +317,7 @@ void ca_schema_query_correlate(Schema* schema, const Query* query_A,
 
 /*****************************************************************************/
 
-void ca_table_write_offset_score(Table* table,
+void ca_table_write_offset_score(TableBuilder* table,
                                  const string_view& key,
                                  const struct ca_offset_score* values,
                                  size_t count);

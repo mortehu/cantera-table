@@ -129,7 +129,7 @@ class LevelDBReader : public leveldb::RandomAccessFile {
 
 /*****************************************************************************/
 
-class LevelDBTable : public Table {
+class LevelDBTable : public Table, public TableBuilder {
  public:
   LevelDBTable(const char* path, const TableOptions& options) {
     leveldb::Options leveldb_options;
@@ -171,13 +171,9 @@ class LevelDBTable : public Table {
 
   int IsSorted() override { return true; }
 
-  void InsertRow(const struct iovec* value, size_t value_count) override {
-    KJ_REQUIRE(value_count == 2);
-
-    Add(leveldb::Slice(reinterpret_cast<const char*>(value[0].iov_base),
-                       value[0].iov_len),
-        leveldb::Slice(reinterpret_cast<const char*>(value[1].iov_base),
-                       value[1].iov_len));
+  void InsertRow(const string_view& key, const string_view& value) override {
+    Add(leveldb::Slice(key.data(), key.size()),
+        leveldb::Slice(value.data(), value.size()));
   }
 
   void SeekToFirst() override {
@@ -285,7 +281,7 @@ class LevelDBTable : public Table {
 
 }  // namespace
 
-std::unique_ptr<Table> LevelDBTableBackend::Create(
+std::unique_ptr<TableBuilder> LevelDBTableBackend::Create(
     const char* path, const TableOptions& options) {
   return std::make_unique<LevelDBTable>(path, options);
 }

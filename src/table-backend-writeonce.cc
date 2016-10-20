@@ -1399,7 +1399,7 @@ class WriteOnceReader_v3 : public WriteOnceSeekableReader {
 
 /*****************************************************************************/
 
-class WriteOnceTable : public SeekableTable {
+class WriteOnceTable : public SeekableTable, public TableBuilder {
  public:
   WriteOnceTable(const char* path, const TableOptions& options) {
     builder_ = options.GetInputUnsorted()
@@ -1444,16 +1444,8 @@ class WriteOnceTable : public SeekableTable {
     }
   }
 
-  void InsertRow(const struct iovec* value, size_t value_count) override {
-    KJ_REQUIRE(value_count == 2);
-
-    if (builder_) {
-      const string_view k(reinterpret_cast<const char*>(value[0].iov_base),
-                          value[0].iov_len);
-      const string_view v(reinterpret_cast<const char*>(value[1].iov_base),
-                          value[1].iov_len);
-      builder_->Add(k, v);
-    }
+  void InsertRow(const string_view& key, const string_view& value) override {
+    if (builder_) builder_->Add(key, value);
   }
 
   void Sync() override {
@@ -1514,7 +1506,7 @@ class WriteOnceTable : public SeekableTable {
 
 /*****************************************************************************/
 
-std::unique_ptr<Table> WriteOnceTableBackend::Create(
+std::unique_ptr<TableBuilder> WriteOnceTableBackend::Create(
     const char* path, const TableOptions& options) {
   return std::make_unique<WriteOnceTable>(path, options);
 }

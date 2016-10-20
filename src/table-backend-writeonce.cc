@@ -907,12 +907,12 @@ class WriteOnceSortingBuilder : public WriteOnceBuilder {
 
 /*****************************************************************************/
 
-class WriteOnceBase {
+class WriteOnceTableBase {
  public:
-  WriteOnceBase(kj::AutoCloseFd&& fd, uint64_t index_offset)
+  WriteOnceTableBase(kj::AutoCloseFd&& fd, uint64_t index_offset)
       : fd_(std::move(fd)), index_offset_(index_offset) {}
 
-  virtual ~WriteOnceBase() noexcept {
+  virtual ~WriteOnceTableBase() noexcept {
     try {
       fd_ = nullptr;
     } catch (...) {
@@ -925,16 +925,16 @@ class WriteOnceBase {
   uint64_t index_offset_;
 };
 
-class WriteOnceReader : public WriteOnceBase, public Table {
+class WriteOnceTable : public WriteOnceTableBase, public Table {
  public:
-  WriteOnceReader(kj::AutoCloseFd&& fd, uint64_t index_offset)
-      : WriteOnceBase(std::move(fd), index_offset) {}
+  WriteOnceTable(kj::AutoCloseFd&& fd, uint64_t index_offset)
+      : WriteOnceTableBase(std::move(fd), index_offset) {}
 };
 
-class WriteOnceSeekableReader : public WriteOnceBase, public SeekableTable {
+class WriteOnceSeekableTable : public WriteOnceTableBase, public SeekableTable {
  public:
-  WriteOnceSeekableReader(kj::AutoCloseFd&& fd, uint64_t index_offset)
-      : WriteOnceBase(std::move(fd), index_offset) {}
+  WriteOnceSeekableTable(kj::AutoCloseFd&& fd, uint64_t index_offset)
+      : WriteOnceTableBase(std::move(fd), index_offset) {}
 
   off_t Offset() override { return offset_ - sizeof(struct CA_wo_header); }
 
@@ -970,11 +970,11 @@ class WriteOnceSeekableReader : public WriteOnceBase, public SeekableTable {
 
 /*****************************************************************************/
 
-class WriteOnceReader_v4 : public WriteOnceReader {
+class WriteOnceTable_v4 : public WriteOnceTable {
  public:
-  WriteOnceReader_v4(kj::AutoCloseFd&& fd, uint64_t index_offset,
-                     TableCompression compression)
-      : WriteOnceReader(std::move(fd), index_offset),
+  WriteOnceTable_v4(kj::AutoCloseFd&& fd, uint64_t index_offset,
+                    TableCompression compression)
+      : WriteOnceTable(std::move(fd), index_offset),
         compression_(compression),
         index_cache_(index_),
         block_cache_(block_) {
@@ -1105,11 +1105,11 @@ class WriteOnceReader_v4 : public WriteOnceReader {
 
 /*****************************************************************************/
 
-class WriteOnceSeekableReader_v4 : public WriteOnceSeekableReader {
+class WriteOnceSeekableTable_v4 : public WriteOnceSeekableTable {
  public:
-  WriteOnceSeekableReader_v4(const std::string& path, kj::AutoCloseFd&& fd,
-                             uint64_t index_offset)
-      : WriteOnceSeekableReader(std::move(fd), index_offset),
+  WriteOnceSeekableTable_v4(const std::string& path, kj::AutoCloseFd&& fd,
+                            uint64_t index_offset)
+      : WriteOnceSeekableTable(std::move(fd), index_offset),
         index_cache_(index_) {
     uint64_t size = FileSize(fd_) - index_offset_;
 
@@ -1123,7 +1123,7 @@ class WriteOnceSeekableReader_v4 : public WriteOnceSeekableReader {
     if (MAP_FAILED == map_) KJ_FAIL_SYSCALL("mmap", errno, path);
   }
 
-  virtual ~WriteOnceSeekableReader_v4() {
+  virtual ~WriteOnceSeekableTable_v4() {
     if (map_ != MAP_FAILED) munmap(map_, index_offset_);
   }
 
@@ -1207,15 +1207,15 @@ uint64_t CA_wo_hash(const string_view& str) {
   return result;
 }
 
-class WriteOnceReader_v3 : public WriteOnceSeekableReader {
+class WriteOnceTable_v3 : public WriteOnceSeekableTable {
  public:
-  WriteOnceReader_v3(const std::string& path, kj::AutoCloseFd&& fd,
-                     uint64_t index_offset)
-      : WriteOnceSeekableReader(std::move(fd), index_offset) {
+  WriteOnceTable_v3(const std::string& path, kj::AutoCloseFd&& fd,
+                    uint64_t index_offset)
+      : WriteOnceSeekableTable(std::move(fd), index_offset) {
     MemoryMap(path);
   }
 
-  virtual ~WriteOnceReader_v3() {
+  virtual ~WriteOnceTable_v3() {
     if (buffer_ != MAP_FAILED) munmap(buffer_, buffer_size_);
   }
 
@@ -1427,15 +1427,15 @@ std::unique_ptr<Table> WriteOnceTableBackend::Open(const char* path) {
   struct CA_wo_header header;
   kj::AutoCloseFd fd = ReadHeader(header, path);
   if (header.major_version <= 3) {
-    return std::make_unique<WriteOnceReader_v3>(path, std::move(fd),
-                                                header.index_offset);
+    return std::make_unique<WriteOnceTable_v3>(path, std::move(fd),
+                                               header.index_offset);
   } else if ((header.flags & CA_WO_FLAG_SEEKABLE) == 0) {
-    return std::make_unique<WriteOnceReader_v4>(
+    return std::make_unique<WriteOnceTable_v4>(
         std::move(fd), header.index_offset,
         TableCompression(header.compression));
   } else {
-    return std::make_unique<WriteOnceSeekableReader_v4>(path, std::move(fd),
-                                                        header.index_offset);
+    return std::make_unique<WriteOnceSeekableTable_v4>(path, std::move(fd),
+                                                       header.index_offset);
   }
 }
 
@@ -1444,14 +1444,14 @@ std::unique_ptr<SeekableTable> WriteOnceTableBackend::OpenSeekable(
   struct CA_wo_header header;
   kj::AutoCloseFd fd = ReadHeader(header, path);
   if (header.major_version <= 3) {
-    return std::make_unique<WriteOnceReader_v3>(path, std::move(fd),
-                                                header.index_offset);
+    return std::make_unique<WriteOnceTable_v3>(path, std::move(fd),
+                                               header.index_offset);
   } else if ((header.flags & CA_WO_FLAG_SEEKABLE) == 0) {
     KJ_FAIL_REQUIRE("the write-once table is not seekable", path);
     return nullptr;
   } else {
-    return std::make_unique<WriteOnceSeekableReader_v4>(path, std::move(fd),
-                                                        header.index_offset);
+    return std::make_unique<WriteOnceSeekableTable_v4>(path, std::move(fd),
+                                                       header.index_offset);
   }
 }
 

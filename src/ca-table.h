@@ -232,7 +232,7 @@ class TableBuilder {
 
 class Table {
  public:
-  Table();
+  Table(const struct stat& st);
 
   virtual ~Table();
 
@@ -266,11 +266,13 @@ class Table {
     return {reinterpret_cast<const char*>(value.iov_base), value.iov_len};
   }
 
-  struct stat st;
+  const struct stat st;
 };
 
 class SeekableTable : public Table {
  public:
+  SeekableTable(const struct stat& st);
+
   virtual off_t Offset() = 0;
 
   virtual void Seek(off_t offset, int whence) = 0;
@@ -285,9 +287,15 @@ class Backend {
   virtual std::unique_ptr<TableBuilder> Create(const char* path,
                                                const TableOptions& options) = 0;
 
-  virtual std::unique_ptr<Table> Open(const char* path) = 0;
+  // NOTE: The fd ownership is transferred to the created object so it is
+  // responsible for closing the file when it is no longer needed.
+  virtual std::unique_ptr<Table> Open(const char* path, int fd,
+                                      const struct stat& st) = 0;
 
-  virtual std::unique_ptr<SeekableTable> OpenSeekable(const char* path) = 0;
+  // NOTE: The fd ownership is transferred to the created object so it is
+  // responsible for closing the file when it is no longer needed.
+  virtual std::unique_ptr<SeekableTable> OpenSeekable(
+      const char* path, int fd, const struct stat& st) = 0;
 };
 
 Backend* ca_table_backend(const char* name);

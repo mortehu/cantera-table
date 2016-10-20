@@ -15,31 +15,50 @@ using namespace internal;
 
 namespace {
 
-const char* detect_table_format(const char* path) {
-  kj::AutoCloseFd fd(OpenFile(path, O_RDONLY));
-
+static const char* detect_table_format(const char* path, int fd, off_t length) {
   uint64_t magic;
-  ReadWithOffset(fd.get(), &magic, sizeof(magic), 0);
+  ReadWithOffset(fd, &magic, sizeof(magic), 0);
 
   if (magic == UINT64_C(0x6c6261742e692e70)) return "write-once";
 
-  off_t length;
-  KJ_SYSCALL(length = lseek(fd.get(), 0, SEEK_END));
-
-  ReadWithOffset(fd.get(), &magic, sizeof(magic), length - 8);
+  ReadWithOffset(fd, &magic, sizeof(magic), length - 8);
 
   if (magic == UINT64_C(0xdb4775248b80fb57)) return "leveldb-table";
 
   KJ_FAIL_REQUIRE("Unrecognized table format", path);
 }
 
-static void init_stat(struct stat& st, const char* path) {
-  std::memset(&st, 0, sizeof(st));
-  KJ_SYSCALL(stat(path, &st), path);
+// Do not use kj::AutoCloseFd here as the fd is to be passed through the
+// external API and we do not want to pollute it with extra dependencies.
+static int open_and_stat(struct stat& st, const char* path) {
+  const int fd = open(path, O_RDONLY | O_CLOEXEC);
+  if (fd == -1) KJ_FAIL_SYSCALL("open", errno, path);
+
+  // A bit of ugly C-style code.
+  if (fstat(fd, &st) == -1) {
+    int errno_fstat = errno;
+    close(fd);
+    KJ_FAIL_SYSCALL("fstat", errno_fstat, path);
+  }
+
+  return fd;
 }
 
 static Backend* get_backend(const char* backend_name, const char* path) {
-  if (!backend_name) backend_name = detect_table_format(path);
+  if (!backend_name) {
+    //
+    // FIXME: Perhaps a wiser approach is to raise an error immediately.
+    //
+    // Infer the backend from a previous instance of the file if any.
+    kj::AutoCloseFd fd = OpenFile(path, O_RDONLY | O_CLOEXEC);
+    backend_name = detect_table_format(path, fd.get(), FileSize(fd.get()));
+  }
+  return ca_table_backend(backend_name);
+}
+
+static Backend* get_backend(const char* backend_name, const char* path, int fd,
+                            const struct stat& st) {
+  if (!backend_name) backend_name = detect_table_format(path, fd, st.st_size);
   return ca_table_backend(backend_name);
 }
 
@@ -48,11 +67,13 @@ std::unique_ptr<Backend> writeonce_backend;
 
 }  // namespace
 
-Table::Table() {}
+TableBuilder::~TableBuilder() {}
+
+Table::Table(const struct stat& s) : st(s) {}
 
 Table::~Table() {}
 
-TableBuilder::~TableBuilder() {}
+SeekableTable::SeekableTable(const struct stat& s) : Table(s) {}
 
 Backend::~Backend() {}
 
@@ -92,27 +113,15 @@ std::unique_ptr<TableBuilder> TableFactory::Create(
 std::unique_ptr<Table> TableFactory::Open(const char* backend_name,
                                           const char* path) {
   struct stat st;
-  init_stat(st, path);
-
-  Backend* backend = get_backend(backend_name, path);
-  auto result = backend->Open(path);
-
-  result->st = st;
-
-  return result;
+  int fd = open_and_stat(st, path);
+  return get_backend(backend_name, path, fd, st)->Open(path, fd, st);
 }
 
 std::unique_ptr<SeekableTable> TableFactory::OpenSeekable(
     const char* backend_name, const char* path) {
   struct stat st;
-  init_stat(st, path);
-
-  Backend* backend = get_backend(backend_name, path);
-  auto result = backend->OpenSeekable(path);
-
-  result->st = st;
-
-  return result;
+  int fd = open_and_stat(st, path);
+  return get_backend(backend_name, path, fd, st)->OpenSeekable(path, fd, st);
 }
 
 }  // namespace table

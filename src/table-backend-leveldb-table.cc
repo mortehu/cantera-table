@@ -149,10 +149,11 @@ class LevelDBBuilder : public TableBuilder {
 
 class LevelDBTable : public Table, private leveldb::RandomAccessFile {
  public:
-  LevelDBTable(const char* path) : fd_(OpenFile(path, O_RDONLY | O_CLOEXEC)) {
+  LevelDBTable(const char* path, int fd, const struct stat& st)
+      : Table(st), fd_(fd) {
     leveldb::Table* table;
     CHECK_STATUS(
-        leveldb::Table::Open(leveldb::Options(), this, FileSize(fd_), &table));
+        leveldb::Table::Open(leveldb::Options(), this, st.st_size, &table));
     table_.reset(table);
 
     iterator_.reset(table_->NewIterator(leveldb::ReadOptions()));
@@ -265,12 +266,13 @@ std::unique_ptr<TableBuilder> LevelDBTableBackend::Create(
   return std::make_unique<LevelDBBuilder>(path, options);
 }
 
-std::unique_ptr<Table> LevelDBTableBackend::Open(const char* path) {
-  return std::make_unique<LevelDBTable>(path);
+std::unique_ptr<Table> LevelDBTableBackend::Open(const char* path, int fd,
+                                                 const struct stat& st) {
+  return std::make_unique<LevelDBTable>(path, fd, st);
 }
 
 std::unique_ptr<SeekableTable> LevelDBTableBackend::OpenSeekable(
-    const char* path) {
+    const char* path, int fd, const struct stat& st) {
   KJ_FAIL_REQUIRE("LevelDB tables are not seekable");
   return nullptr;
 }

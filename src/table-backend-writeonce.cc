@@ -927,14 +927,16 @@ class WriteOnceTableBase {
 
 class WriteOnceTable : public WriteOnceTableBase, public Table {
  public:
-  WriteOnceTable(kj::AutoCloseFd&& fd, uint64_t index_offset)
-      : WriteOnceTableBase(std::move(fd), index_offset) {}
+  WriteOnceTable(kj::AutoCloseFd&& fd, const struct stat& st,
+                 uint64_t index_offset)
+      : WriteOnceTableBase(std::move(fd), index_offset), Table(st) {}
 };
 
 class WriteOnceSeekableTable : public WriteOnceTableBase, public SeekableTable {
  public:
-  WriteOnceSeekableTable(kj::AutoCloseFd&& fd, uint64_t index_offset)
-      : WriteOnceTableBase(std::move(fd), index_offset) {}
+  WriteOnceSeekableTable(kj::AutoCloseFd&& fd, const struct stat& st,
+                         uint64_t index_offset)
+      : WriteOnceTableBase(std::move(fd), index_offset), SeekableTable(st) {}
 
   off_t Offset() override { return offset_ - sizeof(struct CA_wo_header); }
 
@@ -972,9 +974,9 @@ class WriteOnceSeekableTable : public WriteOnceTableBase, public SeekableTable {
 
 class WriteOnceTable_v4 : public WriteOnceTable {
  public:
-  WriteOnceTable_v4(kj::AutoCloseFd&& fd, uint64_t index_offset,
-                    TableCompression compression)
-      : WriteOnceTable(std::move(fd), index_offset),
+  WriteOnceTable_v4(kj::AutoCloseFd&& fd, const struct stat& st,
+                    uint64_t index_offset, TableCompression compression)
+      : WriteOnceTable(std::move(fd), st, index_offset),
         compression_(compression),
         index_cache_(index_),
         block_cache_(block_) {
@@ -1048,7 +1050,7 @@ class WriteOnceTable_v4 : public WriteOnceTable {
 
  private:
   void ReadIndex() {
-    uint64_t size = FileSize(fd_) - index_offset_;
+    uint64_t size = st.st_size - index_offset_;
     bool compressed = (compression_ != kTableCompressionNone);
     index_.Unmarshal(Read(index_offset_, size, compressed));
   }
@@ -1108,10 +1110,10 @@ class WriteOnceTable_v4 : public WriteOnceTable {
 class WriteOnceSeekableTable_v4 : public WriteOnceSeekableTable {
  public:
   WriteOnceSeekableTable_v4(const std::string& path, kj::AutoCloseFd&& fd,
-                            uint64_t index_offset)
-      : WriteOnceSeekableTable(std::move(fd), index_offset),
+                            const struct stat& st, uint64_t index_offset)
+      : WriteOnceSeekableTable(std::move(fd), st, index_offset),
         index_cache_(index_) {
-    uint64_t size = FileSize(fd_) - index_offset_;
+    uint64_t size = st.st_size - index_offset_;
 
     DataBuffer read_buffer;
     read_buffer.resize(size);
@@ -1210,8 +1212,8 @@ uint64_t CA_wo_hash(const string_view& str) {
 class WriteOnceTable_v3 : public WriteOnceSeekableTable {
  public:
   WriteOnceTable_v3(const std::string& path, kj::AutoCloseFd&& fd,
-                    uint64_t index_offset)
-      : WriteOnceSeekableTable(std::move(fd), index_offset) {
+                    const struct stat& st, uint64_t index_offset)
+      : WriteOnceSeekableTable(std::move(fd), st, index_offset) {
     MemoryMap(path);
   }
 
@@ -1327,7 +1329,7 @@ class WriteOnceTable_v3 : public WriteOnceSeekableTable {
 
  private:
   void MemoryMap(const std::string& path) {
-    uint64_t size = FileSize(fd_);
+    uint64_t size = st.st_size;
 
     KJ_REQUIRE(static_cast<size_t>(size) > sizeof(struct CA_wo_header), size,
                sizeof(struct CA_wo_header));
@@ -1390,10 +1392,7 @@ class WriteOnceTable_v3 : public WriteOnceSeekableTable {
 
 /*****************************************************************************/
 
-static kj::AutoCloseFd ReadHeader(struct CA_wo_header header,
-                                  const char* path) {
-  kj::AutoCloseFd fd = OpenFile(path, O_RDONLY | O_CLOEXEC);
-
+static void ReadHeader(struct CA_wo_header& header, int fd) {
   FileIO(fd).Read(&header, sizeof header);
   KJ_REQUIRE(header.magic == MAGIC, header.magic, MAGIC);
   KJ_REQUIRE(header.major_version <= MAJOR_VERSION ||
@@ -1408,8 +1407,6 @@ static kj::AutoCloseFd ReadHeader(struct CA_wo_header header,
     if ((header.flags & CA_WO_FLAG_EXTENDED) != 0)
       KJ_UNIMPLEMENTED("extended write-once tables are not supported yet");
   }
-
-  return fd;
 }
 
 }  // namespace
@@ -1423,35 +1420,42 @@ std::unique_ptr<TableBuilder> WriteOnceTableBackend::Create(
              : std::make_unique<WriteOnceBuilder>(path, options);
 }
 
-std::unique_ptr<Table> WriteOnceTableBackend::Open(const char* path) {
+std::unique_ptr<Table> WriteOnceTableBackend::Open(const char* path, int fd,
+                                                   const struct stat& st) {
+  kj::AutoCloseFd ac_fd(fd);
+
   struct CA_wo_header header;
-  kj::AutoCloseFd fd = ReadHeader(header, path);
+  ReadHeader(header, fd);
+
   if (header.major_version <= 3) {
-    return std::make_unique<WriteOnceTable_v3>(path, std::move(fd),
+    return std::make_unique<WriteOnceTable_v3>(path, std::move(ac_fd), st,
                                                header.index_offset);
   } else if ((header.flags & CA_WO_FLAG_SEEKABLE) == 0) {
     return std::make_unique<WriteOnceTable_v4>(
-        std::move(fd), header.index_offset,
+        std::move(ac_fd), st, header.index_offset,
         TableCompression(header.compression));
   } else {
-    return std::make_unique<WriteOnceSeekableTable_v4>(path, std::move(fd),
-                                                       header.index_offset);
+    return std::make_unique<WriteOnceSeekableTable_v4>(path, std::move(ac_fd),
+                                                       st, header.index_offset);
   }
 }
 
 std::unique_ptr<SeekableTable> WriteOnceTableBackend::OpenSeekable(
-    const char* path) {
+    const char* path, int fd, const struct stat& st) {
+  kj::AutoCloseFd ac_fd(fd);
+
   struct CA_wo_header header;
-  kj::AutoCloseFd fd = ReadHeader(header, path);
+  ReadHeader(header, fd);
+
   if (header.major_version <= 3) {
-    return std::make_unique<WriteOnceTable_v3>(path, std::move(fd),
+    return std::make_unique<WriteOnceTable_v3>(path, std::move(ac_fd), st,
                                                header.index_offset);
   } else if ((header.flags & CA_WO_FLAG_SEEKABLE) == 0) {
     KJ_FAIL_REQUIRE("the write-once table is not seekable", path);
     return nullptr;
   } else {
-    return std::make_unique<WriteOnceSeekableTable_v4>(path, std::move(fd),
-                                                       header.index_offset);
+    return std::make_unique<WriteOnceSeekableTable_v4>(path, std::move(ac_fd),
+                                                       st, header.index_offset);
   }
 }
 

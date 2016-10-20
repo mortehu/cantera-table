@@ -30,23 +30,9 @@ struct ca_offset_score;
 class Query;
 class Schema;
 class Table;
-class SeekableTable;
-class TableOptions;
 
 // Escape string for use in tab delimited format.
 std::string Escape(const string_view& str);
-
-class Backend {
- public:
-  virtual ~Backend();
-
-  virtual std::unique_ptr<Table> Create(const char* path,
-                                        const TableOptions &options) = 0;
-
-  virtual std::unique_ptr<Table> Open(const char* path) = 0;
-
-  virtual std::unique_ptr<SeekableTable> OpenSeekable(const char* path) = 0;
-};
 
 void LookupKey(const std::vector<Table*>& index_tables,
                const char* key,
@@ -152,10 +138,6 @@ struct ca_score {
   float score_pct75 = std::numeric_limits<float>::quiet_NaN();
   float score_pct95 = std::numeric_limits<float>::quiet_NaN();
 };
-
-/*****************************************************************************/
-
-Backend* ca_table_backend(const char* name);
 
 /*****************************************************************************/
 
@@ -297,6 +279,22 @@ class SeekableTable : public Table {
 
   virtual void Seek(off_t offset, int whence) = 0;
 };
+
+/*****************************************************************************/
+
+class Backend {
+ public:
+  virtual ~Backend();
+
+  virtual std::unique_ptr<Table> Create(const char* path,
+                                        const TableOptions &options) = 0;
+
+  virtual std::unique_ptr<Table> Open(const char* path) = 0;
+
+  virtual std::unique_ptr<SeekableTable> OpenSeekable(const char* path) = 0;
+};
+
+Backend* ca_table_backend(const char* name);
 
 /*****************************************************************************/
 

@@ -17,8 +17,6 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
-#include <kj/debug.h>
-
 namespace cantera {
 
 using string_view = std::experimental::string_view;
@@ -238,14 +236,14 @@ class Table {
 
   virtual int IsSorted() = 0;
 
+  virtual void SeekToFirst() = 0;
+
   // Seeks to the given key.  Returns true if the key was found, false
   // otherwise.
   //
   // If the key was not found, the cursor MAY have moved, but not beyond any
   // alphanumerically larger keys.  This allows using this function to be used
   // for speeding up prefix key searches.
-  virtual void SeekToFirst() = 0;
-
   virtual bool SeekToKey(const string_view& key) = 0;
 
   virtual bool Skip(size_t count) = 0;
@@ -258,12 +256,6 @@ class Table {
     key = string_view{reinterpret_cast<const char*>(k.iov_base), k.iov_len};
     value = string_view{reinterpret_cast<const char*>(v.iov_base), v.iov_len};
     return true;
-  }
-
-  string_view ReadValue() {
-    struct iovec key, value;
-    KJ_REQUIRE(ReadRow(&key, &value));
-    return {reinterpret_cast<const char*>(value.iov_base), value.iov_len};
   }
 
   const struct stat st;

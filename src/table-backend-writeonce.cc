@@ -658,8 +658,7 @@ class WriteOnceBuilder : private PendingFile, public TableBuilder {
     WriteHeader(0);
   }
 
-  virtual void InsertRow(const string_view& key,
-                         const string_view& value) override {
+  void InsertRow(const string_view& key, const string_view& value) override {
     KJ_REQUIRE(block_.empty() || block_.GetLaskKey() <= key,
                "unsorted input data");
 
@@ -759,7 +758,7 @@ class WriteOnceBuilder : private PendingFile, public TableBuilder {
 
 /*****************************************************************************/
 
-class WriteOnceSortingBuilder : public WriteOnceBuilder {
+class WriteOnceSortingBuilder final : public WriteOnceBuilder {
  public:
   WriteOnceSortingBuilder(const char* path, const TableOptions& options)
       : WriteOnceBuilder(path, options) {
@@ -938,9 +937,11 @@ class WriteOnceSeekableTable : public WriteOnceTableBase, public SeekableTable {
                          uint64_t index_offset)
       : WriteOnceTableBase(std::move(fd), index_offset), SeekableTable(st) {}
 
-  off_t Offset() override { return offset_ - sizeof(struct CA_wo_header); }
+  off_t Offset() final { return offset_ - sizeof(struct CA_wo_header); }
 
-  void Seek(off_t offset, int whence) override {
+  void SeekToFirst() final { offset_ = sizeof(struct CA_wo_header); }
+
+  void Seek(off_t offset, int whence) final {
     switch (whence) {
       case SEEK_SET:
         offset += sizeof(struct CA_wo_header);
@@ -965,6 +966,14 @@ class WriteOnceSeekableTable : public WriteOnceTableBase, public SeekableTable {
     offset_ = offset;
   }
 
+  bool Skip(size_t count) final {
+    string_view key, value;
+    while (count--) {
+      if (!ReadRow(key, value)) return false;
+    }
+    return true;
+  }
+
  protected:
   // Used for read, seek, offset.
   uint64_t offset_ = sizeof(struct CA_wo_header);
@@ -972,7 +981,7 @@ class WriteOnceSeekableTable : public WriteOnceTableBase, public SeekableTable {
 
 /*****************************************************************************/
 
-class WriteOnceTable_v4 : public WriteOnceTable {
+class WriteOnceTable_v4 final : public WriteOnceTable {
  public:
   WriteOnceTable_v4(kj::AutoCloseFd&& fd, const struct stat& st,
                     uint64_t index_offset, TableCompression compression)
@@ -1102,7 +1111,7 @@ class WriteOnceTable_v4 : public WriteOnceTable {
 
 /*****************************************************************************/
 
-class WriteOnceSeekableTable_v4 : public WriteOnceSeekableTable {
+class WriteOnceSeekableTable_v4 final : public WriteOnceSeekableTable {
  public:
   WriteOnceSeekableTable_v4(const std::string& path, kj::AutoCloseFd&& fd,
                             const struct stat& st, uint64_t index_offset)
@@ -1125,8 +1134,6 @@ class WriteOnceSeekableTable_v4 : public WriteOnceSeekableTable {
   }
 
   int IsSorted() override { return 1; }
-
-  void SeekToFirst() override { offset_ = sizeof(struct CA_wo_header); }
 
   bool SeekToKey(const string_view& key) override {
     uint64_t block_num = index_cache_.FindBlockByKey(key);
@@ -1154,14 +1161,6 @@ class WriteOnceSeekableTable_v4 : public WriteOnceSeekableTable {
 
     offset_ = index_offset_;
     return false;
-  }
-
-  bool Skip(size_t count) override {
-    string_view key, value;
-    while (count--) {
-      if (!ReadRow(key, value)) return false;
-    }
-    return true;
   }
 
   bool ReadRow(string_view& key, string_view& value) override {
@@ -1202,7 +1201,7 @@ uint64_t CA_wo_hash(const string_view& str) {
   return result;
 }
 
-class WriteOnceTable_v3 : public WriteOnceSeekableTable {
+class WriteOnceTable_v3 final : public WriteOnceSeekableTable {
  public:
   WriteOnceTable_v3(const std::string& path, kj::AutoCloseFd&& fd,
                     const struct stat& st, uint64_t index_offset)
@@ -1217,8 +1216,6 @@ class WriteOnceTable_v3 : public WriteOnceSeekableTable {
   int IsSorted() override {
     return 0 != (header_->flags & CA_WO_FLAG_ASCENDING);
   }
-
-  void SeekToFirst() override { Seek(0, SEEK_SET); }
 
   bool SeekToKey(const string_view& key) override {
     if (!has_madvised_index_) MAdviseIndex();
@@ -1284,14 +1281,6 @@ class WriteOnceTable_v3 : public WriteOnceSeekableTable {
     }
 
     return false;
-  }
-
-  bool Skip(size_t count) override {
-    string_view key, value;
-    while (count--) {
-      if (!ReadRow(key, value)) return false;
-    }
-    return true;
   }
 
   bool ReadRow(string_view& key, string_view& value) override {

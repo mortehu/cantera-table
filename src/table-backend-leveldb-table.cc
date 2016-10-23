@@ -66,7 +66,7 @@ using namespace internal;
 
 namespace {
 
-class LevelDBWriter : public PendingFile, public leveldb::WritableFile {
+class LevelDBWriter final : public PendingFile, public leveldb::WritableFile {
  public:
   LevelDBWriter(const char* path, int flags, mode_t mode)
       : PendingFile(path, flags, mode) {}
@@ -101,7 +101,7 @@ class LevelDBWriter : public PendingFile, public leveldb::WritableFile {
 
 /*****************************************************************************/
 
-class LevelDBBuilder : public TableBuilder {
+class LevelDBBuilder final : public TableBuilder {
  public:
   LevelDBBuilder(const char* path, const TableOptions& options) {
     leveldb::Options leveldb_options;
@@ -147,7 +147,7 @@ class LevelDBBuilder : public TableBuilder {
 
 /*****************************************************************************/
 
-class LevelDBTable : public Table, private leveldb::RandomAccessFile {
+class LevelDBTable final : public Table, private leveldb::RandomAccessFile {
  public:
   LevelDBTable(const char* path, int fd, const struct stat& st)
       : Table(st), fd_(fd) {

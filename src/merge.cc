@@ -153,24 +153,32 @@ int ca_table_merge(
 
     KJ_REQUIRE(tables[i]->IsSorted());
 
-    if (!tables[i]->ReadRow(&e.key, &e.value)) continue;
+    string_view key, value;
+    if (!tables[i]->ReadRow(key, value)) continue;
+
+    e.key.iov_len = key.size();
+    e.key.iov_base = const_cast<char *>(key.data());
+    e.value.iov_len = value.size();
+    e.value.iov_base = const_cast<char *>(value.data());
 
     CA_merge_heap_push(&heap[0], heap_size++, &e);
   }
 
   while (heap_size) {
-    struct CA_merge_heap e;
-
-    e = heap[0];
-
+    struct CA_merge_heap e = heap[0];
     if (-1 == callback(&e.key, &e.value)) return -1;
 
-    if (!tables[e.table]->ReadRow(&e.key, &e.value)) {
+    string_view key, value;
+    if (!tables[e.table]->ReadRow(key, value)) {
       CA_merge_heap_pop(&heap[0], heap_size);
       --heap_size;
-
       continue;
     }
+
+    e.key.iov_len = key.size();
+    e.key.iov_base = const_cast<char *>(key.data());
+    e.value.iov_len = value.size();
+    e.value.iov_base = const_cast<char *>(value.data());
 
     CA_merge_heap_replace_top(&heap[0], heap_size, &e);
   }

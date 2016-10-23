@@ -236,27 +236,23 @@ class Table {
 
   virtual int IsSorted() = 0;
 
+  // Seeks to the first table row.
   virtual void SeekToFirst() = 0;
 
   // Seeks to the given key.  Returns true if the key was found, false
   // otherwise.
   //
-  // If the key was not found, the cursor MAY have moved, but not beyond any
-  // alphanumerically larger keys.  This allows using this function to be used
-  // for speeding up prefix key searches.
+  // If the key was not found, the cursor MAY have moved, but not beyond
+  // any alphanumerically larger keys.  This allows this function to be
+  // used for speeding up prefix key searches.
   virtual bool SeekToKey(const string_view& key) = 0;
 
+  // Reads one row.  Returns true if a value was read successfully, or
+  // false if end of file was reached instead.
+  virtual bool ReadRow(string_view& key, string_view& value) = 0;
+
+  // Skips the given number of rows.
   virtual bool Skip(size_t count) = 0;
-
-  virtual bool ReadRow(struct iovec* key, struct iovec* value) = 0;
-
-  inline bool ReadRow(string_view& key, string_view& value) {
-    struct iovec k, v;
-    if (!ReadRow(&k, &v)) return false;
-    key = string_view{reinterpret_cast<const char*>(k.iov_base), k.iov_len};
-    value = string_view{reinterpret_cast<const char*>(v.iov_base), v.iov_len};
-    return true;
-  }
 
   const struct stat st;
 };

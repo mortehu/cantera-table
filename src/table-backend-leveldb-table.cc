@@ -196,32 +196,7 @@ class LevelDBTable : public Table, private leveldb::RandomAccessFile {
     return true;
   }
 
-  bool ReadRow(struct iovec* key, struct iovec* value) override {
-    return ReadRow(const_cast<const void**>(&key->iov_base), &key->iov_len,
-                   const_cast<const void**>(&value->iov_base), &value->iov_len);
-  }
-
- private:
-  bool SeekToKey(const leveldb::Slice& key) {
-    KJ_REQUIRE(iterator_ != nullptr);
-
-    iterator_->Seek(key);
-
-    need_seek_ = false;
-
-    eof_ = !iterator_->Valid();
-
-    if (eof_) return false;
-
-    return 0 == key.compare(iterator_->key());
-  }
-
-  // Reads one row.  Returns true if a value was read successfully, or false if
-  // end of file was reached instead.
-  bool ReadRow(const void** out_key, size_t* out_key_size,
-               const void** out_data, size_t* out_data_size) {
-    KJ_REQUIRE(iterator_ != nullptr);
-
+  bool ReadRow(string_view& key, string_view& value) {
     if (need_seek_) {
       iterator_->Next();
       need_seek_ = false;
@@ -230,17 +205,25 @@ class LevelDBTable : public Table, private leveldb::RandomAccessFile {
 
     if (eof_) return false;
 
-    auto value = iterator_->value();
-    *out_data = reinterpret_cast<const void*>(value.data());
-    *out_data_size = value.size();
-
-    auto key = iterator_->key();
-    *out_key = reinterpret_cast<const void*>(key.data());
-    *out_key_size = key.size();
+    auto k = iterator_->key();
+    key = string_view(k.data(), k.size());
+    auto v = iterator_->value();
+    value = string_view(v.data(), v.size());
 
     need_seek_ = true;
 
     return true;
+  }
+
+ private:
+  bool SeekToKey(const leveldb::Slice& key) {
+    iterator_->Seek(key);
+
+    need_seek_ = false;
+    eof_ = !iterator_->Valid();
+    if (eof_) return false;
+
+    return 0 == key.compare(iterator_->key());
   }
 
   leveldb::Status Read(uint64_t offset, size_t n, leveldb::Slice* result,

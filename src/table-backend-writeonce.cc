@@ -1027,18 +1027,13 @@ class WriteOnceTable_v4 : public WriteOnceTable {
     return true;
   }
 
-  bool ReadRow(struct iovec* key, struct iovec* value) override {
+  bool ReadRow(string_view& key, string_view& value) override {
     if (block_num_ == UINT64_MAX) SeekToFirst();
     if (block_num_ >= index_.num_blocks()) return false;
     if (block_num_ != block_read_num_) ReadBlock(block_num_);
 
-    string_view k = block_cache_.GetKey(entry_num_);
-    key->iov_base = const_cast<char*>(k.data());
-    key->iov_len = k.size();
-
-    string_view v = block_cache_.GetValue(entry_num_);
-    value->iov_base = const_cast<char*>(v.data());
-    value->iov_len = v.size();
+    key = block_cache_.GetKey(entry_num_);
+    value = block_cache_.GetValue(entry_num_);
 
     if (++entry_num_ >= index_.GetNumEntries(block_num_)) {
       ++block_num_;
@@ -1162,14 +1157,14 @@ class WriteOnceSeekableTable_v4 : public WriteOnceSeekableTable {
   }
 
   bool Skip(size_t count) override {
-    struct iovec key, value;
+    string_view key, value;
     while (count--) {
-      if (!ReadRow(&key, &value)) return false;
+      if (!ReadRow(key, value)) return false;
     }
     return true;
   }
 
-  bool ReadRow(struct iovec* key, struct iovec* value) override {
+  bool ReadRow(string_view& key, string_view& value) override {
     if (offset_ >= index_offset_) return false;
 
     const unsigned char* base = reinterpret_cast<unsigned char*>(map_);
@@ -1178,12 +1173,10 @@ class WriteOnceSeekableTable_v4 : public WriteOnceSeekableTable {
     uint32_t k_size = oroch::varint_codec<uint32_t>::value_decode(ptr);
     uint32_t v_size = oroch::varint_codec<uint32_t>::value_decode(ptr);
 
-    key->iov_base = const_cast<unsigned char*>(ptr);
-    key->iov_len = k_size;
+    key = string_view(reinterpret_cast<const char*>(ptr), k_size);
     ptr += k_size;
 
-    value->iov_base = const_cast<unsigned char*>(ptr);
-    value->iov_len = v_size;
+    value = string_view(reinterpret_cast<const char*>(ptr), v_size);
     ptr += v_size;
 
     offset_ = ptr - base;
@@ -1294,35 +1287,30 @@ class WriteOnceTable_v3 : public WriteOnceSeekableTable {
   }
 
   bool Skip(size_t count) override {
-    struct iovec key, value;
+    string_view key, value;
     while (count--) {
-      if (!ReadRow(&key, &value)) return false;
+      if (!ReadRow(key, value)) return false;
     }
     return true;
   }
 
-  bool ReadRow(struct iovec* key, struct iovec* value) override {
-    uint64_t size;
-    uint8_t* p;
-
+  bool ReadRow(string_view& key, string_view& value) override {
     KJ_REQUIRE(offset_ >= sizeof(struct CA_wo_header));
 
-    p = reinterpret_cast<uint8_t*>(buffer_) + offset_;
-
+    uint8_t* p = reinterpret_cast<uint8_t*>(buffer_) + offset_;
     if (offset_ >= header_->index_offset || *p == 0) return false;
 
-    size = ca_parse_integer((const uint8_t**)&p);
+    uint64_t size = ca_parse_integer((const uint8_t**)&p);
 
-    key->iov_base = p;
-    key->iov_len = strlen(reinterpret_cast<const char*>(key->iov_base));
+    key = string_view(reinterpret_cast<char*>(p),
+                      strlen(reinterpret_cast<char*>(p)));
 
-    KJ_ASSERT(size > key->iov_len, size, key->iov_len);
+    KJ_ASSERT(size > key.size(), size, key.size());
 
-    value->iov_base = p + key->iov_len + 1;
-    value->iov_len = size - key->iov_len - 1;
+    value = string_view(reinterpret_cast<char*>(p) + key.size() + 1,
+                        size - key.size() - 1);
 
-    p += size;
-    offset_ = p - reinterpret_cast<uint8_t*>(buffer_);
+    offset_ = p + size - reinterpret_cast<uint8_t*>(buffer_);
 
     return true;
   }

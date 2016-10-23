@@ -268,28 +268,6 @@ class SeekableTable : public Table {
 
 /*****************************************************************************/
 
-class Backend {
- public:
-  virtual ~Backend();
-
-  virtual std::unique_ptr<TableBuilder> Create(const char* path,
-                                               const TableOptions& options) = 0;
-
-  // NOTE: The fd ownership is transferred to the created object so it is
-  // responsible for closing the file when it is no longer needed.
-  virtual std::unique_ptr<Table> Open(const char* path, int fd,
-                                      const struct stat& st) = 0;
-
-  // NOTE: The fd ownership is transferred to the created object so it is
-  // responsible for closing the file when it is no longer needed.
-  virtual std::unique_ptr<SeekableTable> OpenSeekable(
-      const char* path, int fd, const struct stat& st) = 0;
-};
-
-Backend* ca_table_backend(const char* name);
-
-/*****************************************************************************/
-
 class TableFactory {
  public:
   static std::unique_ptr<TableBuilder> Create(const char* backend_name,

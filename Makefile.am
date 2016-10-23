@@ -71,6 +71,8 @@ libca_table_la_SOURCES = \
   src/table-backend-leveldb-table.h \
   src/table-backend-writeonce.cc \
   src/table-backend-writeonce.h \
+  src/table-backend.cc \
+  src/table-backend.h \
   src/table-write.cc \
   src/table.cc \
   src/thread-pool.h \

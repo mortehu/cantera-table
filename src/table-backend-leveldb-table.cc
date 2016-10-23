@@ -249,13 +249,14 @@ std::unique_ptr<TableBuilder> LevelDBTableBackend::Create(
   return std::make_unique<LevelDBBuilder>(path, options);
 }
 
-std::unique_ptr<Table> LevelDBTableBackend::Open(const char* path, int fd,
+std::unique_ptr<Table> LevelDBTableBackend::Open(const char* path,
+                                                 kj::AutoCloseFd fd,
                                                  const struct stat& st) {
   return std::make_unique<LevelDBTable>(path, fd, st);
 }
 
 std::unique_ptr<SeekableTable> LevelDBTableBackend::OpenSeekable(
-    const char* path, int fd, const struct stat& st) {
+    const char* path, kj::AutoCloseFd fd, const struct stat& st) {
   KJ_FAIL_REQUIRE("LevelDB tables are not seekable");
   return nullptr;
 }

@@ -99,7 +99,7 @@ libca_table_la_LIBADD = \
   -lre2
 libca_table_la_LDFLAGS = \
   -no-undefined \
-  -version-info 1:1:0 \
+  -version-info 2:0:0 \
   -export-symbols-regex '^_ZNK?7cantera5table.*'
 
 ca_shell_SOURCES = \

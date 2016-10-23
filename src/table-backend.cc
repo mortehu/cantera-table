@@ -7,6 +7,7 @@
 
 namespace cantera {
 namespace table {
+namespace internal {
 
 Backend* ca_table_backend(const char* name) {
   static std::unique_ptr<Backend> leveldb_table_backend;
@@ -28,5 +29,6 @@ Backend* ca_table_backend(const char* name) {
   return nullptr;
 }
 
+}  // namespace internal
 }  // namespace table
 }  // namespace cantera

@@ -46,7 +46,6 @@
 #include <leveldb/table.h>
 #include <leveldb/table_builder.h>
 
-#include "src/ca-table.h"
 #include "src/util.h"
 
 #if !HAVE_FDATASYNC || !HAVE_DECL_FDATASYNC
@@ -61,10 +60,7 @@
 
 namespace cantera {
 namespace table {
-
-using namespace internal;
-
-namespace {
+namespace internal {
 
 class LevelDBWriter final : public PendingFile, public leveldb::WritableFile {
  public:
@@ -242,7 +238,7 @@ class LevelDBTable final : public Table, private leveldb::RandomAccessFile {
   bool eof_ = false;
 };
 
-}  // namespace
+/*****************************************************************************/
 
 std::unique_ptr<TableBuilder> LevelDBTableBackend::Create(
     const char* path, const TableOptions& options) {
@@ -261,5 +257,6 @@ std::unique_ptr<SeekableTable> LevelDBTableBackend::OpenSeekable(
   return nullptr;
 }
 
+}  // namespace internal
 }  // namespace table
 }  // namespace cantera

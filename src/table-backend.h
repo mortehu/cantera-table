@@ -7,6 +7,7 @@
 
 namespace cantera {
 namespace table {
+namespace internal {
 
 class Backend {
  public:
@@ -24,6 +25,7 @@ class Backend {
 
 Backend* ca_table_backend(const char* name);
 
+}  // namespace internal
 }  // namespace table
 }  // namespace cantera
 

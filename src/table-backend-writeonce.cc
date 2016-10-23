@@ -47,7 +47,6 @@
 
 #include <zstd.h>
 
-#include "src/ca-table.h"
 #include "src/util.h"
 
 #include "third_party/oroch/oroch/integer_codec.h"
@@ -56,15 +55,9 @@
 #define MAJOR_VERSION 4
 #define MINOR_VERSION 0
 
-#define TMP_SUFFIX ".tmp.XXXXXX"
-#define BUFFER_SIZE (1024 * 1024)
-
 namespace cantera {
 namespace table {
-
-using namespace internal;
-
-namespace {
+namespace internal {
 
 enum CA_wo_flags {
   // v3 flags
@@ -1399,8 +1392,6 @@ static void ReadHeader(struct CA_wo_header& header, int fd) {
   }
 }
 
-}  // namespace
-
 /*****************************************************************************/
 
 std::unique_ptr<TableBuilder> WriteOnceTableBackend::Create(
@@ -1446,5 +1437,6 @@ std::unique_ptr<SeekableTable> WriteOnceTableBackend::OpenSeekable(
       path, std::move(fd), st, header.index_offset, compression);
 }
 
+}  // namespace internal
 }  // namespace table
 }  // namespace cantera

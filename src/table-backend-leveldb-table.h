@@ -5,6 +5,7 @@
 
 namespace cantera {
 namespace table {
+namespace internal {
 
 class LevelDBTableBackend final : public Backend {
  public:
@@ -19,6 +20,7 @@ class LevelDBTableBackend final : public Backend {
                                               const struct stat& st) override;
 };
 
+}  // namespace internal
 }  // namespace table
 }  // namespace cantera
 

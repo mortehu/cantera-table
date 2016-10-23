@@ -1114,7 +1114,8 @@ class WriteOnceTable_v4 final : public WriteOnceTable {
 class WriteOnceSeekableTable_v4 final : public WriteOnceSeekableTable {
  public:
   WriteOnceSeekableTable_v4(const std::string& path, kj::AutoCloseFd&& fd,
-                            const struct stat& st, uint64_t index_offset)
+                            const struct stat& st, uint64_t index_offset,
+                            TableCompression compression)
       : WriteOnceSeekableTable(std::move(fd), st, index_offset),
         index_cache_(index_) {
     uint64_t size = st.st_size - index_offset_;
@@ -1123,7 +1124,19 @@ class WriteOnceSeekableTable_v4 final : public WriteOnceSeekableTable {
     read_buffer.resize(size);
     FileIO(fd_).Read(read_buffer, index_offset_);
 
-    index_.Unmarshal(read_buffer);
+    if (compression == kTableCompressionNone) {
+      index_.Unmarshal(read_buffer);
+    } else {
+      size = ZSTD_getDecompressedSize(read_buffer.data(), size);
+
+      DataBuffer decompress_buffer;
+      decompress_buffer.resize(size);
+
+      ZstdDecompressor decompressor;
+      decompressor.Go(decompress_buffer, read_buffer);
+
+      index_.Unmarshal(decompress_buffer);
+    }
 
     map_ = mmap(NULL, index_offset_, PROT_READ, MAP_SHARED, fd_, 0);
     if (MAP_FAILED == map_) KJ_FAIL_SYSCALL("mmap", errno, path);
@@ -1404,17 +1417,17 @@ std::unique_ptr<Table> WriteOnceTableBackend::Open(const char* path, int fd,
   struct CA_wo_header header;
   ReadHeader(header, fd);
 
-  if (header.major_version <= 3) {
+  if (header.major_version <= 3)
     return std::make_unique<WriteOnceTable_v3>(path, std::move(ac_fd), st,
                                                header.index_offset);
-  } else if ((header.flags & CA_WO_FLAG_SEEKABLE) == 0) {
+
+  TableCompression compression = TableCompression(header.compression);
+  if ((header.flags & CA_WO_FLAG_SEEKABLE) == 0)
     return std::make_unique<WriteOnceTable_v4>(
-        std::move(ac_fd), st, header.index_offset,
-        TableCompression(header.compression));
-  } else {
-    return std::make_unique<WriteOnceSeekableTable_v4>(path, std::move(ac_fd),
-                                                       st, header.index_offset);
-  }
+        std::move(ac_fd), st, header.index_offset, compression);
+
+  return std::make_unique<WriteOnceSeekableTable_v4>(
+      path, std::move(ac_fd), st, header.index_offset, compression);
 }
 
 std::unique_ptr<SeekableTable> WriteOnceTableBackend::OpenSeekable(
@@ -1424,16 +1437,16 @@ std::unique_ptr<SeekableTable> WriteOnceTableBackend::OpenSeekable(
   struct CA_wo_header header;
   ReadHeader(header, fd);
 
-  if (header.major_version <= 3) {
+  if (header.major_version <= 3)
     return std::make_unique<WriteOnceTable_v3>(path, std::move(ac_fd), st,
                                                header.index_offset);
-  } else if ((header.flags & CA_WO_FLAG_SEEKABLE) == 0) {
+
+  if ((header.flags & CA_WO_FLAG_SEEKABLE) == 0)
     KJ_FAIL_REQUIRE("the write-once table is not seekable", path);
-    return nullptr;
-  } else {
-    return std::make_unique<WriteOnceSeekableTable_v4>(path, std::move(ac_fd),
-                                                       st, header.index_offset);
-  }
+
+  TableCompression compression = TableCompression(header.compression);
+  return std::make_unique<WriteOnceSeekableTable_v4>(
+      path, std::move(ac_fd), st, header.index_offset, compression);
 }
 
 }  // namespace table

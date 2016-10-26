@@ -125,7 +125,7 @@ class LevelDBBuilder final : public TableBuilder {
   }
 
   void InsertRow(const string_view& key, const string_view& value) override {
-    KJ_REQUIRE(prev_key_ <= key, "keys inserted out of order", prev_key_,
+    KJ_REQUIRE(prev_key_ < key, "keys inserted out of order", prev_key_,
                std::string(key));
     table_builder_->Add(leveldb::Slice(key.data(), key.size()),
                         leveldb::Slice(value.data(), value.size()));

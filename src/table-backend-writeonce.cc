@@ -531,11 +531,16 @@ class WriteOnceIndex {
     buffer.clear();
 
     const size_t num = num_blocks();
-    if (!num) return;
 
     buffer.reserve(EstimateSize());
     unsigned char* ptr = buffer.udata();
     oroch::varint_codec<size_t>::value_encode(ptr, num);
+
+    if (!num) {
+      buffer.resize(ptr - buffer.udata());
+      return;
+    }
+
     oroch::varint_codec<size_t>::encode(ptr, size_.begin(), size_.end());
     oroch::varint_codec<uint32_t>::encode(ptr, num_entries_.begin(),
                                           num_entries_.end());

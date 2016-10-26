@@ -12,6 +12,7 @@ ca_table_include_HEADERS = \
 
 check_PROGRAMS = \
   src/format_test \
+  src/table-backend-leveldb-table_test \
   src/table-backend-writeonce_test
 
 noinst_PROGRAMS = \
@@ -149,5 +150,11 @@ src_format_benchmark_LDADD = \
 src_table_backend_writeonce_test_SOURCES = \
   src//table-backend-writeonce_test.cc
 src_table_backend_writeonce_test_LDADD = \
+  libca-table.la \
+  third_party/gtest/libgtest.a
+
+src_table_backend_leveldb_table_test_SOURCES = \
+  src//table-backend-leveldb-table_test.cc
+src_table_backend_leveldb_table_test_LDADD = \
   libca-table.la \
   third_party/gtest/libgtest.a

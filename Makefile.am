@@ -11,7 +11,8 @@ ca_table_include_HEADERS = \
   src/ca-table.h
 
 check_PROGRAMS = \
-  src/format_test
+  src/format_test \
+  src/table-backend-writeonce_test
 
 noinst_PROGRAMS = \
   src/format_benchmark
@@ -144,3 +145,9 @@ src_format_benchmark_SOURCES = \
   src/format_benchmark.cc
 src_format_benchmark_LDADD = \
   libca-table.la
+
+src_table_backend_writeonce_test_SOURCES = \
+  src//table-backend-writeonce_test.cc
+src_table_backend_writeonce_test_LDADD = \
+  libca-table.la \
+  third_party/gtest/libgtest.a

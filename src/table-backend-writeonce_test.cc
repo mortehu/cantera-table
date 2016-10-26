@@ -1,33 +1,47 @@
 #include <fcntl.h>
+#include <unistd.h>
 
-#include "base/file.h"
 #include "src/ca-table.h"
 #include "third_party/gtest/gtest.h"
 
+#include <kj/exception.h>
+
+using namespace cantera::table;
+
 struct WriteOnceTest : testing::Test {
+  static constexpr char name_template[] = "/tmp/ca-table-test-XXXXXX";
+
  public:
   void SetUp() override {
-    temp_directory_ =
-        std::make_unique<ev::DirectoryTreeRemover>(ev::TemporaryDirectory());
+    char name[sizeof(name_template)];
+    strcpy(name, name_template);
+    ASSERT_NE(mkdtemp(name), nullptr);
+    temp_directory_ = name;
+  }
+
+  void TearDown() override {
+    std::string cmd;
+    cmd.append("rm -rf ");
+    cmd.append(temp_directory_);
+    system(cmd.c_str());
   }
 
  protected:
-  std::unique_ptr<ev::DirectoryTreeRemover> temp_directory_;
+  std::string temp_directory_;
 };
 
 TEST_F(WriteOnceTest, CanWriteThenRead) {
-  auto table_handle = ca_table_open(
-      "write-once", (temp_directory_->Root() + "/table_00").c_str(),
-      O_CREAT | O_TRUNC | O_WRONLY);
-  table_handle->InsertRow("a", "xxx");
-  table_handle->InsertRow("b", "yyy");
-  table_handle->InsertRow("c", "zzz");
-  table_handle->InsertRow("d", "www");
-  table_handle->Sync();
-  table_handle.reset();
+  auto builder = TableFactory::Create(
+      "write-once", (temp_directory_ + "/table_00").c_str(), TableOptions());
+  builder->InsertRow("a", "xxx");
+  builder->InsertRow("b", "yyy");
+  builder->InsertRow("c", "zzz");
+  builder->InsertRow("d", "www");
+  builder->Sync();
+  builder.reset();
 
-  table_handle = ca_table_open(
-      "write-once", (temp_directory_->Root() + "/table_00").c_str(), O_RDONLY);
+  auto table_handle =
+      TableFactory::Open("write-once", (temp_directory_ + "/table_00").c_str());
   EXPECT_TRUE(table_handle->IsSorted());
   EXPECT_TRUE(table_handle->SeekToKey("a"));
   EXPECT_FALSE(table_handle->SeekToKey("D"));
@@ -40,22 +54,21 @@ TEST_F(WriteOnceTest, CanWriteThenRead) {
 }
 
 TEST_F(WriteOnceTest, CanWriteThenReadMany) {
-  auto table_handle = ca_table_open(
-      "write-once", (temp_directory_->Root() + "/table_00").c_str(),
-      O_CREAT | O_TRUNC | O_WRONLY);
+  auto builder = TableFactory::Create(
+      "write-once", (temp_directory_ + "/table_00").c_str(), TableOptions());
   char str[3];
   str[2] = 0;
   for (str[0] = 'a'; str[0] <= 'z'; ++str[0]) {
     for (str[1] = 'a'; str[1] <= 'z'; ++str[1]) {
-      table_handle->InsertRow(str, "xxx");
+      builder->InsertRow(str, "xxx");
     }
   }
 
-  table_handle->Sync();
-  table_handle.reset();
+  builder->Sync();
+  builder.reset();
 
-  table_handle = ca_table_open(
-      "write-once", (temp_directory_->Root() + "/table_00").c_str(), O_RDONLY);
+  auto table_handle =
+      TableFactory::Open("write-once", (temp_directory_ + "/table_00").c_str());
   EXPECT_TRUE(table_handle->IsSorted());
 
   for (str[0] = 'a'; str[0] <= 'z'; ++str[0]) {
@@ -66,19 +79,19 @@ TEST_F(WriteOnceTest, CanWriteThenReadMany) {
 }
 
 TEST_F(WriteOnceTest, CanWriteThenReadUnsorted) {
-  auto table_handle = ca_table_open(
-      "write-once", (temp_directory_->Root() + "/table_00").c_str(),
-      O_CREAT | O_TRUNC | O_WRONLY);
-  table_handle->InsertRow("a", "xxx");
-  table_handle->InsertRow("c", "zzz");
-  table_handle->InsertRow("d", "www");
-  table_handle->InsertRow("b", "yyy");
-  table_handle->Sync();
-  table_handle.reset();
+  auto builder = TableFactory::Create("write-once",
+                                      (temp_directory_ + "/table_00").c_str(),
+                                      TableOptions().SetInputUnsorted(true));
+  builder->InsertRow("a", "xxx");
+  builder->InsertRow("c", "zzz");
+  builder->InsertRow("d", "www");
+  builder->InsertRow("b", "yyy");
+  builder->Sync();
+  builder.reset();
 
-  table_handle = ca_table_open(
-      "write-once", (temp_directory_->Root() + "/table_00").c_str(), O_RDONLY);
-  EXPECT_FALSE(table_handle->IsSorted());
+  auto table_handle =
+      TableFactory::Open("write-once", (temp_directory_ + "/table_00").c_str());
+  EXPECT_TRUE(table_handle->IsSorted());
   EXPECT_TRUE(table_handle->SeekToKey("a"));
   EXPECT_FALSE(table_handle->SeekToKey("D"));
   EXPECT_TRUE(table_handle->SeekToKey("c"));
@@ -90,24 +103,21 @@ TEST_F(WriteOnceTest, CanWriteThenReadUnsorted) {
 }
 
 TEST_F(WriteOnceTest, EmptyTableOK) {
-  auto table_handle = ca_table_open(
-      "write-once", (temp_directory_->Root() + "/table_00").c_str(),
-      O_CREAT | O_TRUNC | O_WRONLY);
-  table_handle->Sync();
-  table_handle.reset();
+  auto builder = TableFactory::Create(
+      "write-once", (temp_directory_ + "/table_00").c_str(), TableOptions());
+  builder->Sync();
+  builder.reset();
 
-  table_handle = ca_table_open(
-      "write-once", (temp_directory_->Root() + "/table_00").c_str(), O_RDONLY);
+  auto table_handle =
+      TableFactory::Open("write-once", (temp_directory_ + "/table_00").c_str());
 }
 
 TEST_F(WriteOnceTest, UnsyncedTableNotWritten) {
-  auto table_handle = ca_table_open(
-      "write-once", (temp_directory_->Root() + "/table_00").c_str(),
-      O_CREAT | O_TRUNC | O_WRONLY);
+  auto table_handle = TableFactory::Create(
+      "write-once", (temp_directory_ + "/table_00").c_str(), TableOptions());
   table_handle.reset();
 
   ASSERT_THROW(
-      ca_table_open("write-once",
-                    (temp_directory_->Root() + "/table_00").c_str(), O_RDONLY),
+      TableFactory::Open("write-once", (temp_directory_ + "/table_00").c_str()),
       kj::Exception);
 }

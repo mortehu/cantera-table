@@ -78,6 +78,15 @@ TEST_F(WriteOnceTest, CanWriteThenReadMany) {
   }
 }
 
+TEST_F(WriteOnceTest, InsertOutOfOrderThrows) {
+  auto builder = TableFactory::Create(
+      "write-once", (temp_directory_ + "/table_00").c_str(), TableOptions());
+  builder->InsertRow("a", "xxx");
+  builder->InsertRow("b", "yyy");
+  builder->InsertRow("c", "zzz");
+  ASSERT_THROW(builder->InsertRow("c", "xxx"), kj::Exception);
+}
+
 TEST_F(WriteOnceTest, CanWriteThenReadUnsorted) {
   auto builder = TableFactory::Create("write-once",
                                       (temp_directory_ + "/table_00").c_str(),

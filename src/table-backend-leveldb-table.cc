@@ -145,8 +145,8 @@ class LevelDBBuilder final : public TableBuilder {
 
 class LevelDBTable final : public Table, private leveldb::RandomAccessFile {
  public:
-  LevelDBTable(const char* path, int fd, const struct stat& st)
-      : Table(st), fd_(fd) {
+  LevelDBTable(const char* path, kj::AutoCloseFd fd, const struct stat& st)
+      : Table(st), fd_(std::move(fd)) {
     leveldb::Table* table;
     CHECK_STATUS(
         leveldb::Table::Open(leveldb::Options(), this, st.st_size, &table));
@@ -248,7 +248,7 @@ std::unique_ptr<TableBuilder> LevelDBTableBackend::Create(
 std::unique_ptr<Table> LevelDBTableBackend::Open(const char* path,
                                                  kj::AutoCloseFd fd,
                                                  const struct stat& st) {
-  return std::make_unique<LevelDBTable>(path, fd, st);
+  return std::make_unique<LevelDBTable>(path, std::move(fd), st);
 }
 
 std::unique_ptr<SeekableTable> LevelDBTableBackend::OpenSeekable(

@@ -14,7 +14,6 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/uio.h>
 #include <unistd.h>
 
 namespace cantera {
@@ -326,8 +325,8 @@ size_t ca_offset_score_count(const uint8_t* begin, const uint8_t* end);
 /*****************************************************************************/
 
 int ca_table_merge(std::vector<std::unique_ptr<Table>>& tables,
-                   std::function<int(const struct iovec* key,
-                                     const struct iovec* value)> callback);
+                   std::function<int(const string_view& key,
+                                     const string_view& value)> callback);
 
 void ca_table_merge(
     std::vector<std::unique_ptr<Table>>& tables,

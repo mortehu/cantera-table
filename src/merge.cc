@@ -27,27 +27,19 @@ namespace cantera {
 namespace table {
 
 struct CA_merge_heap {
-  struct iovec key;
-  struct iovec value;
+  string_view key;
+  string_view value;
   uint32_t table;
 };
 
-#define CA_HEAP_KEY_BEGIN(h) reinterpret_cast<const uint8_t*>((h)->key.iov_base)
-#define CA_HEAP_KEY_END(h) \
-  (reinterpret_cast<const uint8_t*>((h)->key.iov_base) + (h)->key.iov_len)
-
 static void CA_merge_heap_push(struct CA_merge_heap* heap, size_t heap_size,
                                const struct CA_merge_heap* entry) {
-  size_t parent, i;
-
-  i = heap_size;
+  size_t i = heap_size;
 
   while (i) {
-    parent = (i - 1) / 2;
+    size_t parent = (i - 1) / 2;
 
-    if (!std::lexicographical_compare(
-            CA_HEAP_KEY_BEGIN(entry), CA_HEAP_KEY_END(entry),
-            CA_HEAP_KEY_BEGIN(&heap[parent]), CA_HEAP_KEY_END(&heap[parent])))
+    if (entry->key >= heap[parent].key)
       break;
 
     heap[i] = heap[parent];
@@ -60,21 +52,16 @@ static void CA_merge_heap_push(struct CA_merge_heap* heap, size_t heap_size,
 static void CA_merge_heap_replace_top(struct CA_merge_heap* heap,
                                       size_t heap_size,
                                       const struct CA_merge_heap* entry) {
-  size_t i, child, parent;
-
   /* This helps avoid some '+1's and '-1's later.  Technically illegal */
   --heap;
 
   /* Move hole down the tree */
 
+  size_t i, child;
   for (i = 1, child = 2; child <= heap_size; i = child, child = i << 1) {
     /* Move the smaller child up the tree */
 
-    if (child + 1 <= heap_size &&
-        std::lexicographical_compare(CA_HEAP_KEY_BEGIN(&heap[child + 1]),
-                                     CA_HEAP_KEY_END(&heap[child + 1]),
-                                     CA_HEAP_KEY_BEGIN(&heap[child]),
-                                     CA_HEAP_KEY_END(&heap[child])))
+    if (child + 1 <= heap_size && heap[child + 1].key < heap[child].key)
       ++child;
 
     heap[i] = heap[child];
@@ -83,11 +70,9 @@ static void CA_merge_heap_replace_top(struct CA_merge_heap* heap,
   /* Move ancestor chain down into hole, until we can insert the new entry */
 
   while (i > 1) {
-    parent = i >> 1;
+    size_t parent = i >> 1;
 
-    if (!std::lexicographical_compare(
-            CA_HEAP_KEY_BEGIN(entry), CA_HEAP_KEY_END(entry),
-            CA_HEAP_KEY_BEGIN(&heap[parent]), CA_HEAP_KEY_END(&heap[parent])))
+    if (entry->key >= heap[parent].key)
       break;
 
     heap[i] = heap[parent];
@@ -98,7 +83,7 @@ static void CA_merge_heap_replace_top(struct CA_merge_heap* heap,
 }
 
 static void CA_merge_heap_pop(struct CA_merge_heap* heap, size_t heap_size) {
-  size_t i, child, parent;
+  size_t i, child;
 
   /* This helps avoid some '+1's and '-1's later.  Technically illegal */
   --heap;
@@ -108,11 +93,7 @@ static void CA_merge_heap_pop(struct CA_merge_heap* heap, size_t heap_size) {
   for (i = 1, child = 2; child <= heap_size; i = child, child = i << 1) {
     /* Move the smaller child up the tree */
 
-    if (child + 1 <= heap_size &&
-        std::lexicographical_compare(CA_HEAP_KEY_BEGIN(&heap[child + 1]),
-                                     CA_HEAP_KEY_END(&heap[child + 1]),
-                                     CA_HEAP_KEY_BEGIN(&heap[child]),
-                                     CA_HEAP_KEY_END(&heap[child])))
+    if (child + 1 <= heap_size && heap[child + 1].key < heap[child].key)
       ++child;
 
     heap[i] = heap[child];
@@ -124,12 +105,9 @@ static void CA_merge_heap_pop(struct CA_merge_heap* heap, size_t heap_size) {
    * can insert the tail element as an ancestor */
 
   while (i > 0) {
-    parent = i >> 1;
+    size_t parent = i >> 1;
 
-    if (!std::lexicographical_compare(CA_HEAP_KEY_BEGIN(&heap[heap_size]),
-                                      CA_HEAP_KEY_END(&heap[heap_size]),
-                                      CA_HEAP_KEY_BEGIN(&heap[parent]),
-                                      CA_HEAP_KEY_END(&heap[parent])))
+    if (heap[heap_size].key >= heap[parent].key)
       break;
 
     heap[i] = heap[parent];
@@ -141,7 +119,7 @@ static void CA_merge_heap_pop(struct CA_merge_heap* heap, size_t heap_size) {
 
 int ca_table_merge(
     std::vector<std::unique_ptr<Table>>& tables,
-    std::function<int(const struct iovec* key, const struct iovec* value)>
+    std::function<int(const string_view& key, const string_view& value)>
         callback) {
   std::vector<CA_merge_heap> heap(tables.size());
   size_t heap_size = 0;
@@ -153,32 +131,20 @@ int ca_table_merge(
 
     KJ_REQUIRE(tables[i]->IsSorted());
 
-    string_view key, value;
-    if (!tables[i]->ReadRow(key, value)) continue;
-
-    e.key.iov_len = key.size();
-    e.key.iov_base = const_cast<char *>(key.data());
-    e.value.iov_len = value.size();
-    e.value.iov_base = const_cast<char *>(value.data());
+    if (!tables[i]->ReadRow(e.key, e.value)) continue;
 
     CA_merge_heap_push(&heap[0], heap_size++, &e);
   }
 
   while (heap_size) {
     struct CA_merge_heap e = heap[0];
-    if (-1 == callback(&e.key, &e.value)) return -1;
+    if (-1 == callback(e.key, e.value)) return -1;
 
-    string_view key, value;
-    if (!tables[e.table]->ReadRow(key, value)) {
+    if (!tables[e.table]->ReadRow(e.key, e.value)) {
       CA_merge_heap_pop(&heap[0], heap_size);
       --heap_size;
       continue;
     }
-
-    e.key.iov_len = key.size();
-    e.key.iov_base = const_cast<char *>(key.data());
-    e.value.iov_len = value.size();
-    e.value.iov_base = const_cast<char *>(value.data());
 
     CA_merge_heap_replace_top(&heap[0], heap_size, &e);
   }
@@ -194,23 +160,18 @@ void ca_table_merge(
   std::string current_key;
 
   auto callback_wrapper =
-      [&current_key, &data, callback](const struct iovec* key,
-                                      const struct iovec* value) -> int {
-    std::string new_key(reinterpret_cast<const char*>(key->iov_base),
-                        key->iov_len);
-    if (new_key != current_key) {
+      [&current_key, &data, callback](const string_view& key,
+                                      const string_view& value) -> int {
+    if (key != current_key) {
       if (!data.empty()) {
         callback(current_key, data);
+        data.clear();
       }
-      data.clear();
-      current_key = new_key;
+      current_key.assign(key.data(), key.size());
     }
+
     data.emplace_back();
-
-    auto value_begin = reinterpret_cast<const char*>(value->iov_base);
-    auto value_end = value_begin + value->iov_len;
-
-    data.back().assign(value_begin, value_end);
+    data.back().assign(value.begin(), value.end());
 
     return 0;
   };

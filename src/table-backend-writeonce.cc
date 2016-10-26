@@ -59,6 +59,8 @@ namespace cantera {
 namespace table {
 namespace internal {
 
+namespace {
+
 enum CA_wo_flags {
   // v3 flags
   CA_WO_FLAG_ASCENDING = 0x01,
@@ -1380,7 +1382,7 @@ class WriteOnceTable_v3 final : public WriteOnceSeekableTable {
 
 /*****************************************************************************/
 
-static void ReadHeader(struct CA_wo_header& header, int fd) {
+void ReadHeader(struct CA_wo_header& header, int fd) {
   FileIO(fd).Read(&header, sizeof header);
   KJ_REQUIRE(header.magic == MAGIC, header.magic, MAGIC);
   KJ_REQUIRE(header.major_version <= MAJOR_VERSION ||
@@ -1396,6 +1398,8 @@ static void ReadHeader(struct CA_wo_header& header, int fd) {
       KJ_UNIMPLEMENTED("extended write-once tables are not supported yet");
   }
 }
+
+}  // namespace
 
 /*****************************************************************************/
 

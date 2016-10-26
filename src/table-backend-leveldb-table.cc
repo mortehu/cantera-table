@@ -62,6 +62,8 @@ namespace cantera {
 namespace table {
 namespace internal {
 
+namespace {
+
 class LevelDBWriter final : public PendingFile, public leveldb::WritableFile {
  public:
   LevelDBWriter(const char* path, int flags, mode_t mode)
@@ -237,6 +239,8 @@ class LevelDBTable final : public Table, private leveldb::RandomAccessFile {
   bool need_seek_ = false;
   bool eof_ = false;
 };
+
+}  // namespace
 
 /*****************************************************************************/
 

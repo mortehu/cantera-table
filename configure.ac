@@ -1,4 +1,4 @@
-AC_INIT([ca-table], [1.3])
+AC_INIT([ca-table], [1.5])
 AM_INIT_AUTOMAKE([-Wall foreign subdir-objects])
 
 AC_CONFIG_MACRO_DIR([m4])

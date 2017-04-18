@@ -5,12 +5,12 @@
 #include "src/util.h"
 
 #include <cstring>
-#include <memory>
 #include <random>
 
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/time.h>
-#include <unistd.h>
+#include <sys/types.h>
 
 #include <kj/debug.h>
 
@@ -18,9 +18,77 @@ namespace cantera {
 namespace table {
 namespace internal {
 
-namespace {
+/*****************************************************************************/
 
-void MakeRandomString(char* output, size_t length) {
+kj::AutoCloseFd OpenFile(const char* path, int flags, int mode) {
+  const auto fd = open(path, flags, mode);
+  if (fd == -1) KJ_FAIL_SYSCALL("open", errno, path, flags, mode);
+  return kj::AutoCloseFd(fd);
+}
+
+kj::AutoCloseFd AnonTemporaryFile(const char* path, int mode) {
+  return TemporaryFile(path, 0, mode, true);
+}
+
+off_t FileSize(int fd) {
+  struct stat st;
+  KJ_SYSCALL(fstat(fd, &st));
+  return st.st_size;
+}
+
+/*****************************************************************************/
+
+TemporaryFile::~TemporaryFile() noexcept {
+#if !defined(O_TMPFILE)
+  try {
+    Unlink();
+  } catch (...) {
+    KJ_LOG(ERROR, "failed to remove a temporary file", temp_path_.get());
+  }
+#endif
+  try {
+    Close();
+  } catch (...) {
+  }
+}
+
+void TemporaryFile::Make(const char* path, int flags, mode_t mode) {
+  if (path == nullptr) {
+    path = std::getenv("TMPDIR");
+#ifdef P_tmpdir
+    if (path == nullptr) path = P_tmpdir;
+#endif
+    if (path == nullptr) path = "/tmp";
+  }
+
+#ifdef O_TMPFILE
+  flags = (flags & O_CLOEXEC) | O_TMPFILE | O_RDWR;
+  kj::AutoCloseFd fd = OpenFile(path, flags, mode);
+  kj::AutoCloseFd::operator=(std::move(fd));
+#else
+  static const char suffix[] = "/ca-table.tmp.XXXXXX";
+
+  size_t len = std::strlen(path);
+  temp_path_ = std::make_unique<char[]>(len + sizeof(suffix));
+  std::memcpy(temp_path_.get(), path, len);
+  std::memcpy(temp_path_.get() + len, suffix, sizeof(suffix));
+
+  int fd;
+  KJ_SYSCALL(fd = mkstemp(temp_path_.get()), temp_path_.get());
+  kj::AutoCloseFd::operator=(kj::AutoCloseFd(fd));
+
+  if ((flags & O_CLOEXEC) != 0) {
+    KJ_SYSCALL(flags = fcntl(fd, F_GETFD));
+    flags |= FD_CLOEXEC;
+    KJ_SYSCALL(fcntl(fd, F_SETFD, flags));
+  }
+#endif
+}
+
+/*****************************************************************************/
+
+#if defined(O_TMPFILE)
+static void MakeRandomString(char* output, size_t length) {
   struct timeval now;
   gettimeofday(&now, nullptr);
   std::minstd_rand rng;
@@ -33,14 +101,77 @@ void MakeRandomString(char* output, size_t length) {
 
   while (length--) *output++ = kLetters[rng_dist(rng)];
 }
+#endif
 
-}  // namespace
+PendingFile::PendingFile(const char* path, int flags, mode_t mode)
+#if !defined(O_TMPFILE)
+    : path_(path), mode_(mode) {
+#else
+    : path_(path) {
+#endif
+  std::string base(".");
+  if (const char* last_slash = std::strrchr(path, '/')) {
+    KJ_REQUIRE(path != last_slash);
+    base = std::string(path, last_slash);
+  }
 
-kj::AutoCloseFd OpenFile(const char* path, int flags, int mode) {
-  const auto fd = open(path, flags, mode);
-  if (fd == -1) KJ_FAIL_SYSCALL("open", errno, path, flags, mode);
-  return kj::AutoCloseFd(fd);
+  Make(base.data(), flags, mode);
 }
+
+void PendingFile::Finish() {
+  KJ_CONTEXT(path_);
+#if defined(O_TMPFILE)
+  char temp_path[32];
+  snprintf(temp_path, sizeof(temp_path), "/proc/self/fd/%d", get());
+  auto ret =
+      linkat(AT_FDCWD, temp_path, AT_FDCWD, path_.data(), AT_SYMLINK_FOLLOW);
+  if (ret == 0) return;
+  if (errno != EEXIST) {
+    const auto linkat_errno = errno;
+    KJ_SYSCALL(access("/proc", X_OK), "/proc is not available");
+    KJ_FAIL_SYSCALL("linkat", linkat_errno, temp_path);
+  }
+
+  // Target already exists, so we need an intermediate filename to atomically
+  // replace with rename().
+  std::string intermediate_path = path_;
+  intermediate_path += ".XXXXXX";
+
+  static const size_t kMaxAttempts = 62 * 62 * 62;
+
+  for (size_t i = 0; i < kMaxAttempts; ++i) {
+    MakeRandomString(&intermediate_path[intermediate_path.size() - 6], 6);
+
+    ret = linkat(AT_FDCWD, temp_path, AT_FDCWD, intermediate_path.c_str(),
+                 AT_SYMLINK_FOLLOW);
+
+    if (ret == 0) {
+      KJ_SYSCALL(
+          renameat(AT_FDCWD, intermediate_path.data(), AT_FDCWD, path_.data()),
+          intermediate_path, path_);
+      return;
+    }
+
+    if (errno != EEXIST)
+      KJ_FAIL_SYSCALL("linkat", errno, intermediate_path, path_);
+  }
+
+  KJ_FAIL_REQUIRE("all temporary file creation attempts failed", kMaxAttempts);
+#else
+  KJ_REQUIRE(temp_path_ != nullptr, "file has already been renamed or removed");
+
+  auto mask = umask(0);
+  umask(mask);
+  if ((mode_ & ~mask) != ((S_IRUSR | S_IWUSR) & ~mask))
+    KJ_SYSCALL(fchmod(get(), mode_ & ~mask), temp_path_.get());
+
+  KJ_SYSCALL(rename(temp_path_.get(), path_.data()), temp_path_.get(), path_);
+
+  TemporaryFile::Reset();
+#endif
+}
+
+/*****************************************************************************/
 
 size_t ReadWithOffset(int fd, void* dest, size_t size_min, size_t size_max,
                       off_t offset) {
@@ -59,73 +190,6 @@ size_t ReadWithOffset(int fd, void* dest, size_t size_min, size_t size_max,
   KJ_REQUIRE(result >= size_min, "unexpectedly reached end of file", offset, result, size_min);
 
   return result;
-}
-
-kj::AutoCloseFd AnonTemporaryFile(const char* path, int mode) {
-#ifdef O_TMPFILE
-  return OpenFile(path, O_TMPFILE | O_RDWR, mode);
-#else
-  size_t pathlen = std::strlen(path);
-  static const char suffix[] = "/ca-table-XXXXXX";
-  std::unique_ptr<char[]> pathname(new char[pathlen + sizeof(suffix)]);
-  std::memcpy((void *)(pathname.get()), path, pathlen);
-  std::memcpy((void *)(pathname.get() + pathlen), suffix, sizeof(suffix));
-
-  int fd;
-  KJ_SYSCALL(fd = ::mkstemp(pathname.get()), pathname.get());
-
-  kj::AutoCloseFd acfd(fd);
-  KJ_SYSCALL(unlink(pathname.get()), pathname.get());
-
-  return acfd;
-#endif
-}
-
-void LinkAnonTemporaryFile(int fd, const char* path) {
-  LinkAnonTemporaryFile(AT_FDCWD, fd, path);
-}
-
-void LinkAnonTemporaryFile(int dir_fd, int fd, const char* path) {
-  KJ_CONTEXT(path);
-#if __linux__
-  char temp_path[32];
-  snprintf(temp_path, sizeof(temp_path), "/proc/self/fd/%d", fd);
-  auto ret = linkat(AT_FDCWD, temp_path, dir_fd, path, AT_SYMLINK_FOLLOW);
-  if (ret == 0) return;
-  if (errno != EEXIST) {
-    const auto linkat_errno = errno;
-    KJ_SYSCALL(access("/proc", X_OK), "/proc is not available");
-    KJ_FAIL_SYSCALL("linkat", linkat_errno, temp_path);
-  }
-
-  // Target already exists, so we need an intermediate filename to atomically
-  // replace with rename().
-  std::string intermediate_path = path;
-  intermediate_path += ".XXXXXX";
-
-  static const size_t kMaxAttempts = 62 * 62 * 62;
-
-  for (size_t i = 0; i < kMaxAttempts; ++i) {
-    MakeRandomString(&intermediate_path[intermediate_path.size() - 6], 6);
-
-    ret = linkat(AT_FDCWD, temp_path, dir_fd, intermediate_path.c_str(),
-                 AT_SYMLINK_FOLLOW);
-
-    if (ret == 0) {
-      KJ_SYSCALL(renameat(dir_fd, intermediate_path.c_str(), dir_fd, path),
-                 intermediate_path, path);
-      return;
-    }
-
-    if (errno != EEXIST) {
-      KJ_FAIL_SYSCALL("linkat", errno, intermediate_path, path);
-    }
-  }
-
-  KJ_FAIL_REQUIRE("all temporary file creation attempts failed", kMaxAttempts);
-#else
-  KJ_UNIMPLEMENTED("linking an unlinked file");
-#endif
 }
 
 uint64_t Hash(const string_view& key) {

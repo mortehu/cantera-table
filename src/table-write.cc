@@ -34,7 +34,7 @@
 namespace cantera {
 namespace table {
 
-void ca_table_write_offset_score(Table* table,
+void ca_table_write_offset_score(TableBuilder* table,
                                  const string_view& key,
                                  const struct ca_offset_score* values,
                                  size_t count) {

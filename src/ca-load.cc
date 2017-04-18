@@ -111,7 +111,7 @@ struct option kLongOptions[] = {
     {"help", no_argument, &print_help, 1},
     {0, 0, 0, 0}};
 
-std::unique_ptr<ca_table::Table> table_handle;
+std::unique_ptr<ca_table::TableBuilder> table_handle;
 
 enum token_state {
   parse_key,
@@ -540,7 +540,7 @@ void MergeSummariesCallback(std::string key,
   table_handle->InsertRow(key, merged);
 }
 
-void CopyTable(ca_table::Table* input, ca_table::Table* output) {
+void CopyTable(ca_table::Table* input, ca_table::TableBuilder* output) {
   cantera::string_view key, value;
 
   while (input->ReadRow(key, value)) {

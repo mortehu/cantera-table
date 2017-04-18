@@ -4,6 +4,8 @@
 #include "src/query.h"
 #include "src/select.h"
 
+#include <kj/debug.h>
+
 namespace cantera {
 namespace table {
 

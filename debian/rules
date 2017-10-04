@@ -6,8 +6,10 @@ export DH_VERBOSE = 1
 # see FEATURE AREAS in dpkg-buildflags(1)
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 
+export DEB_CXXFLAGS_MAINT_APPEND = -O3 -g1 -march=native -fwhole-program -flto  
+
 override_dh_auto_configure:
-	dh_auto_configure -- --disable-shared
+	dh_auto_configure -- --disable-shared AR=gcc-ar NM=gcc-nm RANLIB=gcc-ranlib
 
 %:
-	dh $@  --parallel
+	dh $@ --parallel

@@ -58,12 +58,11 @@ enum OperatorType {
 
 struct Query {
   enum QueryType type;
-  const char* legacy_query;
-  const char* identifier;
+  const char* identifier=nullptr;
 
   enum OperatorType operator_type;
-  const struct Query* lhs;
-  const struct Query* rhs;
+  const struct Query* lhs=nullptr;
+  const struct Query* rhs=nullptr;
   double value;
   double value2;
 };
@@ -71,19 +70,19 @@ struct Query {
 template <typename T>
 struct LinkedList {
   T value;
-  struct LinkedList* next;
+  struct LinkedList* next=nullptr;
 };
 
 struct QueryList {
-  struct Query* query;
-  QueryList* next;
+  struct Query* query=nullptr;
+  QueryList* next=nullptr;
 };
 
 // Defines a keyword and a set of thresholds values for partitioning query
 // results into groups.
 struct ThresholdClause {
-  const char* key;
-  LinkedList<double>* values;
+  const char* key=nullptr;
+  LinkedList<double>* values=nullptr;
 };
 
 struct query_statement {
@@ -95,6 +94,7 @@ struct query_statement {
   struct ThresholdClause* thresholds;
   int64_t limit;
   size_t offset;
+
 };
 
 struct query_correlate_statement {

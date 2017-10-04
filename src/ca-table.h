@@ -14,10 +14,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/uio.h>
 #include <unistd.h>
-
-#include <kj/debug.h>
 
 namespace cantera {
 
@@ -30,23 +27,9 @@ struct ca_offset_score;
 class Query;
 class Schema;
 class Table;
-class SeekableTable;
-class TableOptions;
 
 // Escape string for use in tab delimited format.
 std::string Escape(const string_view& str);
-
-class Backend {
- public:
-  virtual ~Backend();
-
-  virtual std::unique_ptr<Table> Create(const char* path,
-                                        const TableOptions &options) = 0;
-
-  virtual std::unique_ptr<Table> Open(const char* path) = 0;
-
-  virtual std::unique_ptr<SeekableTable> OpenSeekable(const char* path) = 0;
-};
 
 void LookupKey(const std::vector<Table*>& index_tables,
                const char* key,
@@ -155,10 +138,6 @@ struct ca_score {
 
 /*****************************************************************************/
 
-Backend* ca_table_backend(const char* name);
-
-/*****************************************************************************/
-
 enum TableCompression : uint8_t {
   // No compression.
   kTableCompressionNone = 0,
@@ -239,76 +218,60 @@ class TableOptions {
 
 /*****************************************************************************/
 
+class TableBuilder {
+ public:
+  virtual ~TableBuilder();
+
+  virtual void InsertRow(const string_view& key, const string_view& value) = 0;
+
+  virtual void Sync() = 0;
+};
+
 class Table {
  public:
-  Table();
+  Table(const struct stat& st);
 
   virtual ~Table();
 
-  virtual void Sync() = 0;
-
   virtual int IsSorted() = 0;
 
-  virtual void InsertRow(const struct iovec* value, size_t value_count) = 0;
-
-  void InsertRow(const string_view& key, const string_view& value) {
-    iovec iv[2];
-    iv[0].iov_base = const_cast<char*>(key.data());
-    iv[0].iov_len = key.size();
-    iv[1].iov_base = const_cast<char*>(value.data());
-    iv[1].iov_len = value.size();
-    InsertRow(iv, 2);
-  }
+  // Seeks to the first table row.
+  virtual void SeekToFirst() = 0;
 
   // Seeks to the given key.  Returns true if the key was found, false
   // otherwise.
   //
-  // If the key was not found, the cursor MAY have moved, but not beyond any
-  // alphanumerically larger keys.  This allows using this function to be used
-  // for speeding up prefix key searches.
-  virtual void SeekToFirst() = 0;
-
+  // If the key was not found, the cursor MAY have moved, but not beyond
+  // any alphanumerically larger keys.  This allows this function to be
+  // used for speeding up prefix key searches.
   virtual bool SeekToKey(const string_view& key) = 0;
 
+  // Reads one row.  Returns true if a value was read successfully, or
+  // false if end of file was reached instead.
+  virtual bool ReadRow(string_view& key, string_view& value) = 0;
+
+  // Skips the given number of rows.
   virtual bool Skip(size_t count) = 0;
 
-  virtual bool ReadRow(struct iovec* key, struct iovec* value) = 0;
-
-  inline bool ReadRow(string_view& key, string_view& value) {
-    struct iovec k, v;
-    if (!ReadRow(&k, &v)) return false;
-    key = string_view{reinterpret_cast<const char*>(k.iov_base), k.iov_len};
-    value = string_view{reinterpret_cast<const char*>(v.iov_base), v.iov_len};
-    return true;
-  }
-
-  string_view ReadValue() {
-    struct iovec key, value;
-    KJ_REQUIRE(ReadRow(&key, &value));
-    return {reinterpret_cast<const char*>(value.iov_base), value.iov_len};
-  }
-
-  struct stat st;
+  const struct stat st;
 };
 
 class SeekableTable : public Table {
  public:
+  SeekableTable(const struct stat& st);
+
   virtual off_t Offset() = 0;
 
   virtual void Seek(off_t offset, int whence) = 0;
 };
 
-int ca_table_stat(Table* table, struct stat* buf);
-
-int ca_table_utime(Table* table, const struct timeval tv[2]);
-
 /*****************************************************************************/
 
 class TableFactory {
  public:
-  static std::unique_ptr<Table> Create(const char* backend_name,
-                                       const char* path,
-                                       const TableOptions &options);
+  static std::unique_ptr<TableBuilder> Create(const char* backend_name,
+                                              const char* path,
+                                              const TableOptions& options);
 
   static std::unique_ptr<Table> Open(const char* backend_name,
                                      const char* path);
@@ -327,7 +290,7 @@ void ca_schema_query_correlate(Schema* schema, const Query* query_A,
 
 /*****************************************************************************/
 
-void ca_table_write_offset_score(Table* table,
+void ca_table_write_offset_score(TableBuilder* table,
                                  const string_view& key,
                                  const struct ca_offset_score* values,
                                  size_t count);
@@ -362,8 +325,8 @@ size_t ca_offset_score_count(const uint8_t* begin, const uint8_t* end);
 /*****************************************************************************/
 
 int ca_table_merge(std::vector<std::unique_ptr<Table>>& tables,
-                   std::function<int(const struct iovec* key,
-                                     const struct iovec* value)> callback);
+                   std::function<int(const string_view& key,
+                                     const string_view& value)> callback);
 
 void ca_table_merge(
     std::vector<std::unique_ptr<Table>>& tables,

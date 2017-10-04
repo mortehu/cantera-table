@@ -3,7 +3,7 @@
 
 #include <cstdint>
 #include <memory>
-
+#include <limits>
 #include <sys/uio.h>
 
 #include <kj/arena.h>
@@ -63,8 +63,8 @@ struct Query {
   enum OperatorType operator_type;
   const struct Query* lhs=nullptr;
   const struct Query* rhs=nullptr;
-  double value;
-  double value2;
+  double value=std::numeric_limits<double>::signaling_NaN();
+  double value2=std::numeric_limits<double>::signaling_NaN();
 };
 
 template <typename T>

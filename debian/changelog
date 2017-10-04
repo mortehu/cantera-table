@@ -1,3 +1,9 @@
+ca-table (1.5) unstable; urgency=medium
+
+  * Change API: make Table objects read-only, add TableBuilder objects
+
+ -- Aleksey Demakov <ademakov@gmail.com>  Sun, 23 Oct 2016 23:54:54 +0700
+
 ca-table (1.4) unstable; urgency=medium
 
   * Fix bugs in fast seek code

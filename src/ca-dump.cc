@@ -166,10 +166,17 @@ void DumpTimeSeries() {
     } else {
       if (!strcmp(date_format, "%s")) {
         for (size_t i = 0; i < offsets.size(); ++i) {
-          KJ_REQUIRE(!offsets[i].HasPercentiles());
-
-          printf("%.*s\t%llu\t%.9g\n", static_cast<int>(key.size()), key.data(),
-                 (long long unsigned)offsets[i].offset, offsets[i].score);
+          if (offsets[i].HasPercentiles()) {
+            printf("%.*s\t%s\t%.9g %.9g %.9g %.9g %.9g\n",
+                   static_cast<int>(key.size()), key.data(),
+                   (long long unsigned)offsets[i].offset,
+                   offsets[i].score, offsets[i].score_pct5,
+                   offsets[i].score_pct25, offsets[i].score_pct75,
+                   offsets[i].score_pct95);
+          } else {
+            printf("%.*s\t%llu\t%.9g\n", static_cast<int>(key.size()), key.data(),
+                   (long long unsigned)offsets[i].offset, offsets[i].score);
+          }
         }
       } else {
         for (size_t i = 0; i < offsets.size(); ++i) {

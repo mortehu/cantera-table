@@ -1,6 +1,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <experimental/string_view>
 
 #include <fcntl.h>
@@ -21,6 +22,8 @@ kj::AutoCloseFd OpenFile(const char* path, int flags, int mode = 0666);
 // Creates an unnamed temporary file in the given directory.
 kj::AutoCloseFd AnonTemporaryFile(const char* path = nullptr,
                                   int mode = S_IRUSR | S_IWUSR);
+
+off_t FileSize(int fd);
 
 size_t ReadWithOffset(int fd, void* dest, size_t size_min, size_t size_max,
                       off_t offset);
@@ -45,8 +48,8 @@ class TemporaryFile : public kj::AutoCloseFd {
 
   void Unlink() {
 #if !defined(O_TMPFILE)
-    if (!temp_path_.empty()) {
-      KJ_SYSCALL(unlink(temp_path_.data()), temp_path_);
+    if (temp_path_) {
+      KJ_SYSCALL(unlink(temp_path_.get()), temp_path_.get());
       Reset();
     }
 #endif
@@ -56,9 +59,9 @@ class TemporaryFile : public kj::AutoCloseFd {
 
  protected:
 #if !defined(O_TMPFILE)
-  void Reset() { temp_path_.clear(); }
+  void Reset() { temp_path_.reset(); }
 
-  std::string temp_path_;
+  std::unique_ptr<char[]> temp_path_;
 #endif
 };
 
@@ -66,6 +69,8 @@ class TemporaryFile : public kj::AutoCloseFd {
 class PendingFile : public TemporaryFile {
  public:
   PendingFile(const char* path, int flags, mode_t mode);
+
+  const std::string& path() const { return path_; }
 
   void Finish();
 

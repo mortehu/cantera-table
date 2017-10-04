@@ -11,7 +11,10 @@ ca_table_include_HEADERS = \
   src/ca-table.h
 
 check_PROGRAMS = \
-  src/format_test
+  src/format_test \
+  src/table-backend-leveldb-table_test \
+  src/table-backend-writeonce_test \
+  src/ca-load_test
 
 noinst_PROGRAMS = \
   src/format_benchmark
@@ -71,6 +74,8 @@ libca_table_la_SOURCES = \
   src/table-backend-leveldb-table.h \
   src/table-backend-writeonce.cc \
   src/table-backend-writeonce.h \
+  src/table-backend.cc \
+  src/table-backend.h \
   src/table-write.cc \
   src/table.cc \
   src/thread-pool.h \
@@ -99,7 +104,7 @@ libca_table_la_LIBADD = \
   -lre2
 libca_table_la_LDFLAGS = \
   -no-undefined \
-  -version-info 1:1:0 \
+  -version-info 2:0:0 \
   -export-symbols-regex '^_ZNK?7cantera5table.*'
 
 ca_shell_SOURCES = \
@@ -141,3 +146,21 @@ src_format_benchmark_SOURCES = \
   src/format_benchmark.cc
 src_format_benchmark_LDADD = \
   libca-table.la
+
+src_table_backend_leveldb_table_test_SOURCES = \
+  src/table-backend-leveldb-table_test.cc
+src_table_backend_leveldb_table_test_LDADD = \
+  libca-table.la \
+  third_party/gtest/libgtest.a
+
+src_table_backend_writeonce_test_SOURCES = \
+  src/table-backend-writeonce_test.cc
+src_table_backend_writeonce_test_LDADD = \
+  libca-table.la \
+  third_party/gtest/libgtest.a
+
+src_ca_load_test_SOURCES = \
+  src/ca-load_test.cc
+src_ca_load_test_LDADD = \
+  libca-table.la \
+  third_party/gtest/libgtest.a

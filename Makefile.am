@@ -60,7 +60,6 @@ EXTRA_DIST = \
   third_party/oroch/README.md
 
 libca_table_la_SOURCES = \
-  src/delegate.h \
   src/format.cc \
   src/keywords.cc \
   src/keywords.h \
@@ -80,7 +79,6 @@ libca_table_la_SOURCES = \
   src/table-backend.h \
   src/table-write.cc \
   src/table.cc \
-  src/thread-pool.h \
   src/util.cc \
   src/util.h \
   third_party/evenk/evenk/backoff.h \

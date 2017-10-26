@@ -568,6 +568,8 @@ void ca_schema_query_correlate(Schema* schema, const Query* query_A,
       });
     }
   }
+
+  thread_pool.wait();
 }
 
 }  // namespace table

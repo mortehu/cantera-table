@@ -54,6 +54,8 @@ EXTRA_DIST = \
   debian/rules \
   debian/source \
   debian/source/format \
+  third_party/evenk/LICENSE \
+  third_party/evenk/README.md \
   third_party/oroch/LICENSE \
   third_party/oroch/README.md
 
@@ -81,6 +83,17 @@ libca_table_la_SOURCES = \
   src/thread-pool.h \
   src/util.cc \
   src/util.h \
+  third_party/evenk/evenk/backoff.h \
+  third_party/evenk/evenk/basic.h \
+  third_party/evenk/evenk/bounded_queue.h \
+  third_party/evenk/evenk/conqueue.h \
+  third_party/evenk/evenk/futex.h \
+  third_party/evenk/evenk/spinlock.h \
+  third_party/evenk/evenk/synch.h \
+  third_party/evenk/evenk/synch_queue.h \
+  third_party/evenk/evenk/task.h \
+  third_party/evenk/evenk/thread.h \
+  third_party/evenk/evenk/thread_pool.h \
   third_party/oroch/oroch/bitfor.h \
   third_party/oroch/oroch/bitpck.h \
   third_party/oroch/oroch/bitpfr.h \

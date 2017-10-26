@@ -1,3 +1,7 @@
+evenk/
+
+  Project home page: https://github.com/ademakov/Evenk/
+
 gtest/
 
   Project home page: https://code.google.com/p/googletest/

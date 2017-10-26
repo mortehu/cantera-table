@@ -1,0 +1,12 @@
+#!/bin/sh
+
+if [ ! -f third_party/evenk/evenk/config.h.in ]; then
+	(cd third_party/evenk && autoreconf -i -f -v)
+fi
+
+if [ ! -f third_party/oroch/oroch/config.h.in ]; then
+	(cd third_party/oroch && autoreconf -i -f -v)
+fi
+
+autoreconf -i -f -v
+

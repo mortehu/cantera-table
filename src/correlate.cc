@@ -14,11 +14,11 @@
 #include "src/query.h"
 #include "src/util.h"
 
-#include "third_party/evenk/evenk/thread_pool.h"
 #include "third_party/evenk/evenk/synch_queue.h"
+#include "third_party/evenk/evenk/thread_pool.h"
 
 template <typename T>
-using threa_pool_queue = evenk::synch_queue<T>;
+using thread_pool_queue = evenk::synch_queue<T>;
 
 namespace cantera {
 namespace table {
@@ -519,7 +519,7 @@ void ca_schema_query_correlate(Schema* schema, const Query* query_A,
 
   const auto now = time(nullptr) / 86400.0f;
 
-  evenk::thread_pool<threa_pool_queue> thread_pool(std::thread::hardware_concurrency());
+  evenk::thread_pool<thread_pool_queue> thread_pool(std::thread::hardware_concurrency());
 
   std::vector<ca_offset_score> key_offsets;
 

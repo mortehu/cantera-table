@@ -12,8 +12,13 @@
 #include "src/ca-table.h"
 #include "src/keywords.h"
 #include "src/query.h"
-#include "src/thread-pool.h"
 #include "src/util.h"
+
+#include "third_party/evenk/evenk/thread_pool.h"
+#include "third_party/evenk/evenk/synch_queue.h"
+
+template <typename T>
+using threa_pool_queue = evenk::synch_queue<T>;
 
 namespace cantera {
 namespace table {
@@ -514,7 +519,7 @@ void ca_schema_query_correlate(Schema* schema, const Query* query_A,
 
   const auto now = time(nullptr) / 86400.0f;
 
-  ThreadPool thread_pool;
+  evenk::thread_pool<threa_pool_queue> thread_pool(std::thread::hardware_concurrency());
 
   std::vector<ca_offset_score> key_offsets;
 
@@ -536,7 +541,7 @@ void ca_schema_query_correlate(Schema* schema, const Query* query_A,
       if (key_offsets.size() < limit_A && key_offsets.size() < limit_B)
         continue;
 
-      thread_pool.Launch([
+      thread_pool.submit([
         key = key.to_string(),
         key_offsets = std::move(key_offsets),
         &offsets_A,

@@ -81,8 +81,9 @@ Z [zZ]
 {O}{U}{T}{P}{U}{T}                 { character += yyleng; return OUTPUT; }
 {O}{R}                             { character += yyleng; return OR; }
 {O}{R}{D}{E}{R}\ {B}{Y}            { character += yyleng; return ORDER_BY; }
-{P}{A}{T}{H}                       { character += yyleng; return PATH; }
+{P}{A}{R}{A}{L}{L}{E}{L}           { character += yyleng; return PARALLEL; }
 {P}{A}{R}{S}{E}                    { character += yyleng; return PARSE; }
+{P}{A}{T}{H}                       { character += yyleng; return PATH; }
 {Q}{U}{E}{R}{Y}                    { character += yyleng; return QUERY; }
 {R}{A}{N}{D}{O}{M}_{S}{A}{M}{P}{L}{E} { character += yyleng; return RANDOM_SAMPLE; }
 {R}{O}{W}                          { character += yyleng; return ROW; }

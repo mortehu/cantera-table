@@ -65,6 +65,7 @@ yyerror (YYLTYPE *loc, QueryParseContext *context, const char *message);
 %token SET OUTPUT FORMAT CSV JSON
 %token CORRELATE PARSE
 %token THRESHOLDS FOR
+%token PARALLEL
 
 %token Date
 %token Identifier
@@ -87,6 +88,7 @@ yyerror (YYLTYPE *loc, QueryParseContext *context, const char *message);
 %type<l> keysClause
 %type<l> offsetClause
 %type<l> optionalWithSummaries
+%type<l> parallelClause
 %type<runtime_parameter> runtimeParameter
 %type<runtime_parameter_value> runtimeParameterValue
 
@@ -153,7 +155,7 @@ statement
 
         $$ = stmt;
       }
-    | SELECT queryList FROM query optionalWithSummaries
+    | SELECT parallelClause queryList FROM query optionalWithSummaries
       {
         Statement *stmt;
         struct select_statement *select;
@@ -161,9 +163,10 @@ statement
         ALLOC (stmt);
         stmt->type = kStatementSelect;
         select = &stmt->u.select;
-        select->fields = $2;
-        select->query = $4;
-        select->with_summaries = $5;
+        select->fields = $3;
+        select->query = $5;
+        select->with_summaries = $6;
+        select->parallel = $2;
 
         $$ = stmt;
       }
@@ -526,6 +529,11 @@ fetchClause
     | FETCH firstOrNext Integer rows ONLY { $$ = $3; }
     | LIMIT Integer                       { $$ = $2; }
     ;
+
+parallelClause
+    :                  { $$ = 0; }
+    | PARALLEL Integer { $$ = $2; }
+
 %%
 #include <stdio.h>
 

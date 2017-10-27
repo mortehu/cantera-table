@@ -95,6 +95,7 @@ struct query_statement {
   struct ThresholdClause* thresholds;
   int64_t limit;
   size_t offset;
+  size_t parallel;
 };
 
 struct query_correlate_statement {

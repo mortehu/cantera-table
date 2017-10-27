@@ -103,7 +103,7 @@ void Schema::Load() {
 
     if (!strcmp(line, "summary")) {
       summary_tables.emplace_back(
-          offset,TableFactory::OpenSeekable(nullptr, table_path));
+          offset, TableFactory::OpenSeekable(nullptr, table_path));
     } else if (!strcmp(line, "summary-override")) {
       summary_override_tables.emplace_back(
           TableFactory::Open(nullptr, table_path));
@@ -117,13 +117,12 @@ void Schema::Load() {
   loaded_ = true;
 }
 
-std::vector<std::unique_ptr<Table>>& Schema::IndexTables() {
+std::vector<TableWithLock>& Schema::IndexTables() {
   Load();
 
   if (index_table_paths_.size() != index_tables_.size()) {
     for (const auto& path : index_table_paths_) {
-      index_tables_.emplace_back(
-          TableFactory::Open(nullptr, path.c_str()));
+      index_tables_.emplace_back(TableFactory::Open(nullptr, path.c_str()));
     }
   }
 

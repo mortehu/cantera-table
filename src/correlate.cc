@@ -527,11 +527,11 @@ void ca_schema_query_correlate(Schema* schema, const Query* query_A,
   std::mutex output_mutex;
 
   for (auto& index_table : schema->IndexTables()) {
-    index_table->SeekToFirst();
+    index_table.table->SeekToFirst();
 
     string_view key, data;
 
-    while (index_table->ReadRow(key, data)) {
+    while (index_table.table->ReadRow(key, data)) {
       if (a_is_timestamped && keywords.IsEphemeral(key)) continue;
 
       key_offsets.clear();

@@ -44,7 +44,7 @@
 #include "src/util.h"
 
 #if !HAVE_FWRITE_UNLOCKED
-# define fwrite_unlocked fwrite
+#define fwrite_unlocked fwrite
 #endif
 
 namespace cantera {
@@ -95,8 +95,8 @@ std::vector<ca_offset_score> UnionOffsets(
 
 size_t IntersectOffsets(struct ca_offset_score* lhs, size_t lhs_count,
                         const struct ca_offset_score* rhs, size_t rhs_count) {
-  struct ca_offset_score* output, *o;
-  const struct ca_offset_score* lhs_end, *rhs_end;
+  struct ca_offset_score *output, *o;
+  const struct ca_offset_score *lhs_end, *rhs_end;
 
   output = o = lhs;
 
@@ -198,29 +198,32 @@ void Join(std::vector<ca_offset_score>& lhs,
 }  // namespace
 
 void LookupIndexKey(
-    const std::vector<std::unique_ptr<Table>>& index_tables,
-    const char* key,
+    const std::vector<TableWithLock>& index_tables, const char* key,
     std::function<void(std::vector<ca_offset_score>)>&& callback) {
   const auto unescaped_key = DecodeURIComponent(key);
 
   for (size_t i = 0; i < index_tables.size(); ++i) {
-    if (!index_tables[i]->SeekToKey(unescaped_key)) continue;
-
-    string_view key, data;
-    KJ_REQUIRE(index_tables[i]->ReadRow(key, data));
-
     std::vector<ca_offset_score> new_offsets;
-    ca_offset_score_parse(data, &new_offsets);
+
+    {
+      evenk::lock_guard<decltype(index_tables[i].lock)>(index_tables[i].lock);
+
+      if (!index_tables[i].table->SeekToKey(unescaped_key)) continue;
+
+      string_view key, data;
+      KJ_REQUIRE(index_tables[i].table->ReadRow(key, data));
+      ca_offset_score_parse(data, &new_offsets);
+    }
 
     callback(std::move(new_offsets));
   }
 }
 
 void LookupIndexKey(
-    const std::vector<std::unique_ptr<Table>>& index_tables,
-    const char* token, bool make_headers,
+    const std::vector<TableWithLock>& index_tables, const char* token,
+    bool make_headers,
     std::function<void(std::vector<ca_offset_score>)>&& callback) {
-  const char *delimiter = strchr(token, ':');
+  const char* delimiter = strchr(token, ':');
 
   if (delimiter > token + 3 && !memcmp(delimiter - 3, "-in", 3)) {
     // The "FIELD-in:KEY" keyword retrieves an object from CAS using the
@@ -313,18 +316,19 @@ void LookupIndexKey(
     std::set<uint64_t> offset_buffer;
 
     for (size_t i = 0; i < index_tables.size(); ++i) {
-      index_tables[i]->SeekToFirst();
+      evenk::lock_guard<decltype(index_tables[i].lock)>(index_tables[i].lock);
+
+      index_tables[i].table->SeekToFirst();
 
       // Seek to first key in range.
-      index_tables[i]->SeekToKey(key);
+      index_tables[i].table->SeekToKey(key);
 
       string_view row_key, data;
-      while (index_tables[i]->ReadRow(row_key, data)) {
+      while (index_tables[i].table->ReadRow(row_key, data)) {
         std::vector<ca_offset_score> new_offsets;
 
         if (!HasPrefix(row_key, key)) {
-          if (row_key < key)
-            continue;
+          if (row_key < key) continue;
           break;
         }
 
@@ -356,8 +360,8 @@ size_t SubtractOffsets(struct ca_offset_score* lhs, size_t lhs_count,
   // duplicate offsets from `lhs' unless the same duplicate count exists in
   // `rhs'.
 
-  struct ca_offset_score* output, *o;
-  const struct ca_offset_score* lhs_end, *rhs_end;
+  struct ca_offset_score *output, *o;
+  const struct ca_offset_score *lhs_end, *rhs_end;
 
   output = o = lhs;
 
@@ -438,16 +442,16 @@ void ProcessSubQuery(std::vector<ca_offset_score>& offsets, const Query* query,
           std::vector<ca_offset_score> rhs;
           ProcessSubQuery(rhs, query->rhs, schema, make_headers);
 
-          const auto new_size = SubtractOffsets(
-              offsets.data(), offsets.size(), rhs.data(), rhs.size());
+          const auto new_size = SubtractOffsets(offsets.data(), offsets.size(),
+                                                rhs.data(), rhs.size());
           offsets.resize(new_size);
         } break;
 
         case kOperatorEQ:
           offsets.erase(std::remove_if(offsets.begin(), offsets.end(),
                                        [value = query->value](const auto& v) {
-                          return !(v.score == value);
-                        }),
+                                         return !(v.score == value);
+                                       }),
                         offsets.end());
           break;
 
@@ -461,8 +465,8 @@ void ProcessSubQuery(std::vector<ca_offset_score>& offsets, const Query* query,
           } else {
             offsets.erase(std::remove_if(offsets.begin(), offsets.end(),
                                          [value = query->value](const auto& v) {
-                            return !(v.score > value);
-                          }),
+                                           return !(v.score > value);
+                                         }),
                           offsets.end());
           }
           break;
@@ -470,8 +474,8 @@ void ProcessSubQuery(std::vector<ca_offset_score>& offsets, const Query* query,
         case kOperatorGE:
           offsets.erase(std::remove_if(offsets.begin(), offsets.end(),
                                        [value = query->value](const auto& v) {
-                          return !(v.score >= value);
-                        }),
+                                         return !(v.score >= value);
+                                       }),
                         offsets.end());
           break;
 
@@ -485,8 +489,8 @@ void ProcessSubQuery(std::vector<ca_offset_score>& offsets, const Query* query,
           } else {
             offsets.erase(std::remove_if(offsets.begin(), offsets.end(),
                                          [value = query->value](const auto& v) {
-                            return !(v.score < value);
-                          }),
+                                           return !(v.score < value);
+                                         }),
                           offsets.end());
           }
           break;
@@ -494,8 +498,8 @@ void ProcessSubQuery(std::vector<ca_offset_score>& offsets, const Query* query,
         case kOperatorLE:
           offsets.erase(std::remove_if(offsets.begin(), offsets.end(),
                                        [value = query->value](const auto& v) {
-                          return !(v.score <= value);
-                        }),
+                                         return !(v.score <= value);
+                                       }),
                         offsets.end());
           break;
 
@@ -503,11 +507,12 @@ void ProcessSubQuery(std::vector<ca_offset_score>& offsets, const Query* query,
           auto low = query->value;
           auto high = query->value2;
           if (low > high) std::swap(low, high);
-          offsets.erase(std::remove_if(offsets.begin(), offsets.end(),
-                                       [low, high](const auto& v) {
-                          return !(v.score >= low && v.score <= high);
-                        }),
-                        offsets.end());
+          offsets.erase(
+              std::remove_if(offsets.begin(), offsets.end(),
+                             [low, high](const auto& v) {
+                               return !(v.score >= low && v.score <= high);
+                             }),
+              offsets.end());
         } break;
 
         case kOperatorOrderBy: {
@@ -556,8 +561,9 @@ void ProcessSubQuery(std::vector<ca_offset_score>& offsets, const Query* query,
           offsets.resize(count);
 
           std::sort(offsets.begin(), offsets.end(),
-                    [](const auto& lhs,
-                       const auto& rhs) { return lhs.offset < rhs.offset; });
+                    [](const auto& lhs, const auto& rhs) {
+                      return lhs.offset < rhs.offset;
+                    });
         } break;
 
         default:
@@ -716,8 +722,7 @@ void PrintQuery(const Query* query) {
   }
 }
 
-void ca_schema_query(Schema* schema,
-                     const struct query_statement& stmt) {
+void ca_schema_query(Schema* schema, const struct query_statement& stmt) {
   try {
     schema->Load();
 
@@ -731,8 +736,7 @@ void ca_schema_query(Schema* schema,
 
     KJ_REQUIRE(!summary_tables.empty());
 
-    ProcessQuery(offsets, stmt.query, schema,
-                           stmt.thresholds != nullptr);
+    ProcessQuery(offsets, stmt.query, schema, stmt.thresholds != nullptr);
 
     std::vector<double> thresholds;
     bool reverse_thresholds = false;
@@ -754,8 +758,7 @@ void ca_schema_query(Schema* schema,
         reverse_thresholds = true;
       }
 
-      if (Keywords::GetInstance().IsTimestamped(key))
-        use_date_headers = true;
+      if (Keywords::GetInstance().IsTimestamped(key)) use_date_headers = true;
 
       // Filter `offsets' array by offsets within range.
       LookupIndexKey(index_tables, key, [&offsets, &thresholds](auto values) {
@@ -817,8 +820,8 @@ void ca_schema_query(Schema* schema,
             SEEK_SET);
 
         string_view row_key, data;
-        KJ_REQUIRE(summary_tables[summary_table_idx].second->ReadRow(
-            row_key, data));
+        KJ_REQUIRE(
+            summary_tables[summary_table_idx].second->ReadRow(row_key, data));
 
         printf("%.*s\n", static_cast<int>(row_key.size()), row_key.data());
       }
@@ -830,8 +833,8 @@ void ca_schema_query(Schema* schema,
         sorted_offsets.emplace_back(offsets[i], i - stmt.offset);
       std::sort(sorted_offsets.begin(), sorted_offsets.end(),
                 [](const auto& lhs, const auto& rhs) {
-        return lhs.first.offset < rhs.first.offset;
-      });
+                  return lhs.first.offset < rhs.first.offset;
+                });
 
       std::vector<std::string> results;
       results.resize(sorted_offsets.size());
@@ -850,7 +853,8 @@ void ca_schema_query(Schema* schema,
             SEEK_SET);
 
         string_view row_key, data;
-        KJ_REQUIRE(summary_tables[summary_table_idx].second->ReadRow(row_key, data));
+        KJ_REQUIRE(
+            summary_tables[summary_table_idx].second->ReadRow(row_key, data));
         KJ_REQUIRE(row_key.size() < 100'000'000, row_key.size());
         KJ_REQUIRE(data.size() < 100'000'000, data.size());
 
@@ -901,9 +905,11 @@ void ca_schema_query(Schema* schema,
           const auto max_value = *i;
           std::string header;
           if (!use_date_headers) {
-            header = DoubleToString(min_value) + "–" + DoubleToString(max_value);
+            header =
+                DoubleToString(min_value) + "–" + DoubleToString(max_value);
           } else if (min_value + 1 != max_value) {
-            header = TimeToDateString(min_value) + "–" + TimeToDateString(max_value);
+            header =
+                TimeToDateString(min_value) + "–" + TimeToDateString(max_value);
           } else {
             header = TimeToDateString(min_value);
           }
@@ -915,7 +921,7 @@ void ca_schema_query(Schema* schema,
           // Make a key on the form "AAAAA".."ZZZZZ", so that a client can sort
           // the headers easily, without parsing them.
           result.append(",\"_header_key\":\"");
-          for (auto j = 26*26*26*26; j > 0; j /= 26)
+          for (auto j = 26 * 26 * 26 * 26; j > 0; j /= 26)
             result.push_back('A' + (key / j) % 26);
           result.push_back('\"');
         }

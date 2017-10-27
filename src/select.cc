@@ -13,6 +13,8 @@
 #define fputs_unlocked fputs
 #endif
 
+#define MAX_THREADS (16)
+
 template <typename T>
 using thread_pool_queue = evenk::synch_queue<T>;
 
@@ -79,16 +81,21 @@ void Select(Schema* schema, const select_statement& select) {
   ProcessQuery(selection, select.query, schema, false, false);
 
   std::vector<std::vector<float>> values;
-  auto n_fields = CountFields(select);
   values.resize(selection.size());
+
+  auto n_fields = CountFields(select);
   for (std::size_t i = 0; i < values.size(); ++i) values[i].resize(n_fields);
 
-  if (n_fields < 8) {
+  auto n_threads = select.parallel;
+  if (n_threads > n_fields) n_threads = n_fields;
+
+  if (n_threads < 2) {
     std::size_t index = 0;
     for (auto field = select.fields; field; field = field->next, ++index)
       GetFieldValues(values, index, field->query, schema, selection);
   } else {
-    evenk::thread_pool<thread_pool_queue> thread_pool(4);
+    if (n_threads > MAX_THREADS) n_threads = MAX_THREADS;
+    evenk::thread_pool<thread_pool_queue> thread_pool(n_threads);
 
     std::size_t index = 0;
     for (auto field = select.fields; field; field = field->next, ++index) {

@@ -26,7 +26,8 @@ pkgconfig_DATA = ca-table.pc
 
 BUILT_SOURCES = \
   src/query-lexer.cc \
-  src/query-parser.cc
+  src/query-parser.cc \
+  src/query-parser.hh
 
 TESTS = $(check_PROGRAMS)
 

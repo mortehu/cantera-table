@@ -95,7 +95,6 @@ struct query_statement {
   struct ThresholdClause* thresholds;
   int64_t limit;
   size_t offset;
-  size_t parallel;
 };
 
 struct query_correlate_statement {
@@ -119,6 +118,7 @@ struct select_statement {
   QueryList* fields;
   const struct Query* query;
   int with_summaries;
+  long parallel;
 };
 
 struct set_statement {

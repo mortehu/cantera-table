@@ -18,12 +18,15 @@ class SeekableTable;
 
 class TableWithLock {
  public:
+  using lock_type = evenk::default_synch::lock_type;
+  using lock_guard_type = evenk::default_synch::lock_owner_type;
+
   TableWithLock() = default;
   TableWithLock(TableWithLock&& tab) : table(std::move(tab.table)) {}
   TableWithLock(std::unique_ptr<Table>&& tab) : table(std::move(tab)) {}
 
   std::unique_ptr<Table> table;
-  mutable evenk::default_synch::lock_type lock;
+  mutable lock_type lock;
 };
 
 class Schema {

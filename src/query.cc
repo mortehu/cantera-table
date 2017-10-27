@@ -206,7 +206,7 @@ void LookupIndexKey(
     std::vector<ca_offset_score> new_offsets;
 
     {
-      evenk::lock_guard<decltype(index_tables[i].lock)>(index_tables[i].lock);
+      TableWithLock::lock_guard_type lock(index_tables[i].lock);
 
       if (!index_tables[i].table->SeekToKey(unescaped_key)) continue;
 
@@ -316,8 +316,9 @@ void LookupIndexKey(
     std::set<uint64_t> offset_buffer;
 
     for (size_t i = 0; i < index_tables.size(); ++i) {
-      evenk::lock_guard<decltype(index_tables[i].lock)>(index_tables[i].lock);
+      TableWithLock::lock_guard_type lock(index_tables[i].lock);
 
+      // XXX: why is it here?
       index_tables[i].table->SeekToFirst();
 
       // Seek to first key in range.

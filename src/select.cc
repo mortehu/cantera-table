@@ -32,12 +32,7 @@ void GetFieldValues(std::vector<std::vector<float>>& values, std::size_t field,
                     const std::vector<ca_offset_score>& selection) try {
   std::vector<ca_offset_score> field_offsets;
 
-  // TODO: Get rid of this
-  static std::mutex mutex;
-  {
-    std::unique_lock<std::mutex> lock(mutex);
-    ProcessQuery(field_offsets, query, schema, false, false);
-  }
+  ProcessQuery(field_offsets, query, schema, false, false);
 
   std::sort(field_offsets.begin(), field_offsets.end(),
             [](const auto& lhs, const auto& rhs) {

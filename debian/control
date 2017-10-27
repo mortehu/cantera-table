@@ -9,7 +9,7 @@ Homepage: https://github.com/mortehu/cantera-table/
 Package: ca-table
 Section: database
 Architecture: any
-Depends: libca-table1 (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Analytics search engine
  Cantera Table allows indexing JSON formatted objects, and provides a query
  language with flexible sorting options.
@@ -17,7 +17,7 @@ Description: Analytics search engine
 Package: libca-table-dev
 Section: libdevel
 Architecture: any
-Depends: libca-table1 (= ${binary:Version}), ${misc:Depends}
+Depends: ${misc:Depends}
 Description: Analytics search engine
  Cantera Table allows indexing JSON formatted objects, and provides a query
  language with flexible sorting options.
@@ -25,11 +25,3 @@ Description: Analytics search engine
  This package contains the files needed for developing C++ program using the
  Cantera Table C++ library.
 
-Package: libca-table1
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Analytics search engine
- Cantera Table allows indexing JSON formatted objects, and provides a query
- language with flexible sorting options.
- .
- This package contains the Cantera Table C++ library.

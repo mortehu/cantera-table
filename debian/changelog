@@ -1,3 +1,15 @@
+ca-table (1.5.2) unstable; urgency=medium
+
+  * Fix uninitialized variable
+
+ -- Charles Samuels <kalle@eventures.vc>  Wed, 04 Oct 2017 13:30:12 +0000
+
+ca-table (1.5.1) unstable; urgency=medium
+
+  * Fix uninitialized variable
+
+ -- Charles Samuels <kalle@eventures.vc>  Fri, 15 Sep 2017 10:03:59 +0000
+
 ca-table (1.5) unstable; urgency=medium
 
   * Change API: make Table objects read-only, add TableBuilder objects

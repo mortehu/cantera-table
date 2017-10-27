@@ -133,8 +133,7 @@ ca_shell_LDADD = \
   $(CA_CAS_LIBS) \
   $(CAPNP_RPC_LIBS) \
   $(JSONCPP_LIBS) \
-  -lreadline \
-  -ltcmalloc
+  -lreadline
 
 ca_load_SOURCES = \
   src/ca-load.cc

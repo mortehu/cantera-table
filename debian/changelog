@@ -1,3 +1,10 @@
+ca-table (1.6) unstable; urgency=medium
+
+* Add parallel select feature
+* Use evenk library for concurrency
+
+ -- Aleksey Demakov <ademakov@gmail.com>  Sat, 28 Oct 2017 12:52:50 +0700
+
 ca-table (1.5.2) unstable; urgency=medium
 
   * Fix uninitialized variable

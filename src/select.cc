@@ -21,6 +21,10 @@ using thread_pool_queue = evenk::synch_queue<T>;
 namespace cantera {
 namespace table {
 
+namespace {
+
+std::size_t parallel_default = 0;
+
 std::size_t CountFields(const select_statement& select) {
   std::size_t count = 0;
   for (auto field = select.fields; field; field = field->next) count++;
@@ -66,6 +70,13 @@ void GetFieldValues(std::vector<std::vector<float>>& values, std::size_t field,
   printf("caught unknown exception\n");
 }
 
+} // namespace
+
+void SetSelectParallel(int nthreads)
+{
+  parallel_default = nthreads;
+}
+
 void Select(Schema* schema, const select_statement& select) {
   schema->Load();
 
@@ -82,6 +93,7 @@ void Select(Schema* schema, const select_statement& select) {
   for (std::size_t i = 0; i < values.size(); ++i) values[i].resize(n_fields);
 
   auto n_threads = select.parallel;
+  if (n_threads == 0 && n_fields > 10) n_threads = parallel_default;
   if (n_threads > n_fields) n_threads = n_fields;
 
   if (n_threads < 2) {

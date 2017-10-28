@@ -43,6 +43,7 @@
 
 #include "src/ca-table.h"
 #include "src/query.h"
+#include "src/select.h"
 
 namespace ca_table = cantera::table;
 
@@ -50,6 +51,7 @@ namespace {
 
 enum Option : int {
   kOptionCommand = 'c',
+  kOptionParallel = 'p',
   kOptionUnknown = '?',
 };
 
@@ -60,6 +62,7 @@ const char kDefaultSchemaPath[] = "/data/index/current/schema.txt";
 
 struct option kLongOptions[] = {
     {"command", required_argument, NULL, kOptionCommand},
+    {"parallel", required_argument, NULL, kOptionParallel},
     {"version", no_argument, &print_version, 1},
     {"help", no_argument, &print_help, 1},
     {nullptr, 0, nullptr, 0}};
@@ -102,12 +105,16 @@ int main(int argc, char** argv) try {
 
   strcpy(ca_table::CA_time_format, "%Y-%m-%dT%H:%M:%S");
 
-  while (-1 != (i = getopt_long(argc, argv, "c:", kLongOptions, 0))) {
+  while (-1 != (i = getopt_long(argc, argv, "c:p:", kLongOptions, 0))) {
     if (!i) continue;
 
     switch (static_cast<Option>(i)) {
       case kOptionCommand:
         command = optarg;
+        break;
+
+      case kOptionParallel:
+        cantera::table::SetSelectParallel(std::stoi(optarg));
         break;
 
       case kOptionUnknown:
@@ -120,6 +127,7 @@ int main(int argc, char** argv) try {
         "Usage: %s [OPTION]... [SCHEMA]\n"
         "\n"
         "  -c, --command=STRING       execute commands in STRING and exit\n"
+        "  -p, --parallel=NUMBER      execute multi-field selects parallely\n"
         "      --help     display this help and exit\n"
         "      --version  display version information and exit\n"
         "\n"

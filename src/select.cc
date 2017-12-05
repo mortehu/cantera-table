@@ -1,6 +1,7 @@
 #include <algorithm>
 
 #include "src/ca-table.h"
+#include "src/context.h"
 #include "src/query.h"
 #include "src/schema.h"
 #include "src/select.h"
@@ -32,11 +33,11 @@ std::size_t CountFields(const select_statement& select) {
 }
 
 void GetFieldValues(std::vector<std::vector<float>>& values, std::size_t field,
-                    struct Query* query, Schema* schema,
+                    struct Query* field_query, Schema* schema,
                     const std::vector<ca_offset_score>& selection) try {
   std::vector<ca_offset_score> field_offsets;
 
-  ProcessQuery(field_offsets, query, schema, false, false);
+  ProcessQuery(field_offsets, field_query, schema, false, false);
 
   std::sort(field_offsets.begin(), field_offsets.end(),
             [](const auto& lhs, const auto& rhs) {
@@ -70,12 +71,9 @@ void GetFieldValues(std::vector<std::vector<float>>& values, std::size_t field,
   printf("caught unknown exception\n");
 }
 
-} // namespace
+}  // namespace
 
-void SetSelectParallel(int nthreads)
-{
-  parallel_default = nthreads;
-}
+void SetSelectParallel(int nthreads) { parallel_default = nthreads; }
 
 void Select(Schema* schema, const select_statement& select) {
   schema->Load();
@@ -85,6 +83,10 @@ void Select(Schema* schema, const select_statement& select) {
 
   std::vector<ca_offset_score> selection;
   ProcessQuery(selection, select.query, schema, false, false);
+
+  std::unordered_set<std::uint64_t> select_offsets(selection.size());
+  for (auto select_elt : selection) select_offsets.insert(select_elt.offset);
+  internal::Context::Get()->SetFilter(std::move(select_offsets));
 
   std::vector<std::vector<float>> values;
   values.resize(selection.size());

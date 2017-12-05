@@ -61,6 +61,8 @@ EXTRA_DIST = \
   third_party/oroch/README.md
 
 libca_table_la_SOURCES = \
+  src/context.cc \
+  src/context.h \
   src/format.cc \
   src/keywords.cc \
   src/keywords.h \
@@ -117,7 +119,7 @@ libca_table_la_LIBADD = \
 libca_table_la_LDFLAGS = \
   -no-undefined \
   -version-info 2:0:0 \
-  -export-symbols-regex '^_ZNK?7cantera5table.*'
+  -export-symbols-regex '.*_ZNK?7cantera5table.*'
 
 ca_shell_SOURCES = \
   src/ca-shell.cc \

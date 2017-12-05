@@ -30,6 +30,7 @@
 #include <kj/debug.h>
 
 #include "src/ca-table.h"
+#include "src/context.h"
 #include "src/rle.h"
 
 #include "third_party/oroch/oroch/integer_codec.h"
@@ -269,20 +270,27 @@ void ParseOffsetScoreOroch(const uint8_t*& begin, const uint8_t* end,
   auto base_index = output->size();
 
   // Get the number of encoded offset/score records.
-  size_t count = 0;
+  std::size_t count = 0;
   oroch::varint_codec<size_t>::value_decode(count, begin);
   if (!count) {
     KJ_REQUIRE(begin == end, "unexpected zero-sized offset/score array");
     return;
   }
 
-  output->resize(base_index + count);
+  std::size_t filtered_count = count;
+  const std::unordered_set<std::uint64_t> *filter = nullptr;
+  auto *context = internal::Context::Get();
+  if (context->UseFilter()) {
+    filter = &context->GetFilter();
+    if (filter->size() < count) filtered_count = filter->size();
+  }
+
+  output->resize(base_index + filtered_count);
   auto values = &(*output)[base_index];
 
   // Get the first encoded offset.
   uint64_t offset = 0;
   oroch::varint_codec<uint64_t>::value_decode(offset, begin);
-  values[0].offset = offset;
 
   // Get delta values for offsets.
   std::vector<uint64_t> offset_delta(count - 1);
@@ -293,14 +301,8 @@ void ParseOffsetScoreOroch(const uint8_t*& begin, const uint8_t* end,
   oroch::integer_codec<uint64_t>::decode(offset_i, offset_e, begin,
                                          offset_meta);
 
-  // Convert delta values to original offset values.
-  for (size_t i = 1; i < count; i++) {
-    offset += offset_delta[i - 1];
-    values[i].offset = offset;
-  }
-
-  // Decode score values.
   if (integer_score) {
+    // Decode score values.
     std::vector<int64_t> score(count);
     oroch::integer_codec<int64_t>::metadata score_meta;
     score_meta.decode(begin);
@@ -308,12 +310,78 @@ void ParseOffsetScoreOroch(const uint8_t*& begin, const uint8_t* end,
     auto score_e = score.end();
     oroch::integer_codec<int64_t>::decode(score_i, score_e, begin,
                                           score_meta);
-    for (size_t i = 0; i < count; i++) values[i].score = score[i];
+
+    if (!context->UseFilter()) {
+      // Store the first offset-score pair.
+      values[0].offset = offset;
+      values[0].score = score[0];
+      // Store the rest.
+      for (size_t i = 1; i < count; i++) {
+        // Turn a delta value into the original offset.
+        offset += offset_delta[i - 1];
+        // Store the current pair.
+        values[i].offset = offset;
+        values[i].score = score[i];
+      }
+    } else {
+      std::size_t index = 0;
+      // Store the first offset-score pair.
+      if (filter->count(offset)) {
+        values[0].offset = offset;
+        values[0].score = score[0];
+        index++;
+      }
+      // Store the rest.
+      for (size_t i = 1; i < count; i++) {
+        // Turn a delta value into the original offset.
+        offset += offset_delta[i - 1];
+        if (filter->count(offset)) {
+          // Store the current pair.
+          values[index].offset = offset;
+          values[index].score = score[i];
+          index++;
+        }
+      }
+      output->resize(base_index + index);
+    }
   } else {
-    for (size_t i = 0; i < count; i++) {
-      auto p = reinterpret_cast<uint32_t*>(&values[i].score);
+    if (!context->UseFilter()) {
+      // Store the first offset-score pair (the score is possibly unaligned).
+      values[0].offset = offset;
+      auto p = reinterpret_cast<uint32_t*>(&values[0].score);
       *p = *reinterpret_cast<const uint32_t*>(begin);
-      begin += 4;
+      // Store the rest.
+      for (size_t i = 1; i < count; i++) {
+        begin += 4;
+        // Turn a delta value into the original offset.
+        offset += offset_delta[i - 1];
+        // Store the current pair (the score is possibly unaligned).
+        values[i].offset = offset;
+        p = reinterpret_cast<uint32_t*>(&values[i].score);
+        *p = *reinterpret_cast<const uint32_t*>(begin);
+      }
+    } else {
+      std::size_t index = 0;
+      // Store the first offset-score pair.
+      if (filter->count(offset)) {
+        values[0].offset = offset;
+        auto p = reinterpret_cast<uint32_t*>(&values[0].score);
+        *p = *reinterpret_cast<const uint32_t*>(begin);
+        index++;
+      }
+      // Store the rest.
+      for (size_t i = 1; i < count; i++) {
+        begin += 4;
+        // Turn a delta value into the original offset.
+        offset += offset_delta[i - 1];
+        if (filter->count(offset)) {
+          // Store the current pair (the score is possibly unaligned).
+          values[index].offset = offset;
+          auto p = reinterpret_cast<uint32_t*>(&values[index].score);
+          *p = *reinterpret_cast<const uint32_t*>(begin);
+          index++;
+        }
+      }
     }
   }
 }

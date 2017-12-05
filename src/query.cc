@@ -39,6 +39,7 @@
 #include <kj/debug.h>
 
 #include "src/ca-table.h"
+#include "src/context.h"
 #include "src/keywords.h"
 #include "src/query.h"
 #include "src/util.h"
@@ -393,6 +394,10 @@ size_t SubtractOffsets(struct ca_offset_score* lhs, size_t lhs_count,
 
 void ProcessSubQuery(std::vector<ca_offset_score>& offsets, const Query* query,
                      Schema* schema, bool make_headers) {
+
+  // increment the nesting level
+  ContextNestingLevelGuard nesting_level_guard;
+
   switch (query->type) {
     case kQueryKey: {
       string_view key(query->identifier);

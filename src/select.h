@@ -7,6 +7,7 @@ namespace table {
 class Schema;
 struct select_statement;
 
+void SetSelectHashAlgo(bool enable);
 void SetSelectParallel(int nthreads);
 
 void Select(Schema* schema, const struct select_statement& select);

@@ -24,6 +24,7 @@ namespace table {
 
 namespace {
 
+bool hashing_enabled = false;
 std::size_t parallel_default = 0;
 
 std::size_t CountFields(const select_statement& select) {
@@ -73,6 +74,8 @@ void GetFieldValues(std::vector<std::vector<float>>& values, std::size_t field,
 
 }  // namespace
 
+void SetSelectHashAlgo(bool enable) { hashing_enabled = enable; }
+
 void SetSelectParallel(int nthreads) { parallel_default = nthreads; }
 
 void Select(Schema* schema, const select_statement& select) {
@@ -84,9 +87,11 @@ void Select(Schema* schema, const select_statement& select) {
   std::vector<ca_offset_score> selection;
   ProcessQuery(selection, select.query, schema, false, false);
 
-  std::unordered_set<std::uint64_t> select_offsets(selection.size());
-  for (auto select_elt : selection) select_offsets.insert(select_elt.offset);
-  internal::Context::Get()->SetFilter(std::move(select_offsets));
+  if (hashing_enabled) {
+    std::unordered_set<std::uint64_t> select_offsets(selection.size());
+    for (auto select_elt : selection) select_offsets.insert(select_elt.offset);
+    internal::Context::Get()->SetFilter(std::move(select_offsets));
+  }
 
   std::vector<std::vector<float>> values;
   values.resize(selection.size());

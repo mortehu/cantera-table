@@ -51,6 +51,7 @@ namespace {
 
 enum Option : int {
   kOptionCommand = 'c',
+  kOptionHashAlgo = 'H',
   kOptionParallel = 'p',
   kOptionUnknown = '?',
 };
@@ -62,20 +63,22 @@ const char kDefaultSchemaPath[] = "/data/index/current/schema.txt";
 
 struct option kLongOptions[] = {
     {"command", required_argument, NULL, kOptionCommand},
-    {"parallel", required_argument, NULL, kOptionParallel},
+    {"hash-select-algorithm", required_argument, NULL, kOptionHashAlgo},
+    {"parallel-select", required_argument, NULL, kOptionParallel},
     {"version", no_argument, &print_version, 1},
     {"help", no_argument, &print_help, 1},
     {nullptr, 0, nullptr, 0}};
 
 }  // namespace
 
-static void stdout_error(const char *errmsg) {
+static void stdout_error(const char* errmsg) {
   Json::Value error;
   error["error"] = errmsg;
   std::cout << Json::FastWriter().write(error);
 }
 
-static void parse_string(ca_table::QueryParseContext &context, const char *command, bool use_std_err) {
+static void parse_string(ca_table::QueryParseContext& context,
+                         const char* command, bool use_std_err) {
   FILE* file;
 
 #if HAVE_FMEMOPEN
@@ -105,12 +108,16 @@ int main(int argc, char** argv) try {
 
   strcpy(ca_table::CA_time_format, "%Y-%m-%dT%H:%M:%S");
 
-  while (-1 != (i = getopt_long(argc, argv, "c:p:", kLongOptions, 0))) {
+  while (-1 != (i = getopt_long(argc, argv, "c:Hp:", kLongOptions, 0))) {
     if (!i) continue;
 
     switch (static_cast<Option>(i)) {
       case kOptionCommand:
         command = optarg;
+        break;
+
+      case kOptionHashAlgo:
+        cantera::table::SetSelectHashAlgo(true);
         break;
 
       case kOptionParallel:
@@ -126,8 +133,11 @@ int main(int argc, char** argv) try {
     printf(
         "Usage: %s [OPTION]... [SCHEMA]\n"
         "\n"
-        "  -c, --command=STRING       execute commands in STRING and exit\n"
-        "  -p, --parallel=NUMBER      execute multi-field selects parallely\n"
+        "  -c, --command=STRING         execute commands in STRING and exit\n"
+        "  -H, --hash-select-algorithm  use hashing to optimize select "
+        "execution\n"
+        "  -p, --parallel-select=NUMBER execute multi-field selects "
+        "parallelly\n"
         "      --help     display this help and exit\n"
         "      --version  display version information and exit\n"
         "\n"
@@ -176,14 +186,16 @@ int main(int argc, char** argv) try {
       free(prompt);
 
 #if HAVE_GET_CURRENT_DIR_NAME
-      std::unique_ptr<char[], decltype(free) *> dir(get_current_dir_name(), free);
+      std::unique_ptr<char[], decltype(free)*> dir(get_current_dir_name(),
+                                                   free);
 #else
-      std::unique_ptr<char[], decltype(free) *> dir(getcwd(NULL, 0), free);
+      std::unique_ptr<char[], decltype(free)*> dir(getcwd(NULL, 0), free);
 #endif
       if (-1 == asprintf(&prompt,
                          "[%1$c\033[32;1m%2$cca-table%1$c\033[00m%2$c:%1$c\033["
                          "1m%2$c%3$s%1$c\033[00m%2$c]$ ",
-                         RL_PROMPT_START_IGNORE, RL_PROMPT_END_IGNORE, dir.get()))
+                         RL_PROMPT_START_IGNORE, RL_PROMPT_END_IGNORE,
+                         dir.get()))
         err(EXIT_FAILURE, "asprintf failed");
 
       if (!(line = readline(prompt))) break;

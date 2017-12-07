@@ -277,16 +277,14 @@ void ParseOffsetScoreOroch(const uint8_t*& begin, const uint8_t* end,
     return;
   }
 
-  std::size_t filtered_count = count;
-  const std::unordered_set<std::uint64_t> *filter = nullptr;
-  auto *context = internal::Context::Get();
+  const std::unordered_set<std::uint64_t>* filter = nullptr;
+  auto* context = internal::Context::Get();
   if (context->UseFilter()) {
     filter = &context->GetFilter();
-    if (filter->size() < count) filtered_count = filter->size();
+    output->reserve(base_index + filter->size());
+  } else {
+    output->resize(base_index + count);
   }
-
-  output->resize(base_index + filtered_count);
-  auto values = &(*output)[base_index];
 
   // Get the first encoded offset.
   uint64_t offset = 0;
@@ -308,11 +306,11 @@ void ParseOffsetScoreOroch(const uint8_t*& begin, const uint8_t* end,
     score_meta.decode(begin);
     auto score_i = score.begin();
     auto score_e = score.end();
-    oroch::integer_codec<int64_t>::decode(score_i, score_e, begin,
-                                          score_meta);
+    oroch::integer_codec<int64_t>::decode(score_i, score_e, begin, score_meta);
 
-    if (!context->UseFilter()) {
+    if (filter == nullptr) {
       // Store the first offset-score pair.
+      auto values = &(*output)[base_index];
       values[0].offset = offset;
       values[0].score = score[0];
       // Store the rest.
@@ -324,63 +322,54 @@ void ParseOffsetScoreOroch(const uint8_t*& begin, const uint8_t* end,
         values[i].score = score[i];
       }
     } else {
-      std::size_t index = 0;
       // Store the first offset-score pair.
-      if (filter->count(offset)) {
-        values[0].offset = offset;
-        values[0].score = score[0];
-        index++;
-      }
+      if (filter->count(offset)) output->emplace_back(offset, score[0]);
       // Store the rest.
       for (size_t i = 1; i < count; i++) {
         // Turn a delta value into the original offset.
         offset += offset_delta[i - 1];
-        if (filter->count(offset)) {
-          // Store the current pair.
-          values[index].offset = offset;
-          values[index].score = score[i];
-          index++;
-        }
+        // Store the current pair.
+        if (filter->count(offset)) output->emplace_back(offset, score[i]);
       }
-      output->resize(base_index + index);
     }
   } else {
-    if (!context->UseFilter()) {
+    if (filter == nullptr) {
       // Store the first offset-score pair (the score is possibly unaligned).
+      auto values = &(*output)[base_index];
       values[0].offset = offset;
-      auto p = reinterpret_cast<uint32_t*>(&values[0].score);
-      *p = *reinterpret_cast<const uint32_t*>(begin);
+      memcpy(&values[0].score, begin, sizeof(float));
+      begin += sizeof(float);
       // Store the rest.
       for (size_t i = 1; i < count; i++) {
-        begin += 4;
         // Turn a delta value into the original offset.
         offset += offset_delta[i - 1];
         // Store the current pair (the score is possibly unaligned).
         values[i].offset = offset;
-        p = reinterpret_cast<uint32_t*>(&values[i].score);
-        *p = *reinterpret_cast<const uint32_t*>(begin);
+        memcpy(&values[i].score, begin, sizeof(float));
+        begin += sizeof(float);
       }
     } else {
       std::size_t index = 0;
-      // Store the first offset-score pair.
+      // Store the first offset-score pair (the score is possibly unaligned).
       if (filter->count(offset)) {
-        values[0].offset = offset;
-        auto p = reinterpret_cast<uint32_t*>(&values[0].score);
-        *p = *reinterpret_cast<const uint32_t*>(begin);
-        index++;
+        ca_offset_score value;
+        value.offset = offset;
+        memcpy(&value.score, begin, sizeof(float));
+        output->push_back(value);
       }
+      begin += sizeof(float);
       // Store the rest.
       for (size_t i = 1; i < count; i++) {
-        begin += 4;
         // Turn a delta value into the original offset.
         offset += offset_delta[i - 1];
+        // Store the current pair (the score is possibly unaligned).
         if (filter->count(offset)) {
-          // Store the current pair (the score is possibly unaligned).
-          values[index].offset = offset;
-          auto p = reinterpret_cast<uint32_t*>(&values[index].score);
-          *p = *reinterpret_cast<const uint32_t*>(begin);
-          index++;
+          ca_offset_score value;
+          value.offset = offset;
+          memcpy(&value.score, begin, sizeof(float));
+          output->push_back(value);
         }
+        begin += sizeof(float);
       }
     }
   }
@@ -419,8 +408,7 @@ uint64_t GetMaxOffsetOroch(const uint8_t*& begin, const uint8_t* end,
     score_meta.decode(begin);
     auto score_i = score.begin();
     auto score_e = score.end();
-    oroch::integer_codec<int64_t>::decode(score_i, score_e, begin,
-                                          score_meta);
+    oroch::integer_codec<int64_t>::decode(score_i, score_e, begin, score_meta);
   } else {
     begin += count * sizeof(float);
   }
@@ -458,8 +446,7 @@ size_t CountOffsetScoreOroch(const uint8_t*& begin, const uint8_t* end,
     score_meta.decode(begin);
     auto score_i = score.begin();
     auto score_e = score.end();
-    oroch::integer_codec<int64_t>::decode(score_i, score_e, begin, 
-                                          score_meta);
+    oroch::integer_codec<int64_t>::decode(score_i, score_e, begin, score_meta);
   } else {
     begin += count * sizeof(float);
   }
